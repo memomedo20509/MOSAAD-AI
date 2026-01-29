@@ -100,7 +100,7 @@ const translations = {
     search: "بحث",
     project: "المشروع",
     unit: "وحدة",
-    kanbanBoard: "لوحة الكانبان",
+    kanbanBoard: "خط سير العملاء",
     kanbanSubtitle: "إدارة العملاء بالسحب والإفلات",
     allAgents: "جميع المندوبين",
     allChannels: "جميع المصادر",
