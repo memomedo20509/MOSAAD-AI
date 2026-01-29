@@ -193,5 +193,24 @@ export const insertLeadUnitInterestSchema = createInsertSchema(leadUnitInterests
 export type InsertLeadUnitInterest = z.infer<typeof insertLeadUnitInterestSchema>;
 export type LeadUnitInterest = typeof leadUnitInterests.$inferSelect;
 
+// Reminders
+export const reminders = pgTable("reminders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  leadId: varchar("lead_id").references(() => leads.id),
+  userId: varchar("user_id"),
+  title: text("title").notNull(),
+  description: text("description"),
+  dueDate: timestamp("due_date").notNull(),
+  isCompleted: boolean("is_completed").default(false),
+  priority: text("priority").default("medium"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertReminderSchema = createInsertSchema(reminders).omit({ id: true, createdAt: true });
+export const updateReminderSchema = insertReminderSchema.partial();
+export type InsertReminder = z.infer<typeof insertReminderSchema>;
+export type UpdateReminder = z.infer<typeof updateReminderSchema>;
+export type Reminder = typeof reminders.$inferSelect;
+
 // Export auth models (users, teams, sessions)
 export * from "./models/auth";

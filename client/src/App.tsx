@@ -30,6 +30,8 @@ import DevelopersPage from "@/pages/developers";
 import ProjectsPage from "@/pages/projects";
 import UnitsPage from "@/pages/units";
 import AllUnitsPage from "@/pages/all-units";
+import KanbanPage from "@/pages/kanban";
+import ReportsPage from "@/pages/reports";
 
 function LogoutButton() {
   const { logoutMutation } = useAuth();
@@ -52,6 +54,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
+      <Route path="/kanban" component={KanbanPage} />
+      <Route path="/reports" component={ReportsPage} />
       <Route path="/leads" component={LeadsPage} />
       <Route path="/leads/new" component={AddLeadPage} />
       <Route path="/leads/upload" component={UploadLeadsPage} />

@@ -40,6 +40,7 @@ import {
 import { Link } from "wouter";
 import type { Lead, LeadState } from "@shared/schema";
 import { LeadDetailPanel } from "@/components/lead-detail-panel";
+import { LeadDetailsModal } from "@/components/lead-details-modal";
 import { FilterPanel } from "@/components/filter-panel";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -52,6 +53,7 @@ export default function LeadsPage() {
   const [orderBy, setOrderBy] = useState<"recent" | "oldest">("recent");
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [detailsModalLeadId, setDetailsModalLeadId] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const { toast } = useToast();
@@ -407,8 +409,18 @@ export default function LeadsPage() {
                           e.stopPropagation();
                           setSelectedLead(lead);
                         }}
+                        data-testid={`menu-quick-view-${lead.id}`}
                       >
-                        View Details
+                        {t.viewDetails}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDetailsModalLeadId(lead.id);
+                        }}
+                        data-testid={`menu-full-details-${lead.id}`}
+                      >
+                        {t.leadDetails}
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={(e) => {
@@ -416,8 +428,9 @@ export default function LeadsPage() {
                           deleteLeadMutation.mutate(lead.id);
                         }}
                         className="text-destructive"
+                        data-testid={`menu-delete-${lead.id}`}
                       >
-                        Delete
+                        {t.delete}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -459,6 +472,12 @@ export default function LeadsPage() {
         onClose={() => setFilterOpen(false)}
         filters={filters}
         onApply={setFilters}
+      />
+
+      <LeadDetailsModal
+        leadId={detailsModalLeadId}
+        isOpen={!!detailsModalLeadId}
+        onClose={() => setDetailsModalLeadId(null)}
       />
     </div>
   );

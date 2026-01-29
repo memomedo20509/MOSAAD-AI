@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import {
   Users,
   UserPlus,
@@ -12,10 +13,16 @@ import {
   Clock,
   TrendingUp,
   AlertTriangle,
+  Bell,
+  Activity,
+  Target,
+  ArrowRight,
 } from "lucide-react";
-import type { Lead, LeadState } from "@shared/schema";
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
+import type { Lead, LeadState, Reminder, LeadHistory } from "@shared/schema";
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { useLanguage } from "@/lib/i18n";
+import { format, isToday, isBefore, startOfToday, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
+import { Link } from "wouter";
 
 interface DashboardStats {
   totalLeads: number;
@@ -44,7 +51,27 @@ export default function Dashboard() {
     queryKey: ["/api/leads"],
   });
 
+  const { data: reminders = [] } = useQuery<Reminder[]>({
+    queryKey: ["/api/reminders"],
+  });
+
+  const { data: history = [] } = useQuery<LeadHistory[]>({
+    queryKey: ["/api/history"],
+  });
+
   const isLoading = statesLoading || leadsLoading;
+
+  const today = startOfToday();
+  const monthRange = { start: startOfMonth(new Date()), end: endOfMonth(new Date()) };
+  
+  const newLeadsToday = leads?.filter((l) => l.createdAt && isToday(new Date(l.createdAt))).length || 0;
+  
+  const upcomingReminders = reminders.filter((r) => !r.isCompleted && r.dueDate).slice(0, 5);
+  const overdueReminders = reminders.filter((r) => !r.isCompleted && r.dueDate && isBefore(new Date(r.dueDate), today));
+  
+  const recentActivities = history
+    .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
+    .slice(0, 8);
 
   const stats: DashboardStats | null = !isLoading && states && leads ? {
     totalLeads: leads.length,
@@ -102,12 +129,12 @@ export default function Dashboard() {
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{t.activeStates}</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">{t.newLeadsToday}</CardTitle>
+                <UserPlus className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-active-states">{states?.length || 0}</div>
-                <p className="text-xs text-muted-foreground">{t.leadStatusCategories}</p>
+                <div className="text-2xl font-bold" data-testid="text-new-leads-today">{newLeadsToday}</div>
+                <p className="text-xs text-muted-foreground">{format(new Date(), "MMM dd, yyyy")}</p>
               </CardContent>
             </Card>
             <Card>
@@ -203,10 +230,96 @@ export default function Dashboard() {
             </Card>
           </div>
 
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card data-testid="card-upcoming-reminders">
+              <CardHeader className="flex flex-row items-center justify-between gap-2">
+                <CardTitle className="flex items-center gap-2">
+                  <Bell className="h-5 w-5 text-primary" />
+                  {t.upcomingReminders}
+                </CardTitle>
+                {overdueReminders.length > 0 && (
+                  <Badge variant="destructive">{overdueReminders.length} {t.overdueReminders}</Badge>
+                )}
+              </CardHeader>
+              <CardContent>
+                {upcomingReminders.length > 0 ? (
+                  <div className="space-y-2">
+                    {upcomingReminders.map((reminder) => {
+                      const isOverdue = reminder.dueDate && isBefore(new Date(reminder.dueDate), today);
+                      return (
+                        <div
+                          key={reminder.id}
+                          className={`flex items-center justify-between rounded-md border p-3 ${isOverdue ? "border-destructive/50 bg-destructive/5" : ""}`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`flex h-9 w-9 items-center justify-center rounded-full ${isOverdue ? "bg-destructive/10" : "bg-primary/10"}`}>
+                              <Bell className={`h-4 w-4 ${isOverdue ? "text-destructive" : "text-primary"}`} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-medium truncate">{reminder.title}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {reminder.dueDate && format(new Date(reminder.dueDate), "MMM dd, HH:mm")}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge variant={isOverdue ? "destructive" : "secondary"}>
+                            {reminder.priority}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex h-20 items-center justify-center text-muted-foreground">
+                    {t.noReminders}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-recent-activities">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-primary" />
+                  {t.recentActivities}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {recentActivities.length > 0 ? (
+                  <div className="space-y-2">
+                    {recentActivities.map((activity) => (
+                      <div
+                        key={activity.id}
+                        className="flex items-center justify-between rounded-md border p-3"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
+                            <Activity className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium truncate text-sm">{activity.action}</p>
+                            <p className="text-xs text-muted-foreground truncate">{activity.description}</p>
+                          </div>
+                        </div>
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          {activity.createdAt && format(new Date(activity.createdAt), "HH:mm")}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex h-20 items-center justify-center text-muted-foreground">
+                    {t.noDataToDisplay}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                <Target className="h-5 w-5 text-amber-500" />
                 {t.leadsBySalesRep}
               </CardTitle>
             </CardHeader>

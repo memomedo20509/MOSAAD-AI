@@ -20,6 +20,8 @@ import {
   insertUnitSchema,
   updateUnitSchema,
   insertLeadUnitInterestSchema,
+  insertReminderSchema,
+  updateReminderSchema,
 } from "@shared/schema";
 
 export async function registerRoutes(
@@ -81,8 +83,8 @@ export async function registerRoutes(
     }
   });
 
-  // Users management endpoints (super_admin and admin only)
-  app.get("/api/users", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
+  // Users list - all authenticated users can read (for agent filters, etc.)
+  app.get("/api/users", isAuthenticated, async (req, res) => {
     try {
       const users = await storage.getAllUsers();
       res.json(users);
@@ -640,6 +642,80 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting lead unit interest:", error);
       res.status(500).json({ error: "Failed to delete lead unit interest" });
+    }
+  });
+
+  // ==================== REMINDERS ====================
+
+  app.get("/api/reminders", isAuthenticated, async (req, res) => {
+    try {
+      const reminders = await storage.getAllReminders();
+      res.json(reminders);
+    } catch (error) {
+      console.error("Error fetching reminders:", error);
+      res.status(500).json({ error: "Failed to fetch reminders" });
+    }
+  });
+
+  app.get("/api/reminders/user/:userId", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.params.userId as string;
+      const reminders = await storage.getRemindersByUser(userId);
+      res.json(reminders);
+    } catch (error) {
+      console.error("Error fetching user reminders:", error);
+      res.status(500).json({ error: "Failed to fetch user reminders" });
+    }
+  });
+
+  app.get("/api/leads/:leadId/reminders", isAuthenticated, async (req, res) => {
+    try {
+      const leadId = req.params.leadId as string;
+      const reminders = await storage.getRemindersByLead(leadId);
+      res.json(reminders);
+    } catch (error) {
+      console.error("Error fetching lead reminders:", error);
+      res.status(500).json({ error: "Failed to fetch lead reminders" });
+    }
+  });
+
+  app.post("/api/reminders", isAuthenticated, async (req, res) => {
+    try {
+      const data = insertReminderSchema.parse(req.body);
+      const reminder = await storage.createReminder(data);
+      res.status(201).json(reminder);
+    } catch (error) {
+      console.error("Error creating reminder:", error);
+      res.status(400).json({ error: "Failed to create reminder" });
+    }
+  });
+
+  app.patch("/api/reminders/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const data = updateReminderSchema.parse(req.body);
+      const reminder = await storage.updateReminder(id, data);
+      if (!reminder) {
+        return res.status(404).json({ error: "Reminder not found" });
+      }
+      res.json(reminder);
+    } catch (error) {
+      console.error("Error updating reminder:", error);
+      res.status(400).json({ error: "Failed to update reminder" });
+    }
+  });
+
+  app.delete("/api/reminders/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const deleted = await storage.deleteReminder(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Reminder not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting reminder:", error);
+      res.status(500).json({ error: "Failed to delete reminder" });
     }
   });
 

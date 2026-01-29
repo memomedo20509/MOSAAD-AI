@@ -15,6 +15,9 @@ import {
   Landmark,
   FolderKanban,
   Home,
+  Kanban,
+  BarChart3,
+  Bell,
 } from "lucide-react";
 import {
   Sidebar,
@@ -52,6 +55,16 @@ export function AppSidebar() {
       title: t.dashboard,
       url: "/",
       icon: LayoutDashboard,
+    },
+    {
+      title: t.kanbanBoard,
+      url: "/kanban",
+      icon: Kanban,
+    },
+    {
+      title: t.reports,
+      url: "/reports",
+      icon: BarChart3,
     },
   ];
 
