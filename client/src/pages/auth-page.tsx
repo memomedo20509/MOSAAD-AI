@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useLanguage } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building2, Loader2 } from "lucide-react";
+import { Building2, Loader2, Languages } from "lucide-react";
 
 export default function AuthPage() {
   const [, navigate] = useLocation();
   const { user, loginMutation, registerMutation } = useAuth();
+  const { t, language, setLanguage, isRTL } = useLanguage();
   const [loginData, setLoginData] = useState({ username: "", password: "" });
   const [registerData, setRegisterData] = useState({
     username: "",
@@ -37,12 +39,12 @@ export default function AuthPage() {
     setRegisterError("");
     
     if (registerData.password !== registerData.confirmPassword) {
-      setRegisterError("كلمات المرور غير متطابقة");
+      setRegisterError(t.passwordsMismatch);
       return;
     }
     
     if (registerData.password.length < 6) {
-      setRegisterError("كلمة المرور يجب أن تكون 6 أحرف على الأقل");
+      setRegisterError(t.passwordMinLength);
       return;
     }
 
@@ -55,8 +57,12 @@ export default function AuthPage() {
     });
   };
 
+  const toggleLanguage = () => {
+    setLanguage(language === "ar" ? "en" : "ar");
+  };
+
   return (
-    <div className="min-h-screen flex">
+    <div className={`min-h-screen flex ${isRTL ? "flex-row-reverse" : ""}`}>
       <div className="flex-1 flex items-center justify-center p-8">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
@@ -65,20 +71,32 @@ export default function AuthPage() {
                 <Building2 className="h-6 w-6 text-primary-foreground" />
               </div>
             </div>
-            <CardTitle className="text-2xl">HomeAdvisor CRM</CardTitle>
-            <CardDescription>نظام إدارة العملاء والمبيعات</CardDescription>
+            <div className="flex justify-center mb-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleLanguage}
+                className="gap-2"
+                data-testid="button-auth-language-toggle"
+              >
+                <Languages className="h-4 w-4" />
+                {t.switchLanguage}
+              </Button>
+            </div>
+            <CardTitle className="text-2xl">{t.appName}</CardTitle>
+            <CardDescription>{t.customerManagementSystem}</CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="login" className="w-full">
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="login" data-testid="tab-login">تسجيل الدخول</TabsTrigger>
-                <TabsTrigger value="register" data-testid="tab-register">إنشاء حساب</TabsTrigger>
+                <TabsTrigger value="login" data-testid="tab-login">{t.login}</TabsTrigger>
+                <TabsTrigger value="register" data-testid="tab-register">{t.createAccount}</TabsTrigger>
               </TabsList>
               
               <TabsContent value="login">
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="login-username">اسم المستخدم</Label>
+                    <Label htmlFor="login-username">{t.username}</Label>
                     <Input
                       id="login-username"
                       value={loginData.username}
@@ -88,7 +106,7 @@ export default function AuthPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="login-password">كلمة المرور</Label>
+                    <Label htmlFor="login-password">{t.password}</Label>
                     <Input
                       id="login-password"
                       type="password"
@@ -99,8 +117,8 @@ export default function AuthPage() {
                     />
                   </div>
                   <Button type="submit" className="w-full" disabled={loginMutation.isPending} data-testid="button-login">
-                    {loginMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-                    تسجيل الدخول
+                    {loginMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {t.login}
                   </Button>
                   
                   {import.meta.env.DEV && (
@@ -115,7 +133,7 @@ export default function AuthPage() {
                         disabled={loginMutation.isPending}
                         data-testid="button-quick-login"
                       >
-                        دخول سريع (للتطوير)
+                        {t.quickLoginDev}
                       </Button>
                     </div>
                   )}
@@ -126,7 +144,7 @@ export default function AuthPage() {
                 <form onSubmit={handleRegister} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="register-firstName">الاسم الأول</Label>
+                      <Label htmlFor="register-firstName">{t.firstName}</Label>
                       <Input
                         id="register-firstName"
                         value={registerData.firstName}
@@ -135,7 +153,7 @@ export default function AuthPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="register-lastName">الاسم الأخير</Label>
+                      <Label htmlFor="register-lastName">{t.lastName}</Label>
                       <Input
                         id="register-lastName"
                         value={registerData.lastName}
@@ -145,7 +163,7 @@ export default function AuthPage() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="register-username">اسم المستخدم *</Label>
+                    <Label htmlFor="register-username">{t.username} *</Label>
                     <Input
                       id="register-username"
                       value={registerData.username}
@@ -155,7 +173,7 @@ export default function AuthPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="register-email">البريد الإلكتروني</Label>
+                    <Label htmlFor="register-email">{t.email}</Label>
                     <Input
                       id="register-email"
                       type="email"
@@ -165,7 +183,7 @@ export default function AuthPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="register-password">كلمة المرور *</Label>
+                    <Label htmlFor="register-password">{t.password} *</Label>
                     <Input
                       id="register-password"
                       type="password"
@@ -176,7 +194,7 @@ export default function AuthPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="register-confirmPassword">تأكيد كلمة المرور *</Label>
+                    <Label htmlFor="register-confirmPassword">{t.confirmPassword} *</Label>
                     <Input
                       id="register-confirmPassword"
                       type="password"
@@ -190,8 +208,8 @@ export default function AuthPage() {
                     <p className="text-sm text-destructive" data-testid="text-register-error">{registerError}</p>
                   )}
                   <Button type="submit" className="w-full" disabled={registerMutation.isPending} data-testid="button-register">
-                    {registerMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-                    إنشاء حساب
+                    {registerMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {t.createAccount}
                   </Button>
                 </form>
               </TabsContent>
@@ -200,12 +218,12 @@ export default function AuthPage() {
         </Card>
       </div>
       
-      <div className="hidden lg:flex flex-1 items-center justify-center bg-primary p-8">
+      <div className={`hidden lg:flex flex-1 items-center justify-center bg-primary p-8 ${isRTL ? "order-first" : ""}`}>
         <div className="text-center text-primary-foreground max-w-md">
           <Building2 className="h-16 w-16 mx-auto mb-6" />
-          <h2 className="text-3xl font-bold mb-4">مرحباً بك في HomeAdvisor CRM</h2>
+          <h2 className="text-3xl font-bold mb-4">{t.welcomeToCRM}</h2>
           <p className="text-lg opacity-90">
-            نظام متكامل لإدارة العملاء والعقارات والمبيعات. تتبع العملاء المحتملين، وإدارة المشاريع، وتحليل الأداء.
+            {t.crmDescription}
           </p>
         </div>
       </div>

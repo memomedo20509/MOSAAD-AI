@@ -5,6 +5,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LanguageProvider, useLanguage } from "@/lib/i18n";
+import { LanguageToggle } from "@/components/language-toggle";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -30,6 +32,7 @@ import UnitsPage from "@/pages/units";
 
 function LogoutButton() {
   const { logoutMutation } = useAuth();
+  const { t } = useLanguage();
   return (
     <Button
       variant="ghost"
@@ -38,8 +41,8 @@ function LogoutButton() {
       disabled={logoutMutation.isPending}
       data-testid="button-logout"
     >
-      {logoutMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-      تسجيل الخروج
+      {logoutMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+      {t.signOut}
     </Button>
   );
 }
@@ -69,6 +72,7 @@ function Router() {
 
 function AuthenticatedApp() {
   const { user } = useAuth();
+  const { isRTL } = useLanguage();
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
@@ -76,14 +80,14 @@ function AuthenticatedApp() {
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
-      <div className="flex h-screen w-full">
+      <div className={`flex h-screen w-full ${isRTL ? "flex-row-reverse" : ""}`}>
         <AppSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex h-14 items-center justify-between gap-4 border-b px-4 shrink-0">
+          <header className={`flex h-14 items-center justify-between gap-4 border-b px-4 shrink-0 ${isRTL ? "flex-row-reverse" : ""}`}>
             <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <div className="flex items-center gap-4">
+            <div className={`flex items-center gap-2 ${isRTL ? "flex-row-reverse" : ""}`}>
               {user && (
-                <div className="flex items-center gap-2 text-sm">
+                <div className={`flex items-center gap-2 text-sm ${isRTL ? "flex-row-reverse" : ""}`}>
                   {user.profileImageUrl && (
                     <img 
                       src={user.profileImageUrl} 
@@ -97,6 +101,7 @@ function AuthenticatedApp() {
                   </span>
                 </div>
               )}
+              <LanguageToggle />
               <ThemeToggle />
               <LogoutButton />
             </div>
@@ -133,9 +138,11 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light" storageKey="crm-ui-theme">
         <TooltipProvider>
-          <AuthProvider>
-            <AppContent />
-          </AuthProvider>
+          <LanguageProvider>
+            <AuthProvider>
+              <AppContent />
+            </AuthProvider>
+          </LanguageProvider>
           <Toaster />
         </TooltipProvider>
       </ThemeProvider>

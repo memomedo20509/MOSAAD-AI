@@ -34,96 +34,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useAuth } from "@/hooks/use-auth";
+import { useLanguage } from "@/lib/i18n";
 import type { UserRole } from "@shared/models/auth";
-
-const mainNavItems = [
-  {
-    title: "لوحة التحكم",
-    url: "/",
-    icon: LayoutDashboard,
-  },
-];
-
-const salesItems = [
-  {
-    title: "جميع العملاء المحتملين",
-    url: "/leads",
-    icon: Users,
-  },
-];
-
-const adminItems = [
-  {
-    title: "إضافة عميل جديد",
-    url: "/leads/new",
-    icon: UserPlus,
-  },
-  {
-    title: "رفع العملاء",
-    url: "/leads/upload",
-    icon: Upload,
-  },
-  {
-    title: "العملاء المكررين",
-    url: "/leads/duplicated",
-    icon: Copy,
-  },
-  {
-    title: "العملاء المنسحبين",
-    url: "/leads/withdrawn",
-    icon: FileX,
-  },
-  {
-    title: "سجل الإجراءات",
-    url: "/leads/actions",
-    icon: Activity,
-  },
-];
-
-const inventoryItems = [
-  {
-    title: "المطورين",
-    url: "/inventory/developers",
-    icon: Landmark,
-  },
-  {
-    title: "المشاريع",
-    url: "/inventory/projects",
-    icon: FolderKanban,
-  },
-  {
-    title: "الوحدات",
-    url: "/inventory/units",
-    icon: Home,
-  },
-];
-
-const settingsItems = [
-  {
-    title: "إدارة الحالات",
-    url: "/settings/states",
-    icon: Settings,
-    adminOnly: false,
-  },
-  {
-    title: "الفلاتر المحفوظة",
-    url: "/settings/filters",
-    icon: Filter,
-    adminOnly: false,
-  },
-  {
-    title: "المستخدمين",
-    url: "/settings/users",
-    icon: UsersRound,
-    adminOnly: true,
-  },
-  {
-    title: "الفرق",
-    url: "/settings/teams",
-    icon: Users,
-    adminOnly: true,
-  },
-];
 
 const isAdmin = (role: UserRole | undefined): boolean => {
   return role === "super_admin" || role === "admin";
@@ -132,19 +44,110 @@ const isAdmin = (role: UserRole | undefined): boolean => {
 export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
+  const { t, isRTL } = useLanguage();
   const userRole = user?.role as UserRole | undefined;
+
+  const mainNavItems = [
+    {
+      title: t.dashboard,
+      url: "/",
+      icon: LayoutDashboard,
+    },
+  ];
+
+  const salesItems = [
+    {
+      title: t.allLeads,
+      url: "/leads",
+      icon: Users,
+    },
+  ];
+
+  const adminItems = [
+    {
+      title: t.addNewLead,
+      url: "/leads/new",
+      icon: UserPlus,
+    },
+    {
+      title: t.uploadLeads,
+      url: "/leads/upload",
+      icon: Upload,
+    },
+    {
+      title: t.duplicatedLeads,
+      url: "/leads/duplicated",
+      icon: Copy,
+    },
+    {
+      title: t.withdrawnLeads,
+      url: "/leads/withdrawn",
+      icon: FileX,
+    },
+    {
+      title: t.actionsLog,
+      url: "/leads/actions",
+      icon: Activity,
+    },
+  ];
+
+  const inventoryItems = [
+    {
+      title: t.developers,
+      url: "/inventory/developers",
+      icon: Landmark,
+    },
+    {
+      title: t.projects,
+      url: "/inventory/projects",
+      icon: FolderKanban,
+    },
+    {
+      title: t.units,
+      url: "/inventory/units",
+      icon: Home,
+    },
+  ];
+
+  const settingsItems = [
+    {
+      title: t.statesManagement,
+      url: "/settings/states",
+      icon: Settings,
+      adminOnly: false,
+    },
+    {
+      title: t.savedFilters,
+      url: "/settings/filters",
+      icon: Filter,
+      adminOnly: false,
+    },
+    {
+      title: t.users,
+      url: "/settings/users",
+      icon: UsersRound,
+      adminOnly: true,
+    },
+    {
+      title: t.teams,
+      url: "/settings/teams",
+      icon: Users,
+      adminOnly: true,
+    },
+  ];
+
   const filteredSettingsItems = settingsItems.filter(
     (item) => !item.adminOnly || isAdmin(userRole)
   );
 
   return (
-    <Sidebar>
+    <Sidebar side={isRTL ? "right" : "left"}>
       <SidebarHeader className="p-4">
         <Link href="/" className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
             <Building2 className="h-4 w-4 text-primary-foreground" />
           </div>
-          <span className="font-semibold text-lg" data-testid="text-app-name">HomeAdvisor CRM</span>
+          <span className="font-semibold text-lg" data-testid="text-app-name">{t.appName}</span>
         </Link>
       </SidebarHeader>
       <SidebarContent>
@@ -152,7 +155,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {mainNavItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
+                <SidebarMenuItem key={item.url}>
                   <SidebarMenuButton asChild isActive={location === item.url}>
                     <Link href={item.url} data-testid={`link-nav-${item.url.replace(/\//g, "-").slice(1) || "home"}`}>
                       <item.icon className="h-4 w-4" />
@@ -169,7 +172,7 @@ export function AppSidebar() {
           <Collapsible defaultOpen className="group/collapsible">
             <SidebarGroupLabel asChild>
               <CollapsibleTrigger className="flex w-full items-center justify-between">
-                المبيعات
+                {t.sales}
                 <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
               </CollapsibleTrigger>
             </SidebarGroupLabel>
@@ -177,7 +180,7 @@ export function AppSidebar() {
               <SidebarGroupContent>
                 <SidebarMenu>
                   {salesItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
+                    <SidebarMenuItem key={item.url}>
                       <SidebarMenuButton asChild isActive={location === item.url || (item.url === "/leads" && location.startsWith("/leads") && location !== "/leads/new" && location !== "/leads/upload" && location !== "/leads/duplicated" && location !== "/leads/withdrawn" && location !== "/leads/actions")}>
                         <Link href={item.url} data-testid={`link-nav-${item.url.replace(/\//g, "-").slice(1)}`}>
                           <item.icon className="h-4 w-4" />
@@ -196,7 +199,7 @@ export function AppSidebar() {
           <Collapsible defaultOpen className="group/collapsible">
             <SidebarGroupLabel asChild>
               <CollapsibleTrigger className="flex w-full items-center justify-between">
-                إدارة العملاء
+                {t.leadsAdmin}
                 <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
               </CollapsibleTrigger>
             </SidebarGroupLabel>
@@ -204,7 +207,7 @@ export function AppSidebar() {
               <SidebarGroupContent>
                 <SidebarMenu>
                   {adminItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
+                    <SidebarMenuItem key={item.url}>
                       <SidebarMenuButton asChild isActive={location === item.url}>
                         <Link href={item.url} data-testid={`link-nav-${item.url.replace(/\//g, "-").slice(1)}`}>
                           <item.icon className="h-4 w-4" />
@@ -224,7 +227,7 @@ export function AppSidebar() {
             <Collapsible defaultOpen className="group/collapsible">
               <SidebarGroupLabel asChild>
                 <CollapsibleTrigger className="flex w-full items-center justify-between">
-                  المخزون
+                  {t.inventory}
                   <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
                 </CollapsibleTrigger>
               </SidebarGroupLabel>
@@ -232,7 +235,7 @@ export function AppSidebar() {
                 <SidebarGroupContent>
                   <SidebarMenu>
                     {inventoryItems.map((item) => (
-                      <SidebarMenuItem key={item.title}>
+                      <SidebarMenuItem key={item.url}>
                         <SidebarMenuButton asChild isActive={location.startsWith(item.url)}>
                           <Link href={item.url} data-testid={`link-nav-${item.url.replace(/\//g, "-").slice(1)}`}>
                             <item.icon className="h-4 w-4" />
@@ -249,14 +252,14 @@ export function AppSidebar() {
         )}
 
         <SidebarGroup>
-          <SidebarGroupLabel>العملاء</SidebarGroupLabel>
+          <SidebarGroupLabel>{t.clients}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/clients"}>
                   <Link href="/clients" data-testid="link-nav-clients">
                     <Users className="h-4 w-4" />
-                    <span>جميع العملاء</span>
+                    <span>{t.allClients}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -268,7 +271,7 @@ export function AppSidebar() {
           <Collapsible className="group/collapsible">
             <SidebarGroupLabel asChild>
               <CollapsibleTrigger className="flex w-full items-center justify-between">
-                الإعدادات
+                {t.settings}
                 <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
               </CollapsibleTrigger>
             </SidebarGroupLabel>
@@ -276,7 +279,7 @@ export function AppSidebar() {
               <SidebarGroupContent>
                 <SidebarMenu>
                   {filteredSettingsItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
+                    <SidebarMenuItem key={item.url}>
                       <SidebarMenuButton asChild isActive={location === item.url}>
                         <Link href={item.url} data-testid={`link-nav-${item.url.replace(/\//g, "-").slice(1)}`}>
                           <item.icon className="h-4 w-4" />
@@ -293,7 +296,7 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter className="p-4">
         <div className="text-xs text-muted-foreground">
-          HomeAdvisor CRM v1.0
+          {t.appName} - {t.version}
         </div>
       </SidebarFooter>
     </Sidebar>

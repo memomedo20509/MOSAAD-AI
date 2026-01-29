@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import type { Lead, LeadState } from "@shared/schema";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
+import { useLanguage } from "@/lib/i18n";
 
 interface DashboardStats {
   totalLeads: number;
@@ -33,6 +34,8 @@ const stateIcons: Record<string, typeof Users> = {
 };
 
 export default function Dashboard() {
+  const { t, isRTL } = useLanguage();
+  
   const { data: states, isLoading: statesLoading } = useQuery<LeadState[]>({
     queryKey: ["/api/states"],
   });
@@ -66,8 +69,8 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight" data-testid="text-dashboard-title">Dashboard</h1>
-        <p className="text-muted-foreground">Overview of your sales performance and lead distribution</p>
+        <h1 className="text-2xl font-semibold tracking-tight" data-testid="text-dashboard-title">{t.dashboard}</h1>
+        <p className="text-muted-foreground">{t.dashboardSubtitle}</p>
       </div>
 
       {isLoading ? (
@@ -89,37 +92,37 @@ export default function Dashboard() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Leads</CardTitle>
+                <CardTitle className="text-sm font-medium">{t.totalLeads}</CardTitle>
                 <Users className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold" data-testid="text-total-leads">{stats?.totalLeads || 0}</div>
-                <p className="text-xs text-muted-foreground">All leads in the system</p>
+                <p className="text-xs text-muted-foreground">{t.allLeadsInSystem}</p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active States</CardTitle>
+                <CardTitle className="text-sm font-medium">{t.activeStates}</CardTitle>
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold" data-testid="text-active-states">{states?.length || 0}</div>
-                <p className="text-xs text-muted-foreground">Lead status categories</p>
+                <p className="text-xs text-muted-foreground">{t.leadStatusCategories}</p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Assigned Reps</CardTitle>
+                <CardTitle className="text-sm font-medium">{t.assignedReps}</CardTitle>
                 <Users className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold" data-testid="text-assigned-reps">{stats?.delayedLeads.length || 0}</div>
-                <p className="text-xs text-muted-foreground">Sales representatives</p>
+                <p className="text-xs text-muted-foreground">{t.salesRepresentatives}</p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Conversion Rate</CardTitle>
+                <CardTitle className="text-sm font-medium">{t.conversionRate}</CardTitle>
                 <CheckCircle className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -128,7 +131,7 @@ export default function Dashboard() {
                     ? Math.round((stats.leadsByState.find(s => s.stateName === "Done Deal")?.count || 0) / stats.totalLeads * 100)
                     : 0}%
                 </div>
-                <p className="text-xs text-muted-foreground">Done deals percentage</p>
+                <p className="text-xs text-muted-foreground">{t.doneDealsPercentage}</p>
               </CardContent>
             </Card>
           </div>
@@ -136,7 +139,7 @@ export default function Dashboard() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
             <Card className="col-span-4">
               <CardHeader>
-                <CardTitle>Lead Status Distribution</CardTitle>
+                <CardTitle>{t.leadStatusDistribution}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -167,7 +170,7 @@ export default function Dashboard() {
 
             <Card className="col-span-3">
               <CardHeader>
-                <CardTitle>Performance Chart</CardTitle>
+                <CardTitle>{t.performanceChart}</CardTitle>
               </CardHeader>
               <CardContent>
                 {chartData.length > 0 ? (
@@ -193,7 +196,7 @@ export default function Dashboard() {
                   </ResponsiveContainer>
                 ) : (
                   <div className="flex h-[250px] items-center justify-center text-muted-foreground">
-                    No data to display
+                    {t.noDataToDisplay}
                   </div>
                 )}
               </CardContent>
@@ -204,7 +207,7 @@ export default function Dashboard() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-amber-500" />
-                Leads by Sales Rep
+                {t.leadsBySalesRep}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -222,13 +225,13 @@ export default function Dashboard() {
                         </div>
                         <span className="font-medium">{item.assignedTo}</span>
                       </div>
-                      <Badge variant="secondary">{item.count} leads</Badge>
+                      <Badge variant="secondary">{item.count} {t.leads}</Badge>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="flex h-20 items-center justify-center text-muted-foreground">
-                  No assigned leads yet
+                  {t.noAssignedLeadsYet}
                 </div>
               )}
             </CardContent>
