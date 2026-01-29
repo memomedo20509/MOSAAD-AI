@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, registerAuthRoutes, isAuthenticated, requireRole } from "./replit_integrations/auth";
+import { setupAuth, registerAuthRoutes, isAuthenticated, requireRole } from "./auth";
 import { 
   insertLeadSchema, 
   insertLeadStateSchema, 
@@ -26,8 +26,8 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Setup authentication FIRST
-  await setupAuth(app);
+  // Setup username/password authentication
+  setupAuth(app);
   registerAuthRoutes(app);
 
   // Teams endpoints (admin only for mutations, all authenticated can view)

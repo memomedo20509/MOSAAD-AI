@@ -8,7 +8,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { AppSidebar } from "@/components/app-sidebar";
-import { useAuth } from "@/hooks/use-auth";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
@@ -23,10 +23,26 @@ import StatesManagementPage from "@/pages/states-management";
 import SavedFiltersPage from "@/pages/saved-filters";
 import UsersPage from "@/pages/users";
 import TeamsPage from "@/pages/teams";
-import LandingPage from "@/pages/landing";
+import AuthPage from "@/pages/auth-page";
 import DevelopersPage from "@/pages/developers";
 import ProjectsPage from "@/pages/projects";
 import UnitsPage from "@/pages/units";
+
+function LogoutButton() {
+  const { logoutMutation } = useAuth();
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={() => logoutMutation.mutate()}
+      disabled={logoutMutation.isPending}
+      data-testid="button-logout"
+    >
+      {logoutMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+      تسجيل الخروج
+    </Button>
+  );
+}
 
 function Router() {
   return (
@@ -82,14 +98,7 @@ function AuthenticatedApp() {
                 </div>
               )}
               <ThemeToggle />
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => window.location.href = "/api/logout"}
-                data-testid="button-logout"
-              >
-                Sign Out
-              </Button>
+              <LogoutButton />
             </div>
           </header>
           <main className="flex-1 overflow-auto p-6">
@@ -113,7 +122,7 @@ function AppContent() {
   }
 
   if (!user) {
-    return <LandingPage />;
+    return <AuthPage />;
   }
 
   return <AuthenticatedApp />;
@@ -124,7 +133,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light" storageKey="crm-ui-theme">
         <TooltipProvider>
-          <AppContent />
+          <AuthProvider>
+            <AppContent />
+          </AuthProvider>
           <Toaster />
         </TooltipProvider>
       </ThemeProvider>
