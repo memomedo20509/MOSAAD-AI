@@ -292,7 +292,7 @@ export default function AllUnitsPage() {
                     <Label>{t.area}</Label>
                     <Input
                       value={formData.area || ""}
-                      onChange={(e) => setFormData({ ...formData, area: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, area: parseInt(e.target.value) || undefined })}
                       placeholder={t.area}
                       data-testid="input-area"
                     />
@@ -301,7 +301,7 @@ export default function AllUnitsPage() {
                     <Label>{t.price}</Label>
                     <Input
                       value={formData.price || ""}
-                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, price: parseInt(e.target.value) || undefined })}
                       placeholder={t.price}
                       data-testid="input-price"
                     />
@@ -562,14 +562,14 @@ export default function AllUnitsPage() {
                                     <Label>{t.area}</Label>
                                     <Input
                                       value={formData.area || ""}
-                                      onChange={(e) => setFormData({ ...formData, area: e.target.value })}
+                                      onChange={(e) => setFormData({ ...formData, area: parseInt(e.target.value) || undefined })}
                                     />
                                   </div>
                                   <div className="space-y-2">
                                     <Label>{t.price}</Label>
                                     <Input
                                       value={formData.price || ""}
-                                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                                      onChange={(e) => setFormData({ ...formData, price: parseInt(e.target.value) || undefined })}
                                     />
                                   </div>
                                 </div>

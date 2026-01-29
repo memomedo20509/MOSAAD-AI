@@ -29,6 +29,7 @@ import AuthPage from "@/pages/auth-page";
 import DevelopersPage from "@/pages/developers";
 import ProjectsPage from "@/pages/projects";
 import UnitsPage from "@/pages/units";
+import AllUnitsPage from "@/pages/all-units";
 
 function LogoutButton() {
   const { logoutMutation } = useAuth();
@@ -64,6 +65,7 @@ function Router() {
       <Route path="/settings/teams" component={TeamsPage} />
       <Route path="/inventory/developers" component={DevelopersPage} />
       <Route path="/inventory/projects" component={ProjectsPage} />
+      <Route path="/inventory/units" component={AllUnitsPage} />
       <Route path="/inventory/projects/:projectId/units" component={UnitsPage} />
       <Route component={NotFound} />
     </Switch>
