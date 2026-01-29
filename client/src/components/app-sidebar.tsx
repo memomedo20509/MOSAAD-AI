@@ -11,6 +11,7 @@ import {
   ChevronDown,
   Building2,
   Filter,
+  UsersRound,
 } from "lucide-react";
 import {
   Sidebar,
@@ -32,6 +33,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { useAuth } from "@/hooks/use-auth";
+import type { UserRole } from "@shared/models/auth";
 
 const mainNavItems = [
   {
@@ -82,16 +85,39 @@ const settingsItems = [
     title: "States Management",
     url: "/settings/states",
     icon: Settings,
+    adminOnly: false,
   },
   {
     title: "Saved Filters",
     url: "/settings/filters",
     icon: Filter,
+    adminOnly: false,
+  },
+  {
+    title: "Users",
+    url: "/settings/users",
+    icon: UsersRound,
+    adminOnly: true,
+  },
+  {
+    title: "Teams",
+    url: "/settings/teams",
+    icon: Users,
+    adminOnly: true,
   },
 ];
 
+const isAdmin = (role: UserRole | undefined): boolean => {
+  return role === "super_admin" || role === "admin";
+};
+
 export function AppSidebar() {
   const [location] = useLocation();
+  const { user } = useAuth();
+  const userRole = user?.role as UserRole | undefined;
+  const filteredSettingsItems = settingsItems.filter(
+    (item) => !item.adminOnly || isAdmin(userRole)
+  );
 
   return (
     <Sidebar>
@@ -202,7 +228,7 @@ export function AppSidebar() {
             <CollapsibleContent>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {settingsItems.map((item) => (
+                  {filteredSettingsItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton asChild isActive={location === item.url}>
                         <Link href={item.url} data-testid={`link-nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>

@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { setupAuth, registerAuthRoutes, isAuthenticated, requireRole } from "./replit_integrations/auth";
 import { 
   insertLeadSchema, 
   insertLeadStateSchema, 
@@ -9,12 +10,109 @@ import {
   updateLeadSchema,
   updateLeadStateSchema,
   updateTaskSchema,
+  insertTeamSchema,
+  updateTeamSchema,
+  updateUserSchema,
 } from "@shared/schema";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Setup authentication FIRST
+  await setupAuth(app);
+  registerAuthRoutes(app);
+
+  // Teams endpoints (admin only for mutations, all authenticated can view)
+  app.get("/api/teams", isAuthenticated, async (req, res) => {
+    try {
+      const teams = await storage.getAllTeams();
+      res.json(teams);
+    } catch (error) {
+      console.error("Error fetching teams:", error);
+      res.status(500).json({ error: "Failed to fetch teams" });
+    }
+  });
+
+  app.post("/api/teams", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
+    try {
+      const data = insertTeamSchema.parse(req.body);
+      const team = await storage.createTeam(data);
+      res.status(201).json(team);
+    } catch (error) {
+      console.error("Error creating team:", error);
+      res.status(400).json({ error: "Failed to create team" });
+    }
+  });
+
+  app.patch("/api/teams/:id", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const data = updateTeamSchema.parse(req.body);
+      const team = await storage.updateTeam(id, data);
+      if (!team) {
+        return res.status(404).json({ error: "Team not found" });
+      }
+      res.json(team);
+    } catch (error) {
+      console.error("Error updating team:", error);
+      res.status(400).json({ error: "Failed to update team" });
+    }
+  });
+
+  app.delete("/api/teams/:id", isAuthenticated, requireRole("super_admin"), async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const deleted = await storage.deleteTeam(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Team not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting team:", error);
+      res.status(500).json({ error: "Failed to delete team" });
+    }
+  });
+
+  // Users management endpoints (super_admin and admin only)
+  app.get("/api/users", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      res.json(users);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+
+  app.get("/api/users/:id", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const user = await storage.getUser(id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ error: "Failed to fetch user" });
+    }
+  });
+
+  app.patch("/api/users/:id", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const data = updateUserSchema.parse(req.body);
+      const user = await storage.updateUser(id, data);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json(user);
+    } catch (error) {
+      console.error("Error updating user:", error);
+      res.status(400).json({ error: "Failed to update user" });
+    }
+  });
   // Lead States
   app.get("/api/states", async (req, res) => {
     try {

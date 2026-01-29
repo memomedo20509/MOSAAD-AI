@@ -2,13 +2,14 @@ import { db } from "./db";
 import { eq } from "drizzle-orm";
 import {
   users,
+  teams,
   leads,
   leadStates,
   clients,
   tasks,
   leadHistory,
   type User,
-  type InsertUser,
+  type UpdateUser,
   type Lead,
   type InsertLead,
   type LeadState,
@@ -19,13 +20,22 @@ import {
   type InsertTask,
   type LeadHistory,
   type InsertLeadHistory,
+  type Team,
+  type InsertTeam,
 } from "@shared/schema";
 
 export interface IStorage {
   // Users
   getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  getAllUsers(): Promise<User[]>;
+  updateUser(id: string, data: UpdateUser): Promise<User | undefined>;
+  
+  // Teams
+  getAllTeams(): Promise<Team[]>;
+  getTeam(id: string): Promise<Team | undefined>;
+  createTeam(team: InsertTeam): Promise<Team>;
+  updateTeam(id: string, data: Partial<Team>): Promise<Team | undefined>;
+  deleteTeam(id: string): Promise<boolean>;
 
   // Lead States
   getAllStates(): Promise<LeadState[]>;
@@ -69,14 +79,38 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
-    return user;
+  async getAllUsers(): Promise<User[]> {
+    return db.select().from(users).orderBy(users.createdAt);
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser).returning();
-    return user;
+  async updateUser(id: string, data: UpdateUser): Promise<User | undefined> {
+    const [updated] = await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id)).returning();
+    return updated;
+  }
+
+  // Teams
+  async getAllTeams(): Promise<Team[]> {
+    return db.select().from(teams).orderBy(teams.createdAt);
+  }
+
+  async getTeam(id: string): Promise<Team | undefined> {
+    const [team] = await db.select().from(teams).where(eq(teams.id, id));
+    return team;
+  }
+
+  async createTeam(team: InsertTeam): Promise<Team> {
+    const [newTeam] = await db.insert(teams).values(team).returning();
+    return newTeam;
+  }
+
+  async updateTeam(id: string, data: Partial<Team>): Promise<Team | undefined> {
+    const [updated] = await db.update(teams).set(data).where(eq(teams.id, id)).returning();
+    return updated;
+  }
+
+  async deleteTeam(id: string): Promise<boolean> {
+    const result = await db.delete(teams).where(eq(teams.id, id)).returning();
+    return result.length > 0;
   }
 
   // Lead States

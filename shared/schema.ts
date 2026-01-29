@@ -105,21 +105,5 @@ export const insertLeadHistorySchema = createInsertSchema(leadHistory).omit({ id
 export type InsertLeadHistory = z.infer<typeof insertLeadHistorySchema>;
 export type LeadHistory = typeof leadHistory.$inferSelect;
 
-// Users table for sales reps
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-  name: text("name"),
-  role: text("role").default("sales"),
-});
-
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-  name: true,
-  role: true,
-});
-
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
+// Export auth models (users, teams, sessions)
+export * from "./models/auth";

@@ -28,16 +28,30 @@ Preferred communication style: Simple, everyday language.
 - **Database ORM**: Drizzle ORM with PostgreSQL dialect
 - **Schema Validation**: Zod schemas generated from Drizzle schema via drizzle-zod
 
+### Authentication & Authorization
+- **Authentication**: Replit Auth (OpenID Connect) with automatic session management
+- **Session Storage**: PostgreSQL-backed sessions via connect-pg-simple
+- **Role-Based Access Control (RBAC)**: Four user roles with different permissions
+  - `super_admin` - Full access including user deletion
+  - `admin` - Full access except data deletion
+  - `sales_manager` - Team-level access only
+  - `sales_agent` - Own leads access only
+- **Auth Files**: `server/replit_integrations/auth/*` for auth setup
+- **Middleware**: `isAuthenticated` for login check, `requireRole()` for RBAC
+
 ### Data Layer
 - **Database**: PostgreSQL
 - **Schema Location**: `shared/schema.ts` contains all table definitions
+- **Auth Schema**: `shared/models/auth.ts` contains users, teams, and sessions tables
 - **Core Entities**:
+  - `users` - System users with role, team assignment, and active status
+  - `teams` - Organizational groups for sales teams
+  - `sessions` - OIDC session storage (required by Replit Auth)
   - `leadStates` - Customizable pipeline stages with color and order
   - `leads` - Potential customers with contact info, property preferences, and assignment
   - `clients` - Converted customers
   - `tasks` - Follow-up activities linked to leads
   - `leadHistory` - Audit trail of actions on leads
-  - `users` - System users
 
 ### Project Structure
 ```
