@@ -99,7 +99,7 @@ export default function AuthPage() {
                     />
                   </div>
                   <Button type="submit" className="w-full" disabled={loginMutation.isPending} data-testid="button-login">
-                    {loginMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {loginMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
                     تسجيل الدخول
                   </Button>
                   
@@ -110,10 +110,7 @@ export default function AuthPage() {
                         variant="outline"
                         className="w-full"
                         onClick={() => {
-                          setLoginData({ username: "admin", password: "admin123" });
-                          setTimeout(() => {
-                            loginMutation.mutate({ username: "admin", password: "admin123" });
-                          }, 100);
+                          loginMutation.mutate({ username: "admin", password: "admin123" });
                         }}
                         disabled={loginMutation.isPending}
                         data-testid="button-quick-login"
@@ -193,7 +190,7 @@ export default function AuthPage() {
                     <p className="text-sm text-destructive" data-testid="text-register-error">{registerError}</p>
                   )}
                   <Button type="submit" className="w-full" disabled={registerMutation.isPending} data-testid="button-register">
-                    {registerMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {registerMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
                     إنشاء حساب
                   </Button>
                 </form>
