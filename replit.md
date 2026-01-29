@@ -20,6 +20,14 @@ Preferred communication style: Simple, everyday language.
 - **UI Components**: shadcn/ui component library built on Radix UI primitives
 - **Styling**: Tailwind CSS with CSS variables for theming (light/dark mode support)
 - **Forms**: React Hook Form with Zod validation via @hookform/resolvers
+- **Internationalization (i18n)**: Custom LanguageProvider with Arabic/English support
+  - Language file: `client/src/lib/i18n.tsx`
+  - Language toggle: `client/src/components/language-toggle.tsx`
+  - Default language: Arabic (ar)
+  - RTL layout for Arabic, LTR for English
+  - Sidebar position: Right for Arabic, Left for English
+  - Language stored in localStorage as "crm-language"
+  - Arabic font: Tajawal (Google Fonts)
 
 ### Backend Architecture
 - **Runtime**: Node.js with Express 5
