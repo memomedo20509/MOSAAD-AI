@@ -9,8 +9,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Search, Activity, Calendar, User } from "lucide-react";
 import type { LeadHistory } from "@shared/schema";
 import { format } from "date-fns";
+import { useLanguage } from "@/lib/i18n";
 
 export default function ActionsLogPage() {
+  const { t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState("");
 
   const { data: allHistory, isLoading } = useQuery<LeadHistory[]>({
@@ -36,25 +38,25 @@ export default function ActionsLogPage() {
         </Link>
         <div>
           <h1 className="text-2xl font-semibold tracking-tight" data-testid="text-actions-title">
-            Actions Log
+            {t.actionsLogTitle}
           </h1>
-          <p className="text-muted-foreground">Track all actions performed on leads</p>
+          <p className="text-muted-foreground">{t.actionsLogSubtitle}</p>
         </div>
       </div>
 
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-3 rtl:left-auto rtl:right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search actions..."
+            placeholder={t.searchLeads}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
+            className="pl-9 rtl:pl-3 rtl:pr-9"
             data-testid="input-search-actions"
           />
         </div>
         <div className="text-sm text-muted-foreground" data-testid="text-actions-count">
-          {filteredHistory?.length || 0} actions
+          {filteredHistory?.length || 0} {t.actions}
         </div>
       </div>
 
@@ -101,7 +103,7 @@ export default function ActionsLogPage() {
                     </div>
                   </div>
                   <Badge variant="secondary" className="text-xs">
-                    Lead Action
+                    {t.action}
                   </Badge>
                 </div>
               </CardContent>
@@ -112,9 +114,9 @@ export default function ActionsLogPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Activity className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <h3 className="text-lg font-medium">No actions recorded</h3>
+            <h3 className="text-lg font-medium">{t.noActionsFound}</h3>
             <p className="text-muted-foreground text-sm mt-1 text-center max-w-md">
-              Actions performed on leads will be logged here
+              {t.actionsLogSubtitle}
             </p>
           </CardContent>
         </Card>

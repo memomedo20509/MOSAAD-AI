@@ -9,9 +9,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useToast } from "@/hooks/use-toast";
 import { Users, Plus, Edit, Trash2 } from "lucide-react";
 import type { Team, User } from "@shared/schema";
+import { useLanguage } from "@/lib/i18n";
 
 export default function TeamsPage() {
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
 
@@ -29,11 +31,11 @@ export default function TeamsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
-      toast({ title: "Team created successfully" });
+      toast({ title: t.teamCreatedSuccess });
       setIsAddOpen(false);
     },
     onError: () => {
-      toast({ title: "Failed to create team", variant: "destructive" });
+      toast({ title: t.teamCreatedError, variant: "destructive" });
     },
   });
 
@@ -43,11 +45,11 @@ export default function TeamsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
-      toast({ title: "Team updated successfully" });
+      toast({ title: t.teamUpdatedSuccess });
       setEditingTeam(null);
     },
     onError: () => {
-      toast({ title: "Failed to update team", variant: "destructive" });
+      toast({ title: t.teamUpdatedError, variant: "destructive" });
     },
   });
 
@@ -57,10 +59,10 @@ export default function TeamsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
-      toast({ title: "Team deleted successfully" });
+      toast({ title: t.teamDeletedSuccess });
     },
     onError: () => {
-      toast({ title: "Failed to delete team", variant: "destructive" });
+      toast({ title: t.teamDeletedError, variant: "destructive" });
     },
   });
 
@@ -87,7 +89,7 @@ export default function TeamsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-pulse text-muted-foreground">Loading teams...</div>
+        <div className="animate-pulse text-muted-foreground">{t.loading}</div>
       </div>
     );
   }
@@ -96,34 +98,34 @@ export default function TeamsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-page-title">Team Management</h1>
-          <p className="text-muted-foreground">Organize your sales teams</p>
+          <h1 className="text-2xl font-bold" data-testid="text-page-title">{t.teamsTitle}</h1>
+          <p className="text-muted-foreground">{t.teamsSubtitle}</p>
         </div>
 
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
           <DialogTrigger asChild>
             <Button data-testid="button-add-team">
               <Plus className="h-4 w-4 mr-2" />
-              Add Team
+              {t.addTeam}
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Add New Team</DialogTitle>
+              <DialogTitle>{t.addTeam}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleAddSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Team Name</Label>
+                <Label htmlFor="name">{t.teamName}</Label>
                 <Input
                   id="name"
                   name="name"
-                  placeholder="Enter team name"
+                  placeholder={t.teamName}
                   required
                   data-testid="input-team-name"
                 />
               </div>
               <Button type="submit" className="w-full" data-testid="button-save-team">
-                Create Team
+                {t.create}
               </Button>
             </form>
           </DialogContent>
@@ -156,11 +158,11 @@ export default function TeamsPage() {
                     </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
-                        <DialogTitle>Edit Team</DialogTitle>
+                        <DialogTitle>{t.editTeam}</DialogTitle>
                       </DialogHeader>
                       <form onSubmit={handleEditSubmit} className="space-y-4">
                         <div className="space-y-2">
-                          <Label htmlFor="editName">Team Name</Label>
+                          <Label htmlFor="editName">{t.teamName}</Label>
                           <Input
                             id="editName"
                             name="name"
@@ -170,7 +172,7 @@ export default function TeamsPage() {
                           />
                         </div>
                         <Button type="submit" className="w-full" data-testid="button-update-team">
-                          Update Team
+                          {t.update}
                         </Button>
                       </form>
                     </DialogContent>
@@ -179,7 +181,7 @@ export default function TeamsPage() {
                     size="icon"
                     variant="ghost"
                     onClick={() => {
-                      if (confirm("Are you sure you want to delete this team?")) {
+                      if (confirm(t.deleteTeamConfirm)) {
                         deleteTeamMutation.mutate(team.id);
                       }
                     }}
@@ -191,7 +193,7 @@ export default function TeamsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-sm text-muted-foreground mb-3">
-                  {members.length} member{members.length !== 1 ? "s" : ""}
+                  {members.length} {t.members}
                 </div>
                 {members.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
@@ -221,7 +223,7 @@ export default function TeamsPage() {
                     )}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">No members yet</p>
+                  <p className="text-sm text-muted-foreground">{t.noTeamsYet}</p>
                 )}
               </CardContent>
             </Card>
@@ -230,7 +232,7 @@ export default function TeamsPage() {
 
         {teams.length === 0 && (
           <div className="col-span-full text-center py-12 text-muted-foreground">
-            No teams created yet. Click "Add Team" to get started.
+            {t.noTeamsFound}
           </div>
         )}
       </div>

@@ -11,26 +11,28 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useToast } from "@/hooks/use-toast";
 import { Users, Edit, UserCheck, UserX, Search } from "lucide-react";
 import type { User, Team } from "@shared/schema";
-
-const ROLE_LABELS: Record<string, string> = {
-  super_admin: "Super Admin",
-  admin: "Admin",
-  sales_manager: "Sales Manager",
-  sales_agent: "Sales Agent",
-};
-
-const ROLE_COLORS: Record<string, string> = {
-  super_admin: "bg-red-500/10 text-red-600",
-  admin: "bg-purple-500/10 text-purple-600",
-  sales_manager: "bg-blue-500/10 text-blue-600",
-  sales_agent: "bg-green-500/10 text-green-600",
-};
+import { useLanguage } from "@/lib/i18n";
 
 export default function UsersPage() {
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [search, setSearch] = useState("");
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  const ROLE_LABELS: Record<string, string> = {
+    super_admin: t.superAdmin,
+    admin: t.admin,
+    sales_manager: t.salesManager,
+    sales_agent: t.salesAgent,
+  };
+
+  const ROLE_COLORS: Record<string, string> = {
+    super_admin: "bg-red-500/10 text-red-600",
+    admin: "bg-purple-500/10 text-purple-600",
+    sales_manager: "bg-blue-500/10 text-blue-600",
+    sales_agent: "bg-green-500/10 text-green-600",
+  };
 
   const { data: users = [], isLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -46,12 +48,12 @@ export default function UsersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-      toast({ title: "User updated successfully" });
+      toast({ title: t.userUpdatedSuccess });
       setIsDialogOpen(false);
       setEditingUser(null);
     },
     onError: () => {
-      toast({ title: "Failed to update user", variant: "destructive" });
+      toast({ title: t.userUpdatedError, variant: "destructive" });
     },
   });
 
@@ -80,7 +82,7 @@ export default function UsersPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-pulse text-muted-foreground">Loading users...</div>
+        <div className="animate-pulse text-muted-foreground">{t.loading}</div>
       </div>
     );
   }
@@ -89,8 +91,8 @@ export default function UsersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-page-title">User Management</h1>
-          <p className="text-muted-foreground">Manage system users and their roles</p>
+          <h1 className="text-2xl font-bold" data-testid="text-page-title">{t.usersTitle}</h1>
+          <p className="text-muted-foreground">{t.usersSubtitle}</p>
         </div>
       </div>
 
@@ -99,15 +101,15 @@ export default function UsersPage() {
           <div className="flex items-center justify-between gap-4">
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
-              Users ({filteredUsers.length})
+              {t.users} ({filteredUsers.length})
             </CardTitle>
             <div className="relative w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3 rtl:left-auto rtl:right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search users..."
+                placeholder={t.searchUsers}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
+                className="pl-9 rtl:pl-3 rtl:pr-9"
                 data-testid="input-search-users"
               />
             </div>
@@ -147,11 +149,11 @@ export default function UsersPage() {
                   </Badge>
                   {user.isActive ? (
                     <Badge variant="outline" className="text-green-600">
-                      <UserCheck className="h-3 w-3 mr-1" /> Active
+                      <UserCheck className="h-3 w-3 mr-1" /> {t.active}
                     </Badge>
                   ) : (
                     <Badge variant="outline" className="text-red-600">
-                      <UserX className="h-3 w-3 mr-1" /> Inactive
+                      <UserX className="h-3 w-3 mr-1" /> {t.inactive}
                     </Badge>
                   )}
 
@@ -174,35 +176,35 @@ export default function UsersPage() {
                     </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
-                        <DialogTitle>Edit User</DialogTitle>
+                        <DialogTitle>{t.editUser}</DialogTitle>
                       </DialogHeader>
                       <form onSubmit={handleEditSubmit} className="space-y-4">
                         <div className="space-y-2">
-                          <Label>Email</Label>
+                          <Label>{t.email}</Label>
                           <Input value={user.email || ""} disabled />
                         </div>
                         <div className="space-y-2">
-                          <Label>Role</Label>
+                          <Label>{t.role}</Label>
                           <Select name="role" defaultValue={user.role || "sales_agent"}>
                             <SelectTrigger data-testid="select-role">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="super_admin">Super Admin</SelectItem>
-                              <SelectItem value="admin">Admin</SelectItem>
-                              <SelectItem value="sales_manager">Sales Manager</SelectItem>
-                              <SelectItem value="sales_agent">Sales Agent</SelectItem>
+                              <SelectItem value="super_admin">{t.superAdmin}</SelectItem>
+                              <SelectItem value="admin">{t.admin}</SelectItem>
+                              <SelectItem value="sales_manager">{t.salesManager}</SelectItem>
+                              <SelectItem value="sales_agent">{t.salesAgent}</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                         <div className="space-y-2">
-                          <Label>Team</Label>
+                          <Label>{t.team}</Label>
                           <Select name="teamId" defaultValue={user.teamId || ""}>
                             <SelectTrigger data-testid="select-team">
-                              <SelectValue placeholder="Select team" />
+                              <SelectValue placeholder={t.selectTeam} />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">No Team</SelectItem>
+                              <SelectItem value="">{t.noTeam}</SelectItem>
                               {teams.map((team) => (
                                 <SelectItem key={team.id} value={team.id}>
                                   {team.name}
@@ -212,19 +214,19 @@ export default function UsersPage() {
                           </Select>
                         </div>
                         <div className="space-y-2">
-                          <Label>Status</Label>
+                          <Label>{t.status}</Label>
                           <Select name="isActive" defaultValue={user.isActive ? "true" : "false"}>
                             <SelectTrigger data-testid="select-status">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="true">Active</SelectItem>
-                              <SelectItem value="false">Inactive</SelectItem>
+                              <SelectItem value="true">{t.active}</SelectItem>
+                              <SelectItem value="false">{t.inactive}</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                         <Button type="submit" className="w-full" data-testid="button-save-user">
-                          Save Changes
+                          {t.save}
                         </Button>
                       </form>
                     </DialogContent>
@@ -235,7 +237,7 @@ export default function UsersPage() {
 
             {filteredUsers.length === 0 && (
               <div className="py-8 text-center text-muted-foreground">
-                No users found
+                {t.noUsersFound}
               </div>
             )}
           </div>

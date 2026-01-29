@@ -43,6 +43,7 @@ import {
 import type { LeadState } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/lib/i18n";
 
 const defaultColors = [
   "#3b82f6", // Blue
@@ -58,6 +59,7 @@ const defaultColors = [
 ];
 
 export default function StatesManagementPage() {
+  const { t } = useLanguage();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editState, setEditState] = useState<LeadState | null>(null);
   const [deleteState, setDeleteState] = useState<LeadState | null>(null);
@@ -78,10 +80,10 @@ export default function StatesManagementPage() {
       setIsAddOpen(false);
       setNewName("");
       setNewColor(defaultColors[0]);
-      toast({ title: "State created successfully" });
+      toast({ title: t.stateCreatedSuccess });
     },
     onError: () => {
-      toast({ title: "Failed to create state", variant: "destructive" });
+      toast({ title: t.stateCreatedError, variant: "destructive" });
     },
   });
 
@@ -92,10 +94,10 @@ export default function StatesManagementPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/states"] });
       setEditState(null);
-      toast({ title: "State updated successfully" });
+      toast({ title: t.stateUpdatedSuccess });
     },
     onError: () => {
-      toast({ title: "Failed to update state", variant: "destructive" });
+      toast({ title: t.stateUpdatedError, variant: "destructive" });
     },
   });
 
@@ -106,10 +108,10 @@ export default function StatesManagementPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/states"] });
       setDeleteState(null);
-      toast({ title: "State deleted successfully" });
+      toast({ title: t.stateDeletedSuccess });
     },
     onError: () => {
-      toast({ title: "Failed to delete state", variant: "destructive" });
+      toast({ title: t.stateDeletedError, variant: "destructive" });
     },
   });
 
@@ -154,33 +156,33 @@ export default function StatesManagementPage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight" data-testid="text-states-title">
-            States Management
+            {t.statesManagementTitle}
           </h1>
-          <p className="text-muted-foreground">Configure lead status categories</p>
+          <p className="text-muted-foreground">{t.statesManagementSubtitle}</p>
         </div>
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
           <DialogTrigger asChild>
             <Button data-testid="button-add-state">
               <Plus className="h-4 w-4 mr-2" />
-              Add State
+              {t.addState}
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Add New State</DialogTitle>
+              <DialogTitle>{t.addState}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label>State Name</Label>
+                <Label>{t.stateName}</Label>
                 <Input
-                  placeholder="Enter state name"
+                  placeholder={t.stateName}
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   data-testid="input-new-state-name"
                 />
               </div>
               <div className="space-y-2">
-                <Label>Color</Label>
+                <Label>{t.stateColor}</Label>
                 <div className="flex flex-wrap gap-2">
                   {defaultColors.map((color) => (
                     <button
@@ -198,7 +200,7 @@ export default function StatesManagementPage() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsAddOpen(false)}>
-                Cancel
+                {t.cancel}
               </Button>
               <Button
                 onClick={handleAdd}
@@ -208,7 +210,7 @@ export default function StatesManagementPage() {
                 {createStateMutation.isPending && (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 )}
-                Add State
+                {t.create}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -217,7 +219,7 @@ export default function StatesManagementPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Lead States</CardTitle>
+          <CardTitle className="text-base">{t.statesManagement}</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -231,10 +233,10 @@ export default function StatesManagementPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10">#</TableHead>
-                  <TableHead>State Name</TableHead>
-                  <TableHead className="w-24">Color</TableHead>
-                  <TableHead className="w-24 text-center">Order</TableHead>
-                  <TableHead className="w-24 text-right">Actions</TableHead>
+                  <TableHead>{t.stateName}</TableHead>
+                  <TableHead className="w-24">{t.stateColor}</TableHead>
+                  <TableHead className="w-24 text-center">{t.order}</TableHead>
+                  <TableHead className="w-24 text-right">{t.actions}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -310,13 +312,13 @@ export default function StatesManagementPage() {
             </Table>
           ) : (
             <div className="flex flex-col items-center justify-center py-12">
-              <p className="text-muted-foreground">No states configured yet</p>
+              <p className="text-muted-foreground">{t.noStatesYet}</p>
               <Button
                 variant="outline"
                 className="mt-4"
                 onClick={() => setIsAddOpen(true)}
               >
-                Add your first state
+                {t.addFirstState}
               </Button>
             </div>
           )}
@@ -326,21 +328,21 @@ export default function StatesManagementPage() {
       <Dialog open={!!editState} onOpenChange={(open) => !open && setEditState(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit State</DialogTitle>
+            <DialogTitle>{t.editState}</DialogTitle>
           </DialogHeader>
           {editState && (
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label>State Name</Label>
+                <Label>{t.stateName}</Label>
                 <Input
-                  placeholder="Enter state name"
+                  placeholder={t.stateName}
                   value={editState.name}
                   onChange={(e) => setEditState({ ...editState, name: e.target.value })}
                   data-testid="input-edit-state-name"
                 />
               </div>
               <div className="space-y-2">
-                <Label>Color</Label>
+                <Label>{t.stateColor}</Label>
                 <div className="flex flex-wrap gap-2">
                   {defaultColors.map((color) => (
                     <button
@@ -360,7 +362,7 @@ export default function StatesManagementPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditState(null)}>
-              Cancel
+              {t.cancel}
             </Button>
             <Button
               onClick={handleEdit}
@@ -370,7 +372,7 @@ export default function StatesManagementPage() {
               {updateStateMutation.isPending && (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
-              Save Changes
+              {t.update}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -379,20 +381,19 @@ export default function StatesManagementPage() {
       <AlertDialog open={!!deleteState} onOpenChange={(open) => !open && setDeleteState(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete State</AlertDialogTitle>
+            <AlertDialogTitle>{t.deleteState}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete the state "{deleteState?.name}"? This action cannot
-              be undone.
+              {t.deleteStateConfirm} "{deleteState?.name}"? {t.deleteStateWarning}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteState && deleteStateMutation.mutate(deleteState.id)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               data-testid="button-confirm-delete-state"
             >
-              Delete
+              {t.delete}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

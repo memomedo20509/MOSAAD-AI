@@ -13,10 +13,12 @@ import {
 } from "@/components/ui/sheet";
 import { Search, Phone, Mail, Building2, MapPin, User } from "lucide-react";
 import type { Client } from "@shared/schema";
+import { useLanguage } from "@/lib/i18n";
 
 export default function ClientsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const { t } = useLanguage();
 
   const { data: clients, isLoading } = useQuery<Client[]>({
     queryKey: ["/api/clients"],
@@ -35,24 +37,24 @@ export default function ClientsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight" data-testid="text-clients-title">
-          Clients
+          {t.clientsTitle}
         </h1>
-        <p className="text-muted-foreground">Manage your converted clients</p>
+        <p className="text-muted-foreground">{t.clientsSubtitle}</p>
       </div>
 
       <div className="flex items-center gap-4">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground rtl:left-auto rtl:right-3" />
           <Input
-            placeholder="Search clients..."
+            placeholder={t.searchClients}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
+            className="pl-9 rtl:pl-3 rtl:pr-9"
             data-testid="input-search-clients"
           />
         </div>
         <div className="text-sm text-muted-foreground" data-testid="text-clients-count">
-          {filteredClients?.length || 0} clients
+          {filteredClients?.length || 0} {t.clients}
         </div>
       </div>
 
@@ -84,7 +86,7 @@ export default function ClientsPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium truncate" data-testid={`text-client-name-${client.id}`}>
-                      {client.name || "No Name"}
+                      {client.name || t.noName}
                     </h3>
 
                     <div className="mt-2 space-y-1 text-sm text-muted-foreground">
@@ -123,11 +125,9 @@ export default function ClientsPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <User className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <h3 className="text-lg font-medium">No clients found</h3>
+            <h3 className="text-lg font-medium">{t.noClientsFound}</h3>
             <p className="text-muted-foreground text-sm mt-1">
-              {searchQuery
-                ? "Try adjusting your search"
-                : "Clients will appear here when leads are converted"}
+              {t.noClientsYet}
             </p>
           </CardContent>
         </Card>
@@ -137,14 +137,14 @@ export default function ClientsPage() {
         <SheetContent className="w-full sm:max-w-md">
           <SheetHeader>
             <SheetTitle data-testid="text-client-detail-name">
-              {selectedClient?.name || "No Name"}
+              {selectedClient?.name || t.noName}
             </SheetTitle>
           </SheetHeader>
 
           {selectedClient && (
             <div className="mt-6 space-y-6">
               <div className="space-y-3">
-                <h4 className="text-sm font-medium text-muted-foreground">Contact Information</h4>
+                <h4 className="text-sm font-medium text-muted-foreground">{t.contactInfo}</h4>
                 <div className="space-y-2">
                   {selectedClient.phone && (
                     <div className="flex items-center gap-3">
@@ -168,21 +168,21 @@ export default function ClientsPage() {
               </div>
 
               <div className="space-y-3">
-                <h4 className="text-sm font-medium text-muted-foreground">Property Details</h4>
+                <h4 className="text-sm font-medium text-muted-foreground">{t.propertyPreferences}</h4>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <p className="text-muted-foreground">Project</p>
+                    <p className="text-muted-foreground">{t.projects}</p>
                     <p className="font-medium">{selectedClient.project || "-"}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Units Owned</p>
+                    <p className="text-muted-foreground">{t.units}</p>
                     <p className="font-medium">{selectedClient.unitsCount || 0}</p>
                   </div>
                 </div>
               </div>
 
               <div className="space-y-3">
-                <h4 className="text-sm font-medium text-muted-foreground">Quick Actions</h4>
+                <h4 className="text-sm font-medium text-muted-foreground">{t.actions}</h4>
                 <div className="space-y-2">
                   {selectedClient.phone && (
                     <Button variant="outline" className="w-full justify-start" asChild>

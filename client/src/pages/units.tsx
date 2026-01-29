@@ -46,6 +46,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Home, ArrowLeft, Loader2, LayoutGrid, List } from "lucide-react";
 import type { Unit, Project, InsertUnit } from "@shared/schema";
+import { useLanguage } from "@/lib/i18n";
 
 const UNIT_TYPES = ["Apartment", "Studio", "Duplex", "Penthouse", "Villa", "Townhouse", "Office", "Shop", "Warehouse"];
 const UNIT_STATUSES = [
@@ -58,6 +59,7 @@ const FINISHING_OPTIONS = ["Core & Shell", "Semi-Finished", "Fully Finished", "F
 export default function UnitsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [, params] = useRoute("/inventory/projects/:projectId/units");
   const projectId = params?.projectId;
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -85,10 +87,10 @@ export default function UnitsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "units"] });
       setIsAddOpen(false);
       setFormData({});
-      toast({ title: "Unit created successfully" });
+      toast({ title: t.unitCreatedSuccess });
     },
     onError: () => {
-      toast({ title: "Failed to create unit", variant: "destructive" });
+      toast({ title: t.unitCreatedError, variant: "destructive" });
     },
   });
 
@@ -99,10 +101,10 @@ export default function UnitsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "units"] });
       setEditingUnit(null);
       setFormData({});
-      toast({ title: "Unit updated successfully" });
+      toast({ title: t.unitUpdatedSuccess });
     },
     onError: () => {
-      toast({ title: "Failed to update unit", variant: "destructive" });
+      toast({ title: t.unitUpdatedError, variant: "destructive" });
     },
   });
 
@@ -110,10 +112,10 @@ export default function UnitsPage() {
     mutationFn: (id: string) => apiRequest("DELETE", `/api/units/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "units"] });
-      toast({ title: "Unit deleted successfully" });
+      toast({ title: t.unitDeletedSuccess });
     },
     onError: () => {
-      toast({ title: "Failed to delete unit", variant: "destructive" });
+      toast({ title: t.unitDeletedError, variant: "destructive" });
     },
   });
 
@@ -178,7 +180,7 @@ export default function UnitsPage() {
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="unitNumber">Unit Number *</Label>
+          <Label htmlFor="unitNumber">{t.unitNumber} *</Label>
           <Input
             id="unitNumber"
             value={formData.unitNumber || ""}
@@ -188,7 +190,7 @@ export default function UnitsPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="floor">Floor</Label>
+          <Label htmlFor="floor">{t.floor}</Label>
           <Input
             id="floor"
             type="number"
@@ -200,7 +202,7 @@ export default function UnitsPage() {
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="building">Building</Label>
+          <Label htmlFor="building">{t.location}</Label>
           <Input
             id="building"
             value={formData.building || ""}
@@ -209,10 +211,10 @@ export default function UnitsPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="type">Type</Label>
+          <Label htmlFor="type">{t.type}</Label>
           <Select value={formData.type || ""} onValueChange={(value) => setFormData({ ...formData, type: value })}>
             <SelectTrigger data-testid="select-unit-type">
-              <SelectValue placeholder="Select type" />
+              <SelectValue placeholder={t.type} />
             </SelectTrigger>
             <SelectContent>
               {UNIT_TYPES.map((type) => (
@@ -226,7 +228,7 @@ export default function UnitsPage() {
       </div>
       <div className="grid grid-cols-3 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="bedrooms">Bedrooms</Label>
+          <Label htmlFor="bedrooms">{t.bedrooms}</Label>
           <Input
             id="bedrooms"
             type="number"
@@ -236,7 +238,7 @@ export default function UnitsPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="bathrooms">Bathrooms</Label>
+          <Label htmlFor="bathrooms">{t.bathrooms}</Label>
           <Input
             id="bathrooms"
             type="number"
@@ -246,7 +248,7 @@ export default function UnitsPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="area">Area (sqm)</Label>
+          <Label htmlFor="area">{t.area}</Label>
           <Input
             id="area"
             type="number"
@@ -258,7 +260,7 @@ export default function UnitsPage() {
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="price">Price</Label>
+          <Label htmlFor="price">{t.price}</Label>
           <Input
             id="price"
             type="number"
@@ -268,10 +270,10 @@ export default function UnitsPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="status">Status</Label>
+          <Label htmlFor="status">{t.status}</Label>
           <Select value={formData.status || "available"} onValueChange={(value) => setFormData({ ...formData, status: value })}>
             <SelectTrigger data-testid="select-unit-status">
-              <SelectValue placeholder="Select status" />
+              <SelectValue placeholder={t.status} />
             </SelectTrigger>
             <SelectContent>
               {UNIT_STATUSES.map((status) => (
@@ -285,20 +287,19 @@ export default function UnitsPage() {
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="view">View</Label>
+          <Label htmlFor="view">{t.location}</Label>
           <Input
             id="view"
             value={formData.view || ""}
             onChange={(e) => setFormData({ ...formData, view: e.target.value })}
-            placeholder="e.g., Sea View, Garden View"
             data-testid="input-unit-view"
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="finishing">Finishing</Label>
+          <Label htmlFor="finishing">{t.type}</Label>
           <Select value={formData.finishing || ""} onValueChange={(value) => setFormData({ ...formData, finishing: value })}>
             <SelectTrigger data-testid="select-unit-finishing">
-              <SelectValue placeholder="Select finishing" />
+              <SelectValue placeholder={t.type} />
             </SelectTrigger>
             <SelectContent>
               {FINISHING_OPTIONS.map((option) => (
@@ -311,7 +312,7 @@ export default function UnitsPage() {
         </div>
       </div>
       <div className="space-y-2">
-        <Label htmlFor="notes">Notes</Label>
+        <Label htmlFor="notes">{t.notes}</Label>
         <Textarea
           id="notes"
           value={formData.notes || ""}
@@ -322,7 +323,7 @@ export default function UnitsPage() {
       <DialogFooter>
         <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} data-testid="button-save-unit">
           {(createMutation.isPending || updateMutation.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {editingUnit ? "Update" : "Create"} Unit
+          {editingUnit ? t.update : t.create}
         </Button>
       </DialogFooter>
     </form>
@@ -339,7 +340,7 @@ export default function UnitsPage() {
         ))}
       </div>
       {floors.length === 0 ? (
-        <p className="text-muted-foreground text-center py-8">No units with floor information</p>
+        <p className="text-muted-foreground text-center py-8">{t.noUnitsFound}</p>
       ) : (
         <div className="border rounded-lg overflow-hidden">
           {floors.map((floor) => {
@@ -347,7 +348,7 @@ export default function UnitsPage() {
             return (
               <div key={floor} className="flex border-b last:border-b-0">
                 <div className="w-20 flex-shrink-0 bg-muted flex items-center justify-center font-medium p-2">
-                  Floor {floor}
+                  {t.floor} {floor}
                 </div>
                 <div className="flex-1 flex flex-wrap gap-2 p-2">
                   {floorUnits.map((unit) => (
@@ -364,7 +365,7 @@ export default function UnitsPage() {
                       </DialogTrigger>
                       <DialogContent className="max-w-lg">
                         <DialogHeader>
-                          <DialogTitle>Edit Unit {unit.unitNumber}</DialogTitle>
+                          <DialogTitle>{t.editUnit} {unit.unitNumber}</DialogTitle>
                         </DialogHeader>
                         <UnitForm />
                       </DialogContent>
@@ -384,14 +385,14 @@ export default function UnitsPage() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Unit</TableHead>
-            <TableHead>Floor</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Beds/Baths</TableHead>
-            <TableHead>Area</TableHead>
-            <TableHead>Price</TableHead>
-            <TableHead>Status</TableHead>
-            {isAdmin && <TableHead className="text-right">Actions</TableHead>}
+            <TableHead>{t.unitNumber}</TableHead>
+            <TableHead>{t.floor}</TableHead>
+            <TableHead>{t.type}</TableHead>
+            <TableHead>{t.bedrooms}/{t.bathrooms}</TableHead>
+            <TableHead>{t.area}</TableHead>
+            <TableHead>{t.price}</TableHead>
+            <TableHead>{t.status}</TableHead>
+            {isAdmin && <TableHead className="text-right">{t.actions}</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -419,7 +420,7 @@ export default function UnitsPage() {
                       </DialogTrigger>
                       <DialogContent className="max-w-lg">
                         <DialogHeader>
-                          <DialogTitle>Edit Unit {unit.unitNumber}</DialogTitle>
+                          <DialogTitle>{t.editUnit} {unit.unitNumber}</DialogTitle>
                         </DialogHeader>
                         <UnitForm />
                       </DialogContent>
@@ -433,15 +434,15 @@ export default function UnitsPage() {
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Unit?</AlertDialogTitle>
+                            <AlertDialogTitle>{t.deleteUnit}?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              This action cannot be undone. This will permanently delete unit "{unit.unitNumber}".
+                              {t.deleteUnitConfirm} "{unit.unitNumber}"
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
                             <AlertDialogAction onClick={() => deleteMutation.mutate(unit.id)} data-testid="button-confirm-delete-unit">
-                              Delete
+                              {t.delete}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
@@ -467,9 +468,9 @@ export default function UnitsPage() {
         </Link>
         <div className="flex-1">
           <h1 className="text-2xl font-bold" data-testid="text-page-title">
-            {project?.name || "Project"} - Units
+            {project?.name || t.projects} - {t.units}
           </h1>
-          <p className="text-muted-foreground">{filteredUnits.length} units found</p>
+          <p className="text-muted-foreground">{filteredUnits.length} {t.units}</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -494,12 +495,12 @@ export default function UnitsPage() {
             <DialogTrigger asChild>
               <Button data-testid="button-add-unit">
                 <Plus className="mr-2 h-4 w-4" />
-                Add Unit
+                {t.addUnit}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-lg">
               <DialogHeader>
-                <DialogTitle>Add New Unit</DialogTitle>
+                <DialogTitle>{t.addUnit}</DialogTitle>
               </DialogHeader>
               <UnitForm />
             </DialogContent>
@@ -510,10 +511,10 @@ export default function UnitsPage() {
       <div className="flex gap-4 mb-6">
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="w-48" data-testid="filter-status">
-            <SelectValue placeholder="Filter by status" />
+            <SelectValue placeholder={t.status} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="all">{t.allStates}</SelectItem>
             {UNIT_STATUSES.map((status) => (
               <SelectItem key={status.value} value={status.value}>
                 {status.label}
@@ -527,11 +528,11 @@ export default function UnitsPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Home className="h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">No units found</p>
+            <p className="text-muted-foreground">{t.noUnitsFound}</p>
             {isAdmin && (
               <Button className="mt-4" onClick={() => setIsAddOpen(true)} data-testid="button-add-first-unit">
                 <Plus className="mr-2 h-4 w-4" />
-                Add Your First Unit
+                {t.addUnit}
               </Button>
             )}
           </CardContent>

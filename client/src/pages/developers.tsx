@@ -30,10 +30,12 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Building2, Phone, Mail, Globe, MapPin, Loader2 } from "lucide-react";
 import type { Developer, InsertDeveloper } from "@shared/schema";
+import { useLanguage } from "@/lib/i18n";
 
 export default function DevelopersPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingDeveloper, setEditingDeveloper] = useState<Developer | null>(null);
   const [formData, setFormData] = useState<Partial<InsertDeveloper>>({});
@@ -51,10 +53,10 @@ export default function DevelopersPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/developers"] });
       setIsAddOpen(false);
       setFormData({});
-      toast({ title: "Developer created successfully" });
+      toast({ title: t.developerCreatedSuccess });
     },
     onError: () => {
-      toast({ title: "Failed to create developer", variant: "destructive" });
+      toast({ title: t.developerCreatedError, variant: "destructive" });
     },
   });
 
@@ -65,10 +67,10 @@ export default function DevelopersPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/developers"] });
       setEditingDeveloper(null);
       setFormData({});
-      toast({ title: "Developer updated successfully" });
+      toast({ title: t.developerUpdatedSuccess });
     },
     onError: () => {
-      toast({ title: "Failed to update developer", variant: "destructive" });
+      toast({ title: t.developerUpdatedError, variant: "destructive" });
     },
   });
 
@@ -76,10 +78,10 @@ export default function DevelopersPage() {
     mutationFn: (id: string) => apiRequest("DELETE", `/api/developers/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/developers"] });
-      toast({ title: "Developer deleted successfully" });
+      toast({ title: t.developerDeletedSuccess });
     },
     onError: () => {
-      toast({ title: "Failed to delete developer", variant: "destructive" });
+      toast({ title: t.developerDeletedError, variant: "destructive" });
     },
   });
 
@@ -121,7 +123,7 @@ export default function DevelopersPage() {
   const DeveloperForm = () => (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="name">Developer Name *</Label>
+        <Label htmlFor="name">{t.developerName} *</Label>
         <Input
           id="name"
           value={formData.name || ""}
@@ -132,7 +134,7 @@ export default function DevelopersPage() {
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="phone">Phone</Label>
+          <Label htmlFor="phone">{t.phone}</Label>
           <Input
             id="phone"
             value={formData.phone || ""}
@@ -141,7 +143,7 @@ export default function DevelopersPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">{t.email}</Label>
           <Input
             id="email"
             type="email"
@@ -152,7 +154,7 @@ export default function DevelopersPage() {
         </div>
       </div>
       <div className="space-y-2">
-        <Label htmlFor="website">Website</Label>
+        <Label htmlFor="website">{t.website}</Label>
         <Input
           id="website"
           value={formData.website || ""}
@@ -161,7 +163,7 @@ export default function DevelopersPage() {
         />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="address">Address</Label>
+        <Label htmlFor="address">{t.address}</Label>
         <Input
           id="address"
           value={formData.address || ""}
@@ -170,7 +172,7 @@ export default function DevelopersPage() {
         />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="description">Description</Label>
+        <Label htmlFor="description">{t.description}</Label>
         <Textarea
           id="description"
           value={formData.description || ""}
@@ -185,12 +187,12 @@ export default function DevelopersPage() {
           onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
           data-testid="switch-developer-active"
         />
-        <Label htmlFor="isActive">Active</Label>
+        <Label htmlFor="isActive">{t.active}</Label>
       </div>
       <DialogFooter>
         <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} data-testid="button-save-developer">
           {(createMutation.isPending || updateMutation.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {editingDeveloper ? "Update" : "Create"} Developer
+          {editingDeveloper ? t.update : t.create}
         </Button>
       </DialogFooter>
     </form>
@@ -200,20 +202,20 @@ export default function DevelopersPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-page-title">Developers</h1>
-          <p className="text-muted-foreground">Manage real estate developers</p>
+          <h1 className="text-2xl font-bold" data-testid="text-page-title">{t.developersTitle}</h1>
+          <p className="text-muted-foreground">{t.developersSubtitle}</p>
         </div>
         {isAdmin && (
           <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) resetForm(); }}>
             <DialogTrigger asChild>
               <Button data-testid="button-add-developer">
                 <Plus className="mr-2 h-4 w-4" />
-                Add Developer
+                {t.addDeveloper}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Add New Developer</DialogTitle>
+                <DialogTitle>{t.addDeveloper}</DialogTitle>
               </DialogHeader>
               <DeveloperForm />
             </DialogContent>
@@ -225,11 +227,11 @@ export default function DevelopersPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Building2 className="h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">No developers found</p>
+            <p className="text-muted-foreground">{t.noDevelopersFound}</p>
             {isAdmin && (
               <Button className="mt-4" onClick={() => setIsAddOpen(true)} data-testid="button-add-first-developer">
                 <Plus className="mr-2 h-4 w-4" />
-                Add Your First Developer
+                {t.addDeveloper}
               </Button>
             )}
           </CardContent>
@@ -244,7 +246,7 @@ export default function DevelopersPage() {
                     {developer.name}
                   </CardTitle>
                   {!developer.isActive && (
-                    <span className="text-xs text-muted-foreground">(Inactive)</span>
+                    <span className="text-xs text-muted-foreground">({t.inactive})</span>
                   )}
                 </div>
                 {isAdmin && (
@@ -257,7 +259,7 @@ export default function DevelopersPage() {
                       </DialogTrigger>
                       <DialogContent>
                         <DialogHeader>
-                          <DialogTitle>Edit Developer</DialogTitle>
+                          <DialogTitle>{t.editDeveloper}</DialogTitle>
                         </DialogHeader>
                         <DeveloperForm />
                       </DialogContent>
@@ -271,15 +273,15 @@ export default function DevelopersPage() {
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Developer?</AlertDialogTitle>
+                            <AlertDialogTitle>{t.deleteDeveloper}?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              This action cannot be undone. This will permanently delete "{developer.name}" and all associated data.
+                              {t.deleteDeveloperConfirm} "{developer.name}"
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
                             <AlertDialogAction onClick={() => deleteMutation.mutate(developer.id)} data-testid="button-confirm-delete-developer">
-                              Delete
+                              {t.delete}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>

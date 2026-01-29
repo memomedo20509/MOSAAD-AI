@@ -39,6 +39,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, FolderKanban, MapPin, Calendar, Home, Loader2 } from "lucide-react";
 import type { Project, Developer, InsertProject } from "@shared/schema";
+import { useLanguage } from "@/lib/i18n";
 
 const PROJECT_TYPES = ["Residential", "Commercial", "Mixed Use", "Retail", "Industrial"];
 const PROJECT_STATUSES = [
@@ -50,6 +51,7 @@ const PROJECT_STATUSES = [
 export default function ProjectsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [formData, setFormData] = useState<Partial<InsertProject>>({});
@@ -73,10 +75,10 @@ export default function ProjectsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       setIsAddOpen(false);
       setFormData({});
-      toast({ title: "Project created successfully" });
+      toast({ title: t.projectCreatedSuccess });
     },
     onError: () => {
-      toast({ title: "Failed to create project", variant: "destructive" });
+      toast({ title: t.projectCreatedError, variant: "destructive" });
     },
   });
 
@@ -87,10 +89,10 @@ export default function ProjectsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       setEditingProject(null);
       setFormData({});
-      toast({ title: "Project updated successfully" });
+      toast({ title: t.projectUpdatedSuccess });
     },
     onError: () => {
-      toast({ title: "Failed to update project", variant: "destructive" });
+      toast({ title: t.projectUpdatedError, variant: "destructive" });
     },
   });
 
@@ -98,10 +100,10 @@ export default function ProjectsPage() {
     mutationFn: (id: string) => apiRequest("DELETE", `/api/projects/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      toast({ title: "Project deleted successfully" });
+      toast({ title: t.projectDeletedSuccess });
     },
     onError: () => {
-      toast({ title: "Failed to delete project", variant: "destructive" });
+      toast({ title: t.projectDeletedError, variant: "destructive" });
     },
   });
 
@@ -166,7 +168,7 @@ export default function ProjectsPage() {
   const ProjectForm = () => (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="name">Project Name *</Label>
+        <Label htmlFor="name">{t.projectName} *</Label>
         <Input
           id="name"
           value={formData.name || ""}
@@ -176,10 +178,10 @@ export default function ProjectsPage() {
         />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="developerId">Developer</Label>
+        <Label htmlFor="developerId">{t.developer}</Label>
         <Select value={formData.developerId || ""} onValueChange={(value) => setFormData({ ...formData, developerId: value || undefined })}>
           <SelectTrigger data-testid="select-project-developer">
-            <SelectValue placeholder="Select developer" />
+            <SelectValue placeholder={t.selectDeveloper} />
           </SelectTrigger>
           <SelectContent>
             {developers.map((developer) => (
@@ -192,10 +194,10 @@ export default function ProjectsPage() {
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="type">Type</Label>
+          <Label htmlFor="type">{t.type}</Label>
           <Select value={formData.type || ""} onValueChange={(value) => setFormData({ ...formData, type: value })}>
             <SelectTrigger data-testid="select-project-type">
-              <SelectValue placeholder="Select type" />
+              <SelectValue placeholder={t.type} />
             </SelectTrigger>
             <SelectContent>
               {PROJECT_TYPES.map((type) => (
@@ -207,10 +209,10 @@ export default function ProjectsPage() {
           </Select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="status">Status</Label>
+          <Label htmlFor="status">{t.status}</Label>
           <Select value={formData.status || "under_construction"} onValueChange={(value) => setFormData({ ...formData, status: value })}>
             <SelectTrigger data-testid="select-project-status">
-              <SelectValue placeholder="Select status" />
+              <SelectValue placeholder={t.status} />
             </SelectTrigger>
             <SelectContent>
               {PROJECT_STATUSES.map((status) => (
@@ -223,7 +225,7 @@ export default function ProjectsPage() {
         </div>
       </div>
       <div className="space-y-2">
-        <Label htmlFor="location">Location</Label>
+        <Label htmlFor="location">{t.location}</Label>
         <Input
           id="location"
           value={formData.location || ""}
@@ -232,7 +234,7 @@ export default function ProjectsPage() {
         />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="address">Address</Label>
+        <Label htmlFor="address">{t.address}</Label>
         <Input
           id="address"
           value={formData.address || ""}
@@ -242,7 +244,7 @@ export default function ProjectsPage() {
       </div>
       <div className="grid grid-cols-3 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="totalUnits">Total Units</Label>
+          <Label htmlFor="totalUnits">{t.unitsCount}</Label>
           <Input
             id="totalUnits"
             type="number"
@@ -252,7 +254,7 @@ export default function ProjectsPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="minPrice">Min Price</Label>
+          <Label htmlFor="minPrice">{t.price}</Label>
           <Input
             id="minPrice"
             type="number"
@@ -262,7 +264,7 @@ export default function ProjectsPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="maxPrice">Max Price</Label>
+          <Label htmlFor="maxPrice">{t.price}</Label>
           <Input
             id="maxPrice"
             type="number"
@@ -273,7 +275,7 @@ export default function ProjectsPage() {
         </div>
       </div>
       <div className="space-y-2">
-        <Label htmlFor="deliveryDate">Delivery Date</Label>
+        <Label htmlFor="deliveryDate">{t.date}</Label>
         <Input
           id="deliveryDate"
           value={formData.deliveryDate || ""}
@@ -283,7 +285,7 @@ export default function ProjectsPage() {
         />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="description">Description</Label>
+        <Label htmlFor="description">{t.description}</Label>
         <Textarea
           id="description"
           value={formData.description || ""}
@@ -298,12 +300,12 @@ export default function ProjectsPage() {
           onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
           data-testid="switch-project-active"
         />
-        <Label htmlFor="isActive">Active</Label>
+        <Label htmlFor="isActive">{t.active}</Label>
       </div>
       <DialogFooter>
         <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} data-testid="button-save-project">
           {(createMutation.isPending || updateMutation.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {editingProject ? "Update" : "Create"} Project
+          {editingProject ? t.update : t.create}
         </Button>
       </DialogFooter>
     </form>
@@ -313,20 +315,20 @@ export default function ProjectsPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-page-title">Projects</h1>
-          <p className="text-muted-foreground">Manage real estate projects</p>
+          <h1 className="text-2xl font-bold" data-testid="text-page-title">{t.projectsTitle}</h1>
+          <p className="text-muted-foreground">{t.projectsSubtitle}</p>
         </div>
         {isAdmin && (
           <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) resetForm(); }}>
             <DialogTrigger asChild>
               <Button data-testid="button-add-project">
                 <Plus className="mr-2 h-4 w-4" />
-                Add Project
+                {t.addProject}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Add New Project</DialogTitle>
+                <DialogTitle>{t.addProject}</DialogTitle>
               </DialogHeader>
               <ProjectForm />
             </DialogContent>
@@ -337,10 +339,10 @@ export default function ProjectsPage() {
       <div className="flex gap-4 mb-6">
         <Select value={filterDeveloper} onValueChange={setFilterDeveloper}>
           <SelectTrigger className="w-48" data-testid="filter-developer">
-            <SelectValue placeholder="Filter by developer" />
+            <SelectValue placeholder={t.developer} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Developers</SelectItem>
+            <SelectItem value="all">{t.developers}</SelectItem>
             {developers.map((developer) => (
               <SelectItem key={developer.id} value={developer.id}>
                 {developer.name}
@@ -350,10 +352,10 @@ export default function ProjectsPage() {
         </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="w-48" data-testid="filter-status">
-            <SelectValue placeholder="Filter by status" />
+            <SelectValue placeholder={t.status} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="all">{t.allStates}</SelectItem>
             {PROJECT_STATUSES.map((status) => (
               <SelectItem key={status.value} value={status.value}>
                 {status.label}
@@ -367,11 +369,11 @@ export default function ProjectsPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <FolderKanban className="h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">No projects found</p>
+            <p className="text-muted-foreground">{t.noProjectsFound}</p>
             {isAdmin && (
               <Button className="mt-4" onClick={() => setIsAddOpen(true)} data-testid="button-add-first-project">
                 <Plus className="mr-2 h-4 w-4" />
-                Add Your First Project
+                {t.addProject}
               </Button>
             )}
           </CardContent>
@@ -397,7 +399,7 @@ export default function ProjectsPage() {
                       </DialogTrigger>
                       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
-                          <DialogTitle>Edit Project</DialogTitle>
+                          <DialogTitle>{t.editProject}</DialogTitle>
                         </DialogHeader>
                         <ProjectForm />
                       </DialogContent>
@@ -411,15 +413,15 @@ export default function ProjectsPage() {
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Project?</AlertDialogTitle>
+                            <AlertDialogTitle>{t.deleteProject}?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              This action cannot be undone. This will permanently delete "{project.name}" and all associated data.
+                              {t.deleteProjectConfirm} "{project.name}"
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
                             <AlertDialogAction onClick={() => deleteMutation.mutate(project.id)} data-testid="button-confirm-delete-project">
-                              Delete
+                              {t.delete}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
@@ -442,25 +444,25 @@ export default function ProjectsPage() {
                 {project.deliveryDate && (
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Calendar className="h-4 w-4" />
-                    <span>Delivery: {project.deliveryDate}</span>
+                    <span>{project.deliveryDate}</span>
                   </div>
                 )}
                 {project.totalUnits && project.totalUnits > 0 && (
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Home className="h-4 w-4" />
-                    <span>{project.totalUnits} Units</span>
+                    <span>{project.totalUnits} {t.units}</span>
                   </div>
                 )}
                 {(project.minPrice || project.maxPrice) && (
                   <p className="text-muted-foreground">
-                    Price: {project.minPrice?.toLocaleString()} - {project.maxPrice?.toLocaleString()} EGP
+                    {t.price}: {project.minPrice?.toLocaleString()} - {project.maxPrice?.toLocaleString()} EGP
                   </p>
                 )}
               </CardContent>
               <CardFooter>
                 <Link href={`/inventory/projects/${project.id}/units`} className="w-full">
                   <Button variant="outline" className="w-full" data-testid={`button-view-units-${project.id}`}>
-                    View Units
+                    {t.viewUnits}
                   </Button>
                 </Link>
               </CardFooter>

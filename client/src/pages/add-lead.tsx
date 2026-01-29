@@ -27,10 +27,11 @@ import { Link } from "wouter";
 import type { LeadState } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/lib/i18n";
 
-const formSchema = z.object({
+const createFormSchema = (phoneRequiredMsg: string) => z.object({
   name: z.string().optional(),
-  phone: z.string().min(1, "Phone number is required"),
+  phone: z.string().min(1, phoneRequiredMsg),
   phone2: z.string().optional(),
   email: z.string().email().optional().or(z.literal("")),
   stateId: z.string().optional(),
@@ -50,11 +51,13 @@ const formSchema = z.object({
   notes: z.string().optional(),
 });
 
-type FormData = z.infer<typeof formSchema>;
+type FormData = z.infer<ReturnType<typeof createFormSchema>>;
 
 export default function AddLeadPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { t } = useLanguage();
+  const formSchema = createFormSchema(t.phoneRequired);
 
   const { data: states } = useQuery<LeadState[]>({
     queryKey: ["/api/states"],
@@ -94,11 +97,11 @@ export default function AddLeadPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
-      toast({ title: "Lead created successfully" });
+      toast({ title: t.leadCreatedSuccess });
       navigate("/leads");
     },
     onError: () => {
-      toast({ title: "Failed to create lead", variant: "destructive" });
+      toast({ title: t.leadCreatedError, variant: "destructive" });
     },
   });
 
@@ -116,9 +119,9 @@ export default function AddLeadPage() {
         </Link>
         <div>
           <h1 className="text-2xl font-semibold tracking-tight" data-testid="text-add-lead-title">
-            Add New Lead
+            {t.addNewLeadTitle}
           </h1>
-          <p className="text-muted-foreground">Create a new lead in the system</p>
+          <p className="text-muted-foreground">{t.addNewLeadSubtitle}</p>
         </div>
       </div>
 
@@ -127,7 +130,7 @@ export default function AddLeadPage() {
           <div className="grid gap-6 md:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Contact Information</CardTitle>
+                <CardTitle className="text-base">{t.contactInfo}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <FormField
@@ -135,9 +138,9 @@ export default function AddLeadPage() {
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Full Name</FormLabel>
+                      <FormLabel>{t.name}</FormLabel>
                       <FormControl>
-                        <Input placeholder="Enter name" {...field} data-testid="input-lead-name" />
+                        <Input placeholder={t.name} {...field} data-testid="input-lead-name" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -148,10 +151,10 @@ export default function AddLeadPage() {
                   name="phone"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Phone Number *</FormLabel>
+                      <FormLabel>{t.phone} *</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="Enter phone number"
+                          placeholder={t.phone}
                           {...field}
                           data-testid="input-lead-phone"
                         />
@@ -165,10 +168,10 @@ export default function AddLeadPage() {
                   name="phone2"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Secondary Phone</FormLabel>
+                      <FormLabel>{t.phone2}</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="Enter secondary phone"
+                          placeholder={t.phone2}
                           {...field}
                           data-testid="input-lead-phone2"
                         />
@@ -182,11 +185,11 @@ export default function AddLeadPage() {
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email</FormLabel>
+                      <FormLabel>{t.email}</FormLabel>
                       <FormControl>
                         <Input
                           type="email"
-                          placeholder="Enter email"
+                          placeholder={t.email}
                           {...field}
                           data-testid="input-lead-email"
                         />
@@ -200,7 +203,7 @@ export default function AddLeadPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Lead Details</CardTitle>
+                <CardTitle className="text-base">{t.leadStatus}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <FormField
@@ -208,11 +211,11 @@ export default function AddLeadPage() {
                   name="stateId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Status</FormLabel>
+                      <FormLabel>{t.status}</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger data-testid="select-lead-state">
-                            <SelectValue placeholder="Select status" />
+                            <SelectValue placeholder={t.selectState} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -232,20 +235,20 @@ export default function AddLeadPage() {
                   name="channel"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Channel</FormLabel>
+                      <FormLabel>{t.channel}</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger data-testid="select-lead-channel">
-                            <SelectValue placeholder="Select channel" />
+                            <SelectValue placeholder={t.selectChannel} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="Facebook">Facebook</SelectItem>
+                          <SelectItem value="Facebook">{t.facebook}</SelectItem>
                           <SelectItem value="Google">Google</SelectItem>
-                          <SelectItem value="Instagram">Instagram</SelectItem>
-                          <SelectItem value="Website">Website</SelectItem>
-                          <SelectItem value="Referral">Referral</SelectItem>
-                          <SelectItem value="Cold Call">Cold Call</SelectItem>
+                          <SelectItem value="Instagram">{t.instagram}</SelectItem>
+                          <SelectItem value="Website">{t.website}</SelectItem>
+                          <SelectItem value="Referral">{t.referral}</SelectItem>
+                          <SelectItem value="Cold Call">{t.other}</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -257,10 +260,10 @@ export default function AddLeadPage() {
                   name="campaign"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Campaign</FormLabel>
+                      <FormLabel>{t.campaign}</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="Enter campaign name"
+                          placeholder={t.campaign}
                           {...field}
                           data-testid="input-lead-campaign"
                         />
@@ -274,10 +277,10 @@ export default function AddLeadPage() {
                   name="assignedTo"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Assign To</FormLabel>
+                      <FormLabel>{t.assignedTo}</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="Enter sales rep name"
+                          placeholder={t.assignedTo}
                           {...field}
                           data-testid="input-lead-assigned"
                         />
@@ -291,7 +294,7 @@ export default function AddLeadPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Request Information</CardTitle>
+                <CardTitle className="text-base">{t.propertyPreferences}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <FormField
@@ -299,17 +302,17 @@ export default function AddLeadPage() {
                   name="requestType"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Request Type</FormLabel>
+                      <FormLabel>{t.requestType}</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger data-testid="select-lead-request-type">
-                            <SelectValue placeholder="Select type" />
+                            <SelectValue placeholder={t.selectRequestType} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="Buy">Buy</SelectItem>
-                          <SelectItem value="Rent">Rent</SelectItem>
-                          <SelectItem value="Invest">Invest</SelectItem>
+                          <SelectItem value="Buy">{t.buy}</SelectItem>
+                          <SelectItem value="Rent">{t.rent}</SelectItem>
+                          <SelectItem value="Invest">{t.invest}</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -321,22 +324,22 @@ export default function AddLeadPage() {
                   name="unitType"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Unit Type</FormLabel>
+                      <FormLabel>{t.unitType}</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger data-testid="select-lead-unit-type">
-                            <SelectValue placeholder="Select unit type" />
+                            <SelectValue placeholder={t.selectUnitType} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="Apartment">Apartment</SelectItem>
-                          <SelectItem value="Villa">Villa</SelectItem>
-                          <SelectItem value="Townhouse">Townhouse</SelectItem>
-                          <SelectItem value="Duplex">Duplex</SelectItem>
-                          <SelectItem value="Penthouse">Penthouse</SelectItem>
-                          <SelectItem value="Studio">Studio</SelectItem>
-                          <SelectItem value="Office">Office</SelectItem>
-                          <SelectItem value="Shop">Shop</SelectItem>
+                          <SelectItem value="Apartment">{t.apartment}</SelectItem>
+                          <SelectItem value="Villa">{t.villa}</SelectItem>
+                          <SelectItem value="Townhouse">{t.townhouse}</SelectItem>
+                          <SelectItem value="Duplex">{t.duplex}</SelectItem>
+                          <SelectItem value="Penthouse">{t.penthouse}</SelectItem>
+                          <SelectItem value="Studio">{t.studio}</SelectItem>
+                          <SelectItem value="Office">{t.commercial}</SelectItem>
+                          <SelectItem value="Shop">{t.commercial}</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -349,7 +352,7 @@ export default function AddLeadPage() {
                     name="bedrooms"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Bedrooms</FormLabel>
+                        <FormLabel>{t.bedrooms}</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -368,7 +371,7 @@ export default function AddLeadPage() {
                     name="bathrooms"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Bathrooms</FormLabel>
+                        <FormLabel>{t.bathrooms}</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -388,7 +391,7 @@ export default function AddLeadPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Budget & Location</CardTitle>
+                <CardTitle className="text-base">{t.paymentDetails}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <FormField
@@ -396,9 +399,9 @@ export default function AddLeadPage() {
                   name="area"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Area</FormLabel>
+                      <FormLabel>{t.area}</FormLabel>
                       <FormControl>
-                        <Input placeholder="Enter area" {...field} data-testid="input-lead-area" />
+                        <Input placeholder={t.area} {...field} data-testid="input-lead-area" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -409,10 +412,10 @@ export default function AddLeadPage() {
                   name="location"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Location</FormLabel>
+                      <FormLabel>{t.location}</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="Enter location"
+                          placeholder={t.location}
                           {...field}
                           data-testid="input-lead-location"
                         />
@@ -426,10 +429,10 @@ export default function AddLeadPage() {
                   name="budget"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Budget</FormLabel>
+                      <FormLabel>{t.budget}</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="Enter budget"
+                          placeholder={t.budget}
                           {...field}
                           data-testid="input-lead-budget"
                         />
@@ -443,17 +446,17 @@ export default function AddLeadPage() {
                   name="paymentType"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Payment Type</FormLabel>
+                      <FormLabel>{t.paymentType}</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger data-testid="select-lead-payment-type">
-                            <SelectValue placeholder="Select payment type" />
+                            <SelectValue placeholder={t.selectPaymentType} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="Cash">Cash</SelectItem>
-                          <SelectItem value="Installment">Installment</SelectItem>
-                          <SelectItem value="Mortgage">Mortgage</SelectItem>
+                          <SelectItem value="Cash">{t.cash}</SelectItem>
+                          <SelectItem value="Installment">{t.installments}</SelectItem>
+                          <SelectItem value="Mortgage">{t.mortgage}</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -465,10 +468,10 @@ export default function AddLeadPage() {
                   name="downPayment"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Down Payment</FormLabel>
+                      <FormLabel>{t.downPayment}</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="Enter down payment"
+                          placeholder={t.downPayment}
                           {...field}
                           data-testid="input-lead-down-payment"
                         />
@@ -483,7 +486,7 @@ export default function AddLeadPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Additional Notes</CardTitle>
+              <CardTitle className="text-base">{t.notes}</CardTitle>
             </CardHeader>
             <CardContent>
               <FormField
@@ -493,7 +496,7 @@ export default function AddLeadPage() {
                   <FormItem>
                     <FormControl>
                       <Textarea
-                        placeholder="Enter any additional notes about this lead..."
+                        placeholder={t.additionalNotes}
                         rows={4}
                         {...field}
                         data-testid="textarea-lead-notes"
@@ -509,7 +512,7 @@ export default function AddLeadPage() {
           <div className="flex justify-end gap-4">
             <Link href="/leads">
               <Button variant="outline" type="button" data-testid="button-cancel">
-                Cancel
+                {t.cancel}
               </Button>
             </Link>
             <Button
@@ -520,12 +523,12 @@ export default function AddLeadPage() {
               {createLeadMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Saving...
+                  {t.saving}
                 </>
               ) : (
                 <>
                   <Save className="h-4 w-4 mr-2" />
-                  Save Lead
+                  {t.save}
                 </>
               )}
             </Button>

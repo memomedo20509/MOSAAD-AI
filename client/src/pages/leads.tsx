@@ -43,6 +43,7 @@ import { LeadDetailPanel } from "@/components/lead-detail-panel";
 import { FilterPanel } from "@/components/filter-panel";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/lib/i18n";
 import { format } from "date-fns";
 
 export default function LeadsPage() {
@@ -54,6 +55,7 @@ export default function LeadsPage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const { toast } = useToast();
+  const { t } = useLanguage();
 
   const { data: leads, isLoading: leadsLoading } = useQuery<Lead[]>({
     queryKey: ["/api/leads"],
@@ -69,10 +71,10 @@ export default function LeadsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
-      toast({ title: "Lead updated successfully" });
+      toast({ title: t.leadUpdatedSuccess });
     },
     onError: () => {
-      toast({ title: "Failed to update lead", variant: "destructive" });
+      toast({ title: t.leadUpdatedError, variant: "destructive" });
     },
   });
 
@@ -82,10 +84,10 @@ export default function LeadsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
-      toast({ title: "Lead deleted successfully" });
+      toast({ title: t.leadDeletedSuccess });
     },
     onError: () => {
-      toast({ title: "Failed to delete lead", variant: "destructive" });
+      toast({ title: t.leadDeletedError, variant: "destructive" });
     },
   });
 
@@ -153,7 +155,7 @@ export default function LeadsPage() {
 
   const handleExport = () => {
     if (!filteredLeads) return;
-    const headers = ["Name", "Phone", "Email", "State", "Channel", "Created At"];
+    const headers = [t.name, t.phone, t.email, t.leadStatus, t.channel, t.createdAt];
     const rows = filteredLeads.map((lead) => [
       lead.name || "",
       lead.phone || "",
@@ -167,44 +169,44 @@ export default function LeadsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "leads.csv";
+    a.download = t.leads + ".csv";
     a.click();
     URL.revokeObjectURL(url);
-    toast({ title: "Leads exported successfully" });
+    toast({ title: t.leadUpdatedSuccess });
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight" data-testid="text-leads-title">All Leads</h1>
+          <h1 className="text-2xl font-semibold tracking-tight" data-testid="text-leads-title">{t.allLeads}</h1>
           <p className="text-muted-foreground">
-            Manage and track your sales leads
+            {t.manageLeadsSubtitle}
           </p>
         </div>
         <Link href="/leads/new">
-          <Button data-testid="button-add-lead">Add New Lead</Button>
+          <Button data-testid="button-add-lead">{t.addNewLead}</Button>
         </Link>
       </div>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-1 items-center gap-2">
           <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground rtl:left-auto rtl:right-3" />
             <Input
-              placeholder="Search leads..."
+              placeholder={t.searchLeads}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              className="pl-9 rtl:pl-3 rtl:pr-9"
               data-testid="input-search-leads"
             />
           </div>
           <Select value={selectedStateId} onValueChange={setSelectedStateId}>
             <SelectTrigger className="w-[180px]" data-testid="select-state-filter">
-              <SelectValue placeholder="Filter by state" />
+              <SelectValue placeholder={t.allStates} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All States</SelectItem>
+              <SelectItem value="all">{t.allStates}</SelectItem>
               {states?.map((state) => (
                 <SelectItem key={state.id} value={state.id}>
                   {state.name}
@@ -218,8 +220,8 @@ export default function LeadsPage() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" data-testid="button-bulk-actions">
-                Bulk Actions
-                <ChevronDown className="ml-2 h-4 w-4" />
+                {t.actions}
+                <ChevronDown className="ml-2 h-4 w-4 rtl:ml-0 rtl:mr-2" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
@@ -230,18 +232,18 @@ export default function LeadsPage() {
                 }}
                 disabled={selectedLeads.size === 0}
               >
-                Delete Selected
+                {t.delete} {t.selected}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
           <Select value={orderBy} onValueChange={(v) => setOrderBy(v as "recent" | "oldest")}>
             <SelectTrigger className="w-[160px]" data-testid="select-order">
-              <SelectValue placeholder="Order by" />
+              <SelectValue placeholder={t.recent} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="recent">Recent First</SelectItem>
-              <SelectItem value="oldest">Oldest First</SelectItem>
+              <SelectItem value="recent">{t.recent}</SelectItem>
+              <SelectItem value="oldest">{t.oldest}</SelectItem>
             </SelectContent>
           </Select>
 
