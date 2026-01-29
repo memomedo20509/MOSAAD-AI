@@ -14,6 +14,7 @@ import {
   UsersRound,
   Landmark,
   FolderKanban,
+  Home,
 } from "lucide-react";
 import {
   Sidebar,
@@ -26,9 +27,6 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
-  SidebarMenuSub,
-  SidebarMenuSubItem,
-  SidebarMenuSubButton,
 } from "@/components/ui/sidebar";
 import {
   Collapsible,
@@ -40,7 +38,7 @@ import type { UserRole } from "@shared/models/auth";
 
 const mainNavItems = [
   {
-    title: "Dashboard",
+    title: "لوحة التحكم",
     url: "/",
     icon: LayoutDashboard,
   },
@@ -48,7 +46,7 @@ const mainNavItems = [
 
 const salesItems = [
   {
-    title: "All Leads",
+    title: "جميع العملاء المحتملين",
     url: "/leads",
     icon: Users,
   },
@@ -56,27 +54,27 @@ const salesItems = [
 
 const adminItems = [
   {
-    title: "Add New Lead",
+    title: "إضافة عميل جديد",
     url: "/leads/new",
     icon: UserPlus,
   },
   {
-    title: "Upload Leads",
+    title: "رفع العملاء",
     url: "/leads/upload",
     icon: Upload,
   },
   {
-    title: "Duplicated Leads",
+    title: "العملاء المكررين",
     url: "/leads/duplicated",
     icon: Copy,
   },
   {
-    title: "Withdrawn Leads",
+    title: "العملاء المنسحبين",
     url: "/leads/withdrawn",
     icon: FileX,
   },
   {
-    title: "Actions Log",
+    title: "سجل الإجراءات",
     url: "/leads/actions",
     icon: Activity,
   },
@@ -84,38 +82,43 @@ const adminItems = [
 
 const inventoryItems = [
   {
-    title: "Developers",
+    title: "المطورين",
     url: "/inventory/developers",
     icon: Landmark,
   },
   {
-    title: "Projects",
+    title: "المشاريع",
     url: "/inventory/projects",
     icon: FolderKanban,
+  },
+  {
+    title: "الوحدات",
+    url: "/inventory/units",
+    icon: Home,
   },
 ];
 
 const settingsItems = [
   {
-    title: "States Management",
+    title: "إدارة الحالات",
     url: "/settings/states",
     icon: Settings,
     adminOnly: false,
   },
   {
-    title: "Saved Filters",
+    title: "الفلاتر المحفوظة",
     url: "/settings/filters",
     icon: Filter,
     adminOnly: false,
   },
   {
-    title: "Users",
+    title: "المستخدمين",
     url: "/settings/users",
     icon: UsersRound,
     adminOnly: true,
   },
   {
-    title: "Teams",
+    title: "الفرق",
     url: "/settings/teams",
     icon: Users,
     adminOnly: true,
@@ -151,7 +154,7 @@ export function AppSidebar() {
               {mainNavItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={location === item.url}>
-                    <Link href={item.url} data-testid={`link-nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
+                    <Link href={item.url} data-testid={`link-nav-${item.url.replace(/\//g, "-").slice(1) || "home"}`}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </Link>
@@ -166,7 +169,7 @@ export function AppSidebar() {
           <Collapsible defaultOpen className="group/collapsible">
             <SidebarGroupLabel asChild>
               <CollapsibleTrigger className="flex w-full items-center justify-between">
-                Sales
+                المبيعات
                 <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
               </CollapsibleTrigger>
             </SidebarGroupLabel>
@@ -176,7 +179,7 @@ export function AppSidebar() {
                   {salesItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton asChild isActive={location === item.url || (item.url === "/leads" && location.startsWith("/leads") && location !== "/leads/new" && location !== "/leads/upload" && location !== "/leads/duplicated" && location !== "/leads/withdrawn" && location !== "/leads/actions")}>
-                        <Link href={item.url} data-testid={`link-nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
+                        <Link href={item.url} data-testid={`link-nav-${item.url.replace(/\//g, "-").slice(1)}`}>
                           <item.icon className="h-4 w-4" />
                           <span>{item.title}</span>
                         </Link>
@@ -193,7 +196,7 @@ export function AppSidebar() {
           <Collapsible defaultOpen className="group/collapsible">
             <SidebarGroupLabel asChild>
               <CollapsibleTrigger className="flex w-full items-center justify-between">
-                Leads Administration
+                إدارة العملاء
                 <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
               </CollapsibleTrigger>
             </SidebarGroupLabel>
@@ -203,7 +206,7 @@ export function AppSidebar() {
                   {adminItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton asChild isActive={location === item.url}>
-                        <Link href={item.url} data-testid={`link-nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
+                        <Link href={item.url} data-testid={`link-nav-${item.url.replace(/\//g, "-").slice(1)}`}>
                           <item.icon className="h-4 w-4" />
                           <span>{item.title}</span>
                         </Link>
@@ -221,7 +224,7 @@ export function AppSidebar() {
             <Collapsible defaultOpen className="group/collapsible">
               <SidebarGroupLabel asChild>
                 <CollapsibleTrigger className="flex w-full items-center justify-between">
-                  Inventory
+                  المخزون
                   <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
                 </CollapsibleTrigger>
               </SidebarGroupLabel>
@@ -231,7 +234,7 @@ export function AppSidebar() {
                     {inventoryItems.map((item) => (
                       <SidebarMenuItem key={item.title}>
                         <SidebarMenuButton asChild isActive={location.startsWith(item.url)}>
-                          <Link href={item.url} data-testid={`link-nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
+                          <Link href={item.url} data-testid={`link-nav-${item.url.replace(/\//g, "-").slice(1)}`}>
                             <item.icon className="h-4 w-4" />
                             <span>{item.title}</span>
                           </Link>
@@ -246,14 +249,14 @@ export function AppSidebar() {
         )}
 
         <SidebarGroup>
-          <SidebarGroupLabel>Clients</SidebarGroupLabel>
+          <SidebarGroupLabel>العملاء</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/clients"}>
                   <Link href="/clients" data-testid="link-nav-clients">
                     <Users className="h-4 w-4" />
-                    <span>All Clients</span>
+                    <span>جميع العملاء</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -265,7 +268,7 @@ export function AppSidebar() {
           <Collapsible className="group/collapsible">
             <SidebarGroupLabel asChild>
               <CollapsibleTrigger className="flex w-full items-center justify-between">
-                Settings
+                الإعدادات
                 <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
               </CollapsibleTrigger>
             </SidebarGroupLabel>
@@ -275,7 +278,7 @@ export function AppSidebar() {
                   {filteredSettingsItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton asChild isActive={location === item.url}>
-                        <Link href={item.url} data-testid={`link-nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
+                        <Link href={item.url} data-testid={`link-nav-${item.url.replace(/\//g, "-").slice(1)}`}>
                           <item.icon className="h-4 w-4" />
                           <span>{item.title}</span>
                         </Link>

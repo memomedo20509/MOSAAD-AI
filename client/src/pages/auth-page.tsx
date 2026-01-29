@@ -102,6 +102,26 @@ export default function AuthPage() {
                     {loginMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     تسجيل الدخول
                   </Button>
+                  
+                  {import.meta.env.DEV && (
+                    <div className="mt-4 pt-4 border-t">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => {
+                          setLoginData({ username: "admin", password: "admin123" });
+                          setTimeout(() => {
+                            loginMutation.mutate({ username: "admin", password: "admin123" });
+                          }, 100);
+                        }}
+                        disabled={loginMutation.isPending}
+                        data-testid="button-quick-login"
+                      >
+                        دخول سريع (للتطوير)
+                      </Button>
+                    </div>
+                  )}
                 </form>
               </TabsContent>
               
