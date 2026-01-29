@@ -52,6 +52,10 @@ Preferred communication style: Simple, everyday language.
   - `clients` - Converted customers
   - `tasks` - Follow-up activities linked to leads
   - `leadHistory` - Audit trail of actions on leads
+  - `developers` - Real estate developers with contact info
+  - `projects` - Real estate projects linked to developers
+  - `units` - Individual units within projects (apartments, villas, etc.)
+  - `leadUnitInterests` - Links between leads and units they're interested in
 
 ### Project Structure
 ```

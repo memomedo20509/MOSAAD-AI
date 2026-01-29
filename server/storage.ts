@@ -8,6 +8,10 @@ import {
   clients,
   tasks,
   leadHistory,
+  developers,
+  projects,
+  units,
+  leadUnitInterests,
   type User,
   type UpdateUser,
   type Lead,
@@ -22,6 +26,14 @@ import {
   type InsertLeadHistory,
   type Team,
   type InsertTeam,
+  type Developer,
+  type InsertDeveloper,
+  type Project,
+  type InsertProject,
+  type Unit,
+  type InsertUnit,
+  type LeadUnitInterest,
+  type InsertLeadUnitInterest,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -70,6 +82,35 @@ export interface IStorage {
   getAllHistory(): Promise<LeadHistory[]>;
   getHistoryByLeadId(leadId: string): Promise<LeadHistory[]>;
   createHistory(history: InsertLeadHistory): Promise<LeadHistory>;
+
+  // Developers
+  getAllDevelopers(): Promise<Developer[]>;
+  getDeveloper(id: string): Promise<Developer | undefined>;
+  createDeveloper(developer: InsertDeveloper): Promise<Developer>;
+  updateDeveloper(id: string, data: Partial<Developer>): Promise<Developer | undefined>;
+  deleteDeveloper(id: string): Promise<boolean>;
+
+  // Projects
+  getAllProjects(): Promise<Project[]>;
+  getProjectsByDeveloper(developerId: string): Promise<Project[]>;
+  getProject(id: string): Promise<Project | undefined>;
+  createProject(project: InsertProject): Promise<Project>;
+  updateProject(id: string, data: Partial<Project>): Promise<Project | undefined>;
+  deleteProject(id: string): Promise<boolean>;
+
+  // Units
+  getAllUnits(): Promise<Unit[]>;
+  getUnitsByProject(projectId: string): Promise<Unit[]>;
+  getUnit(id: string): Promise<Unit | undefined>;
+  createUnit(unit: InsertUnit): Promise<Unit>;
+  updateUnit(id: string, data: Partial<Unit>): Promise<Unit | undefined>;
+  deleteUnit(id: string): Promise<boolean>;
+
+  // Lead Unit Interests
+  getLeadUnitInterests(leadId: string): Promise<LeadUnitInterest[]>;
+  getUnitInterests(unitId: string): Promise<LeadUnitInterest[]>;
+  createLeadUnitInterest(interest: InsertLeadUnitInterest): Promise<LeadUnitInterest>;
+  deleteLeadUnitInterest(id: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -257,6 +298,108 @@ export class DatabaseStorage implements IStorage {
   async createHistory(history: InsertLeadHistory): Promise<LeadHistory> {
     const [newHistory] = await db.insert(leadHistory).values(history).returning();
     return newHistory;
+  }
+
+  // Developers
+  async getAllDevelopers(): Promise<Developer[]> {
+    return db.select().from(developers).orderBy(developers.name);
+  }
+
+  async getDeveloper(id: string): Promise<Developer | undefined> {
+    const [developer] = await db.select().from(developers).where(eq(developers.id, id));
+    return developer;
+  }
+
+  async createDeveloper(developer: InsertDeveloper): Promise<Developer> {
+    const [newDeveloper] = await db.insert(developers).values(developer).returning();
+    return newDeveloper;
+  }
+
+  async updateDeveloper(id: string, data: Partial<Developer>): Promise<Developer | undefined> {
+    const [updated] = await db.update(developers).set({ ...data, updatedAt: new Date() }).where(eq(developers.id, id)).returning();
+    return updated;
+  }
+
+  async deleteDeveloper(id: string): Promise<boolean> {
+    const result = await db.delete(developers).where(eq(developers.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Projects
+  async getAllProjects(): Promise<Project[]> {
+    return db.select().from(projects).orderBy(projects.name);
+  }
+
+  async getProjectsByDeveloper(developerId: string): Promise<Project[]> {
+    return db.select().from(projects).where(eq(projects.developerId, developerId)).orderBy(projects.name);
+  }
+
+  async getProject(id: string): Promise<Project | undefined> {
+    const [project] = await db.select().from(projects).where(eq(projects.id, id));
+    return project;
+  }
+
+  async createProject(project: InsertProject): Promise<Project> {
+    const [newProject] = await db.insert(projects).values(project).returning();
+    return newProject;
+  }
+
+  async updateProject(id: string, data: Partial<Project>): Promise<Project | undefined> {
+    const [updated] = await db.update(projects).set({ ...data, updatedAt: new Date() }).where(eq(projects.id, id)).returning();
+    return updated;
+  }
+
+  async deleteProject(id: string): Promise<boolean> {
+    const result = await db.delete(projects).where(eq(projects.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Units
+  async getAllUnits(): Promise<Unit[]> {
+    return db.select().from(units).orderBy(units.unitNumber);
+  }
+
+  async getUnitsByProject(projectId: string): Promise<Unit[]> {
+    return db.select().from(units).where(eq(units.projectId, projectId)).orderBy(units.floor, units.unitNumber);
+  }
+
+  async getUnit(id: string): Promise<Unit | undefined> {
+    const [unit] = await db.select().from(units).where(eq(units.id, id));
+    return unit;
+  }
+
+  async createUnit(unit: InsertUnit): Promise<Unit> {
+    const [newUnit] = await db.insert(units).values(unit).returning();
+    return newUnit;
+  }
+
+  async updateUnit(id: string, data: Partial<Unit>): Promise<Unit | undefined> {
+    const [updated] = await db.update(units).set({ ...data, updatedAt: new Date() }).where(eq(units.id, id)).returning();
+    return updated;
+  }
+
+  async deleteUnit(id: string): Promise<boolean> {
+    const result = await db.delete(units).where(eq(units.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Lead Unit Interests
+  async getLeadUnitInterests(leadId: string): Promise<LeadUnitInterest[]> {
+    return db.select().from(leadUnitInterests).where(eq(leadUnitInterests.leadId, leadId));
+  }
+
+  async getUnitInterests(unitId: string): Promise<LeadUnitInterest[]> {
+    return db.select().from(leadUnitInterests).where(eq(leadUnitInterests.unitId, unitId));
+  }
+
+  async createLeadUnitInterest(interest: InsertLeadUnitInterest): Promise<LeadUnitInterest> {
+    const [newInterest] = await db.insert(leadUnitInterests).values(interest).returning();
+    return newInterest;
+  }
+
+  async deleteLeadUnitInterest(id: string): Promise<boolean> {
+    const result = await db.delete(leadUnitInterests).where(eq(leadUnitInterests.id, id)).returning();
+    return result.length > 0;
   }
 }
 

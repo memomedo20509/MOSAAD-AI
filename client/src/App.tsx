@@ -24,6 +24,9 @@ import SavedFiltersPage from "@/pages/saved-filters";
 import UsersPage from "@/pages/users";
 import TeamsPage from "@/pages/teams";
 import LandingPage from "@/pages/landing";
+import DevelopersPage from "@/pages/developers";
+import ProjectsPage from "@/pages/projects";
+import UnitsPage from "@/pages/units";
 
 function Router() {
   return (
@@ -40,6 +43,9 @@ function Router() {
       <Route path="/settings/filters" component={SavedFiltersPage} />
       <Route path="/settings/users" component={UsersPage} />
       <Route path="/settings/teams" component={TeamsPage} />
+      <Route path="/inventory/developers" component={DevelopersPage} />
+      <Route path="/inventory/projects" component={ProjectsPage} />
+      <Route path="/inventory/projects/:projectId/units" component={UnitsPage} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -13,6 +13,13 @@ import {
   insertTeamSchema,
   updateTeamSchema,
   updateUserSchema,
+  insertDeveloperSchema,
+  updateDeveloperSchema,
+  insertProjectSchema,
+  updateProjectSchema,
+  insertUnitSchema,
+  updateUnitSchema,
+  insertLeadUnitInterestSchema,
 } from "@shared/schema";
 
 export async function registerRoutes(
@@ -366,6 +373,273 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting client:", error);
       res.status(500).json({ error: "Failed to delete client" });
+    }
+  });
+
+  // ==================== INVENTORY MANAGEMENT ====================
+
+  // Developers
+  app.get("/api/developers", isAuthenticated, async (req, res) => {
+    try {
+      const developers = await storage.getAllDevelopers();
+      res.json(developers);
+    } catch (error) {
+      console.error("Error fetching developers:", error);
+      res.status(500).json({ error: "Failed to fetch developers" });
+    }
+  });
+
+  app.get("/api/developers/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const developer = await storage.getDeveloper(id);
+      if (!developer) {
+        return res.status(404).json({ error: "Developer not found" });
+      }
+      res.json(developer);
+    } catch (error) {
+      console.error("Error fetching developer:", error);
+      res.status(500).json({ error: "Failed to fetch developer" });
+    }
+  });
+
+  app.post("/api/developers", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
+    try {
+      const data = insertDeveloperSchema.parse(req.body);
+      const developer = await storage.createDeveloper(data);
+      res.status(201).json(developer);
+    } catch (error) {
+      console.error("Error creating developer:", error);
+      res.status(400).json({ error: "Failed to create developer" });
+    }
+  });
+
+  app.patch("/api/developers/:id", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const data = updateDeveloperSchema.parse(req.body);
+      const developer = await storage.updateDeveloper(id, data);
+      if (!developer) {
+        return res.status(404).json({ error: "Developer not found" });
+      }
+      res.json(developer);
+    } catch (error) {
+      console.error("Error updating developer:", error);
+      res.status(400).json({ error: "Failed to update developer" });
+    }
+  });
+
+  app.delete("/api/developers/:id", isAuthenticated, requireRole("super_admin"), async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const deleted = await storage.deleteDeveloper(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Developer not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting developer:", error);
+      res.status(500).json({ error: "Failed to delete developer" });
+    }
+  });
+
+  // Projects
+  app.get("/api/projects", isAuthenticated, async (req, res) => {
+    try {
+      const projects = await storage.getAllProjects();
+      res.json(projects);
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+      res.status(500).json({ error: "Failed to fetch projects" });
+    }
+  });
+
+  app.get("/api/developers/:developerId/projects", isAuthenticated, async (req, res) => {
+    try {
+      const developerId = req.params.developerId as string;
+      const projects = await storage.getProjectsByDeveloper(developerId);
+      res.json(projects);
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+      res.status(500).json({ error: "Failed to fetch projects" });
+    }
+  });
+
+  app.get("/api/projects/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const project = await storage.getProject(id);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      res.json(project);
+    } catch (error) {
+      console.error("Error fetching project:", error);
+      res.status(500).json({ error: "Failed to fetch project" });
+    }
+  });
+
+  app.post("/api/projects", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
+    try {
+      const data = insertProjectSchema.parse(req.body);
+      const project = await storage.createProject(data);
+      res.status(201).json(project);
+    } catch (error) {
+      console.error("Error creating project:", error);
+      res.status(400).json({ error: "Failed to create project" });
+    }
+  });
+
+  app.patch("/api/projects/:id", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const data = updateProjectSchema.parse(req.body);
+      const project = await storage.updateProject(id, data);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      res.json(project);
+    } catch (error) {
+      console.error("Error updating project:", error);
+      res.status(400).json({ error: "Failed to update project" });
+    }
+  });
+
+  app.delete("/api/projects/:id", isAuthenticated, requireRole("super_admin"), async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const deleted = await storage.deleteProject(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting project:", error);
+      res.status(500).json({ error: "Failed to delete project" });
+    }
+  });
+
+  // Units
+  app.get("/api/units", isAuthenticated, async (req, res) => {
+    try {
+      const units = await storage.getAllUnits();
+      res.json(units);
+    } catch (error) {
+      console.error("Error fetching units:", error);
+      res.status(500).json({ error: "Failed to fetch units" });
+    }
+  });
+
+  app.get("/api/projects/:projectId/units", isAuthenticated, async (req, res) => {
+    try {
+      const projectId = req.params.projectId as string;
+      const units = await storage.getUnitsByProject(projectId);
+      res.json(units);
+    } catch (error) {
+      console.error("Error fetching units:", error);
+      res.status(500).json({ error: "Failed to fetch units" });
+    }
+  });
+
+  app.get("/api/units/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const unit = await storage.getUnit(id);
+      if (!unit) {
+        return res.status(404).json({ error: "Unit not found" });
+      }
+      res.json(unit);
+    } catch (error) {
+      console.error("Error fetching unit:", error);
+      res.status(500).json({ error: "Failed to fetch unit" });
+    }
+  });
+
+  app.post("/api/units", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
+    try {
+      const data = insertUnitSchema.parse(req.body);
+      const unit = await storage.createUnit(data);
+      res.status(201).json(unit);
+    } catch (error) {
+      console.error("Error creating unit:", error);
+      res.status(400).json({ error: "Failed to create unit" });
+    }
+  });
+
+  app.patch("/api/units/:id", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const data = updateUnitSchema.parse(req.body);
+      const unit = await storage.updateUnit(id, data);
+      if (!unit) {
+        return res.status(404).json({ error: "Unit not found" });
+      }
+      res.json(unit);
+    } catch (error) {
+      console.error("Error updating unit:", error);
+      res.status(400).json({ error: "Failed to update unit" });
+    }
+  });
+
+  app.delete("/api/units/:id", isAuthenticated, requireRole("super_admin"), async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const deleted = await storage.deleteUnit(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Unit not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting unit:", error);
+      res.status(500).json({ error: "Failed to delete unit" });
+    }
+  });
+
+  // Lead Unit Interests
+  app.get("/api/leads/:leadId/unit-interests", isAuthenticated, async (req, res) => {
+    try {
+      const leadId = req.params.leadId as string;
+      const interests = await storage.getLeadUnitInterests(leadId);
+      res.json(interests);
+    } catch (error) {
+      console.error("Error fetching lead unit interests:", error);
+      res.status(500).json({ error: "Failed to fetch lead unit interests" });
+    }
+  });
+
+  app.get("/api/units/:unitId/interests", isAuthenticated, async (req, res) => {
+    try {
+      const unitId = req.params.unitId as string;
+      const interests = await storage.getUnitInterests(unitId);
+      res.json(interests);
+    } catch (error) {
+      console.error("Error fetching unit interests:", error);
+      res.status(500).json({ error: "Failed to fetch unit interests" });
+    }
+  });
+
+  app.post("/api/lead-unit-interests", isAuthenticated, async (req, res) => {
+    try {
+      const data = insertLeadUnitInterestSchema.parse(req.body);
+      const interest = await storage.createLeadUnitInterest(data);
+      res.status(201).json(interest);
+    } catch (error) {
+      console.error("Error creating lead unit interest:", error);
+      res.status(400).json({ error: "Failed to create lead unit interest" });
+    }
+  });
+
+  app.delete("/api/lead-unit-interests/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const deleted = await storage.deleteLeadUnitInterest(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Interest not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting lead unit interest:", error);
+      res.status(500).json({ error: "Failed to delete lead unit interest" });
     }
   });
 

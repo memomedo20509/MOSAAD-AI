@@ -12,6 +12,8 @@ import {
   Building2,
   Filter,
   UsersRound,
+  Landmark,
+  FolderKanban,
 } from "lucide-react";
 import {
   Sidebar,
@@ -77,6 +79,19 @@ const adminItems = [
     title: "Actions Log",
     url: "/leads/actions",
     icon: Activity,
+  },
+];
+
+const inventoryItems = [
+  {
+    title: "Developers",
+    url: "/inventory/developers",
+    icon: Landmark,
+  },
+  {
+    title: "Projects",
+    url: "/inventory/projects",
+    icon: FolderKanban,
   },
 ];
 
@@ -200,6 +215,35 @@ export function AppSidebar() {
             </CollapsibleContent>
           </Collapsible>
         </SidebarGroup>
+
+        {isAdmin(userRole) && (
+          <SidebarGroup>
+            <Collapsible defaultOpen className="group/collapsible">
+              <SidebarGroupLabel asChild>
+                <CollapsibleTrigger className="flex w-full items-center justify-between">
+                  Inventory
+                  <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                </CollapsibleTrigger>
+              </SidebarGroupLabel>
+              <CollapsibleContent>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {inventoryItems.map((item) => (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton asChild isActive={location.startsWith(item.url)}>
+                          <Link href={item.url} data-testid={`link-nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </CollapsibleContent>
+            </Collapsible>
+          </SidebarGroup>
+        )}
 
         <SidebarGroup>
           <SidebarGroupLabel>Clients</SidebarGroupLabel>
