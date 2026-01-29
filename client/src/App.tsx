@@ -3,26 +3,67 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/app-sidebar";
 import NotFound from "@/pages/not-found";
+import Dashboard from "@/pages/dashboard";
+import LeadsPage from "@/pages/leads";
+import AddLeadPage from "@/pages/add-lead";
+import UploadLeadsPage from "@/pages/upload-leads";
+import DuplicatedLeadsPage from "@/pages/duplicated-leads";
+import WithdrawnLeadsPage from "@/pages/withdrawn-leads";
+import ActionsLogPage from "@/pages/actions-log";
+import ClientsPage from "@/pages/clients";
+import StatesManagementPage from "@/pages/states-management";
+import SavedFiltersPage from "@/pages/saved-filters";
 
 function Router() {
   return (
     <Switch>
-      {/* Add pages below */}
-      {/* <Route path="/" component={Home}/> */}
-      {/* Fallback to 404 */}
+      <Route path="/" component={Dashboard} />
+      <Route path="/leads" component={LeadsPage} />
+      <Route path="/leads/new" component={AddLeadPage} />
+      <Route path="/leads/upload" component={UploadLeadsPage} />
+      <Route path="/leads/duplicated" component={DuplicatedLeadsPage} />
+      <Route path="/leads/withdrawn" component={WithdrawnLeadsPage} />
+      <Route path="/leads/actions" component={ActionsLogPage} />
+      <Route path="/clients" component={ClientsPage} />
+      <Route path="/settings/states" component={StatesManagementPage} />
+      <Route path="/settings/filters" component={SavedFiltersPage} />
       <Route component={NotFound} />
     </Switch>
   );
 }
 
 function App() {
+  const style = {
+    "--sidebar-width": "16rem",
+    "--sidebar-width-icon": "3rem",
+  };
+
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-      </TooltipProvider>
+      <ThemeProvider defaultTheme="light" storageKey="crm-ui-theme">
+        <TooltipProvider>
+          <SidebarProvider style={style as React.CSSProperties}>
+            <div className="flex h-screen w-full">
+              <AppSidebar />
+              <div className="flex flex-col flex-1 overflow-hidden">
+                <header className="flex h-14 items-center justify-between gap-4 border-b px-4 shrink-0">
+                  <SidebarTrigger data-testid="button-sidebar-toggle" />
+                  <ThemeToggle />
+                </header>
+                <main className="flex-1 overflow-auto p-6">
+                  <Router />
+                </main>
+              </div>
+            </div>
+          </SidebarProvider>
+          <Toaster />
+        </TooltipProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
