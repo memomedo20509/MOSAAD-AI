@@ -72,7 +72,6 @@ function Router() {
 
 function AuthenticatedApp() {
   const { user } = useAuth();
-  const { isRTL } = useLanguage();
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
@@ -80,36 +79,34 @@ function AuthenticatedApp() {
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
-      <div className={`flex h-screen w-full ${isRTL ? "flex-row-reverse" : ""}`}>
-        <AppSidebar />
-        <div className="flex flex-col flex-1 overflow-hidden">
-          <header className={`flex h-14 items-center justify-between gap-4 border-b px-4 shrink-0 ${isRTL ? "flex-row-reverse" : ""}`}>
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <div className={`flex items-center gap-2 ${isRTL ? "flex-row-reverse" : ""}`}>
-              {user && (
-                <div className={`flex items-center gap-2 text-sm ${isRTL ? "flex-row-reverse" : ""}`}>
-                  {user.profileImageUrl && (
-                    <img 
-                      src={user.profileImageUrl} 
-                      alt={user.firstName || "User"} 
-                      className="h-8 w-8 rounded-full"
-                      data-testid="img-user-avatar"
-                    />
-                  )}
-                  <span className="hidden md:inline text-muted-foreground" data-testid="text-user-name">
-                    {user.firstName} {user.lastName}
-                  </span>
-                </div>
-              )}
-              <LanguageToggle />
-              <ThemeToggle />
-              <LogoutButton />
-            </div>
-          </header>
-          <main className="flex-1 overflow-auto p-6">
-            <Router />
-          </main>
-        </div>
+      <AppSidebar />
+      <div className="flex flex-col flex-1 overflow-hidden min-w-0">
+        <header className="flex h-14 items-center justify-between gap-4 border-b px-4 shrink-0">
+          <SidebarTrigger data-testid="button-sidebar-toggle" />
+          <div className="flex items-center gap-2">
+            {user && (
+              <div className="flex items-center gap-2 text-sm">
+                {user.profileImageUrl && (
+                  <img 
+                    src={user.profileImageUrl} 
+                    alt={user.firstName || "User"} 
+                    className="h-8 w-8 rounded-full"
+                    data-testid="img-user-avatar"
+                  />
+                )}
+                <span className="hidden md:inline text-muted-foreground" data-testid="text-user-name">
+                  {user.firstName} {user.lastName}
+                </span>
+              </div>
+            )}
+            <LanguageToggle />
+            <ThemeToggle />
+            <LogoutButton />
+          </div>
+        </header>
+        <main className="flex-1 overflow-auto p-6">
+          <Router />
+        </main>
       </div>
     </SidebarProvider>
   );
