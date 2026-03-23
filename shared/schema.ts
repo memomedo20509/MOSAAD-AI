@@ -193,6 +193,21 @@ export const insertLeadUnitInterestSchema = createInsertSchema(leadUnitInterests
 export type InsertLeadUnitInterest = z.infer<typeof insertLeadUnitInterestSchema>;
 export type LeadUnitInterest = typeof leadUnitInterests.$inferSelect;
 
+// Communications log (calls, WhatsApp, meetings, notes)
+export const communications = pgTable("communications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  leadId: varchar("lead_id").references(() => leads.id).notNull(),
+  userId: varchar("user_id"),
+  userName: text("user_name"),
+  type: text("type").notNull(), // call, whatsapp, email, meeting, note, no_answer
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertCommunicationSchema = createInsertSchema(communications).omit({ id: true, createdAt: true });
+export type InsertCommunication = z.infer<typeof insertCommunicationSchema>;
+export type Communication = typeof communications.$inferSelect;
+
 // Reminders
 export const reminders = pgTable("reminders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

@@ -13,6 +13,13 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/lib/i18n";
 import {
@@ -30,9 +37,13 @@ import {
   Activity,
   Home,
   FileText,
+  MessageCircle,
+  PhoneCall,
+  PhoneMissed,
+  Users,
 } from "lucide-react";
 import { format } from "date-fns";
-import type { Lead, LeadState, LeadHistory, Task, Reminder, LeadUnitInterest, Unit, Project } from "@shared/schema";
+import type { Lead, LeadState, LeadHistory, Task, Reminder, LeadUnitInterest, Unit, Project, Communication } from "@shared/schema";
 
 interface LeadDetailsModalProps {
   leadId: string | null;
@@ -46,6 +57,8 @@ export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalPr
   const [activeTab, setActiveTab] = useState("overview");
   const [newReminderTitle, setNewReminderTitle] = useState("");
   const [newReminderDate, setNewReminderDate] = useState("");
+  const [commType, setCommType] = useState("");
+  const [commNote, setCommNote] = useState("");
 
   const { data: lead } = useQuery<Lead>({
     queryKey: ["/api/leads", leadId],
@@ -73,6 +86,11 @@ export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalPr
 
   const { data: interests = [] } = useQuery<LeadUnitInterest[]>({
     queryKey: ["/api/leads", leadId, "unit-interests"],
+    enabled: !!leadId,
+  });
+
+  const { data: commList = [] } = useQuery<Communication[]>({
+    queryKey: ["/api/leads", leadId, "communications"],
     enabled: !!leadId,
   });
 
@@ -113,6 +131,22 @@ export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalPr
       queryClient.invalidateQueries({ queryKey: ["/api/leads", leadId, "tasks"] });
     },
   });
+
+  const createCommunicationMutation = useMutation({
+    mutationFn: (data: { type: string; note?: string }) =>
+      apiRequest("POST", `/api/leads/${leadId}/communications`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", leadId, "communications"] });
+      setCommType("");
+      setCommNote("");
+      toast({ title: t.communicationLogged });
+    },
+  });
+
+  const handleLogCommunication = () => {
+    if (!commType || !leadId) return;
+    createCommunicationMutation.mutate({ type: commType, note: commNote || undefined });
+  };
 
   const handleAddReminder = () => {
     if (!newReminderTitle || !newReminderDate || !leadId) return;
@@ -156,10 +190,14 @@ export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalPr
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="overview" data-testid="tab-overview">
               <FileText className="h-4 w-4 mr-1" />
               {t.overview}
+            </TabsTrigger>
+            <TabsTrigger value="communications" data-testid="tab-communications">
+              <MessageCircle className="h-4 w-4 mr-1" />
+              {t.communicationLog}
             </TabsTrigger>
             <TabsTrigger value="timeline" data-testid="tab-timeline">
               <Activity className="h-4 w-4 mr-1" />
@@ -183,15 +221,41 @@ export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalPr
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {lead.phone && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      <span dir="ltr">{lead.phone}</span>
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-muted-foreground" />
+                        <span dir="ltr">{lead.phone}</span>
+                      </div>
+                      <a
+                        href={`https://wa.me/${lead.phone.replace(/\D/g, "")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Button size="sm" variant="outline" className="h-7 gap-1 text-green-600 border-green-200 hover:bg-green-50" data-testid="button-whatsapp-primary">
+                          <MessageCircle className="h-3.5 w-3.5" />
+                          WhatsApp
+                        </Button>
+                      </a>
                     </div>
                   )}
                   {lead.phone2 && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      <span dir="ltr">{lead.phone2}</span>
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-muted-foreground" />
+                        <span dir="ltr">{lead.phone2}</span>
+                      </div>
+                      <a
+                        href={`https://wa.me/${lead.phone2.replace(/\D/g, "")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Button size="sm" variant="outline" className="h-7 gap-1 text-green-600 border-green-200 hover:bg-green-50" data-testid="button-whatsapp-secondary">
+                          <MessageCircle className="h-3.5 w-3.5" />
+                          WhatsApp
+                        </Button>
+                      </a>
                     </div>
                   )}
                   {lead.email && (
@@ -327,6 +391,151 @@ export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalPr
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          <TabsContent value="communications" className="mt-4 space-y-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">{t.logCommunication}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col gap-2">
+                  <div className="flex gap-2">
+                    <Select value={commType} onValueChange={setCommType}>
+                      <SelectTrigger className="flex-1" data-testid="select-comm-type">
+                        <SelectValue placeholder={t.selectCommType} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="call">
+                          <div className="flex items-center gap-2">
+                            <PhoneCall className="h-4 w-4 text-blue-500" />
+                            {t.commTypeCall}
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="no_answer">
+                          <div className="flex items-center gap-2">
+                            <PhoneMissed className="h-4 w-4 text-red-500" />
+                            {t.commTypeNoAnswer}
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="whatsapp">
+                          <div className="flex items-center gap-2">
+                            <MessageCircle className="h-4 w-4 text-green-500" />
+                            {t.commTypeWhatsapp}
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="meeting">
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4 text-purple-500" />
+                            {t.commTypeMeeting}
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="email">
+                          <div className="flex items-center gap-2">
+                            <Mail className="h-4 w-4 text-orange-500" />
+                            {t.commTypeEmail}
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="note">
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-gray-500" />
+                            {t.commTypeNote}
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {lead.phone && commType === "whatsapp" && (
+                      <a
+                        href={`https://wa.me/${lead.phone.replace(/\D/g, "")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Button variant="outline" className="text-green-600 border-green-200 hover:bg-green-50" data-testid="button-open-whatsapp">
+                          <MessageCircle className="h-4 w-4 mr-1" />
+                          {t.whatsappChat}
+                        </Button>
+                      </a>
+                    )}
+                  </div>
+                  <Textarea
+                    placeholder={t.communicationNote}
+                    value={commNote}
+                    onChange={(e) => setCommNote(e.target.value)}
+                    className="min-h-[60px]"
+                    data-testid="input-comm-note"
+                  />
+                  <Button
+                    onClick={handleLogCommunication}
+                    disabled={!commType || createCommunicationMutation.isPending}
+                    className="self-end"
+                    data-testid="button-log-communication"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    {t.logComm}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-4">
+                {commList.length > 0 ? (
+                  <div className="relative">
+                    <div className="absolute left-4 top-0 bottom-0 w-px bg-border rtl:left-auto rtl:right-4" />
+                    <div className="space-y-3">
+                      {[...commList].sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime()).map((comm) => {
+                        const iconMap: Record<string, { icon: React.ReactNode; color: string }> = {
+                          call: { icon: <PhoneCall className="h-4 w-4" />, color: "text-blue-500 bg-blue-50" },
+                          no_answer: { icon: <PhoneMissed className="h-4 w-4" />, color: "text-red-500 bg-red-50" },
+                          whatsapp: { icon: <MessageCircle className="h-4 w-4" />, color: "text-green-500 bg-green-50" },
+                          meeting: { icon: <Users className="h-4 w-4" />, color: "text-purple-500 bg-purple-50" },
+                          email: { icon: <Mail className="h-4 w-4" />, color: "text-orange-500 bg-orange-50" },
+                          note: { icon: <FileText className="h-4 w-4" />, color: "text-gray-500 bg-gray-50" },
+                        };
+                        const typeInfo = iconMap[comm.type] || iconMap.note;
+                        const typeLabel: Record<string, string> = {
+                          call: t.commTypeCall,
+                          no_answer: t.commTypeNoAnswer,
+                          whatsapp: t.commTypeWhatsapp,
+                          meeting: t.commTypeMeeting,
+                          email: t.commTypeEmail,
+                          note: t.commTypeNote,
+                        };
+                        return (
+                          <div key={comm.id} className="relative pl-10 rtl:pl-0 rtl:pr-10">
+                            <div className={`absolute left-2 top-2 w-5 h-5 rounded-full flex items-center justify-center rtl:left-auto rtl:right-2 ${typeInfo.color}`}>
+                              {typeInfo.icon}
+                            </div>
+                            <div className="p-3 rounded-md border">
+                              <div className="flex items-center justify-between">
+                                <Badge variant="secondary" className={typeInfo.color}>
+                                  {typeLabel[comm.type] || comm.type}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">
+                                  {comm.createdAt && format(new Date(comm.createdAt), "MMM dd, HH:mm")}
+                                </span>
+                              </div>
+                              {comm.note && (
+                                <p className="text-sm text-muted-foreground mt-1">{comm.note}</p>
+                              )}
+                              {comm.userName && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {t.performedBy}: {comm.userName}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex h-32 items-center justify-center text-muted-foreground">
+                    {t.noCommunications}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="timeline" className="mt-4">

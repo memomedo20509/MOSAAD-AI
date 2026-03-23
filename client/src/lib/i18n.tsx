@@ -407,6 +407,23 @@ const translations = {
     filterName: "اسم الفلتر",
     noFiltersYet: "لا يوجد فلاتر محفوظة بعد",
     
+    // Communication Log
+    communicationLog: "سجل التواصل",
+    logCommunication: "تسجيل تواصل",
+    communicationType: "نوع التواصل",
+    commTypeCall: "مكالمة هاتفية",
+    commTypeWhatsapp: "واتساب",
+    commTypeEmail: "إيميل",
+    commTypeMeeting: "اجتماع",
+    commTypeNote: "ملاحظة",
+    commTypeNoAnswer: "لم يرد",
+    communicationNote: "ملاحظة (اختياري)",
+    communicationLogged: "تم تسجيل التواصل بنجاح",
+    noCommunications: "لا يوجد سجل تواصل بعد",
+    whatsappChat: "محادثة واتساب",
+    selectCommType: "اختر نوع التواصل",
+    logComm: "تسجيل",
+    
     // Common
     loading: "جاري التحميل...",
     error: "خطأ",
@@ -822,6 +839,23 @@ const translations = {
     addFilter: "Add Filter",
     filterName: "Filter Name",
     noFiltersYet: "No saved filters yet",
+    
+    // Communication Log
+    communicationLog: "Communication Log",
+    logCommunication: "Log Communication",
+    communicationType: "Communication Type",
+    commTypeCall: "Phone Call",
+    commTypeWhatsapp: "WhatsApp",
+    commTypeEmail: "Email",
+    commTypeMeeting: "Meeting",
+    commTypeNote: "Note",
+    commTypeNoAnswer: "No Answer",
+    communicationNote: "Note (optional)",
+    communicationLogged: "Communication logged successfully",
+    noCommunications: "No communications logged yet",
+    whatsappChat: "WhatsApp Chat",
+    selectCommType: "Select Type",
+    logComm: "Log",
     
     // Common
     loading: "Loading...",

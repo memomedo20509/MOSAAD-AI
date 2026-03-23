@@ -14,6 +14,7 @@ import {
   projects,
   units,
   leadUnitInterests,
+  communications,
   reminders,
   type User,
   type InsertUser,
@@ -38,6 +39,8 @@ import {
   type InsertUnit,
   type LeadUnitInterest,
   type InsertLeadUnitInterest,
+  type Communication,
+  type InsertCommunication,
   type Reminder,
   type InsertReminder,
 } from "@shared/schema";
@@ -125,6 +128,10 @@ export interface IStorage {
   getUnitInterests(unitId: string): Promise<LeadUnitInterest[]>;
   createLeadUnitInterest(interest: InsertLeadUnitInterest): Promise<LeadUnitInterest>;
   deleteLeadUnitInterest(id: string): Promise<boolean>;
+
+  // Communications
+  getCommunicationsByLead(leadId: string): Promise<Communication[]>;
+  createCommunication(comm: InsertCommunication): Promise<Communication>;
 
   // Reminders
   getAllReminders(): Promise<Reminder[]>;
@@ -448,6 +455,16 @@ export class DatabaseStorage implements IStorage {
   async deleteLeadUnitInterest(id: string): Promise<boolean> {
     const result = await db.delete(leadUnitInterests).where(eq(leadUnitInterests.id, id)).returning();
     return result.length > 0;
+  }
+
+  // Communications
+  async getCommunicationsByLead(leadId: string): Promise<Communication[]> {
+    return db.select().from(communications).where(eq(communications.leadId, leadId)).orderBy(communications.createdAt);
+  }
+
+  async createCommunication(comm: InsertCommunication): Promise<Communication> {
+    const [newComm] = await db.insert(communications).values(comm).returning();
+    return newComm;
   }
 
   // Reminders

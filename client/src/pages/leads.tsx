@@ -36,6 +36,7 @@ import {
   Calendar,
   ChevronDown,
   X,
+  MessageCircle,
 } from "lucide-react";
 import { Link } from "wouter";
 import type { Lead, LeadState } from "@shared/schema";
@@ -349,9 +350,27 @@ export default function LeadsPage() {
 
                       <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                         {lead.phone && (
-                          <div className="flex items-center gap-2">
-                            <Phone className="h-3.5 w-3.5" />
-                            <span className="truncate">{lead.phone}</span>
+                          <div className="flex items-center gap-2 justify-between">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Phone className="h-3.5 w-3.5 flex-shrink-0" />
+                              <span className="truncate">{lead.phone}</span>
+                            </div>
+                            <a
+                              href={`https://wa.me/${lead.phone.replace(/\D/g, "")}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex-shrink-0"
+                            >
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                data-testid={`button-whatsapp-${lead.id}`}
+                              >
+                                <MessageCircle className="h-3.5 w-3.5" />
+                              </Button>
+                            </a>
                           </div>
                         )}
                         {lead.email && (

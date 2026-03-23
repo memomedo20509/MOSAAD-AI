@@ -20,6 +20,7 @@ import {
   insertUnitSchema,
   updateUnitSchema,
   insertLeadUnitInterestSchema,
+  insertCommunicationSchema,
   insertReminderSchema,
   updateReminderSchema,
 } from "@shared/schema";
@@ -642,6 +643,37 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting lead unit interest:", error);
       res.status(500).json({ error: "Failed to delete lead unit interest" });
+    }
+  });
+
+  // ==================== COMMUNICATIONS ====================
+
+  app.get("/api/leads/:leadId/communications", isAuthenticated, async (req, res) => {
+    try {
+      const leadId = req.params.leadId as string;
+      const comms = await storage.getCommunicationsByLead(leadId);
+      res.json(comms);
+    } catch (error) {
+      console.error("Error fetching communications:", error);
+      res.status(500).json({ error: "Failed to fetch communications" });
+    }
+  });
+
+  app.post("/api/leads/:leadId/communications", isAuthenticated, async (req, res) => {
+    try {
+      const leadId = req.params.leadId as string;
+      const user = req.user as any;
+      const data = insertCommunicationSchema.parse({
+        ...req.body,
+        leadId,
+        userId: user?.id,
+        userName: user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username : "System",
+      });
+      const comm = await storage.createCommunication(data);
+      res.status(201).json(comm);
+    } catch (error) {
+      console.error("Error creating communication:", error);
+      res.status(400).json({ error: "Failed to create communication" });
     }
   });
 
