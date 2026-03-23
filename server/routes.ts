@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated, requireRole } from "./auth";
+import { getScoringConfig, updateScoringConfig } from "./scoring";
 import { 
   insertLeadSchema, 
   insertLeadStateSchema, 
@@ -646,6 +647,23 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== SCORING CONFIG ====================
+
+  app.get("/api/scoring-config", isAuthenticated, async (req, res) => {
+    res.json(getScoringConfig());
+  });
+
+  app.post("/api/scoring-config", isAuthenticated, requireRole(["super_admin", "admin", "sales_manager"]), async (req, res) => {
+    try {
+      const { hotMaxDays, coldMinDays } = req.body;
+      const config = updateScoringConfig({ hotMaxDays, coldMinDays });
+      res.json(config);
+    } catch (error) {
+      console.error("Error updating scoring config:", error);
+      res.status(400).json({ error: "Failed to update scoring config" });
+    }
+  });
+
   // ==================== TEAM LOAD & AUTO ASSIGN ====================
 
   app.get("/api/team-load", isAuthenticated, async (req, res) => {
@@ -658,10 +676,11 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/leads/:leadId/auto-assign", isAuthenticated, async (req, res) => {
+  app.post("/api/leads/:leadId/auto-assign", isAuthenticated, requireRole(["super_admin", "admin", "sales_manager"]), async (req, res) => {
     try {
       const leadId = req.params.leadId as string;
-      const lead = await storage.autoAssignLead(leadId);
+      const user = req.user;
+      const lead = await storage.autoAssignLead(leadId, user?.teamId ?? null);
       if (!lead) {
         return res.status(400).json({ error: "No agents available for assignment" });
       }

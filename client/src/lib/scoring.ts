@@ -16,6 +16,11 @@ export function computeLeadScore(lead: Lead): ScoreInfo {
 
   const daysSinceContact = Math.floor((now - lastContactMs) / (1000 * 60 * 60 * 24));
 
+  const dbScore = lead.score as LeadScore | undefined;
+  if (dbScore && (dbScore === "hot" || dbScore === "warm" || dbScore === "cold")) {
+    return { score: dbScore, daysSinceContact };
+  }
+
   let score: LeadScore;
   if (daysSinceContact <= 3) {
     score = "hot";

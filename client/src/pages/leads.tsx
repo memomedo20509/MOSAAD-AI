@@ -48,7 +48,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/lib/i18n";
 import { format } from "date-fns";
 import { computeLeadScore, SCORE_COLORS } from "@/lib/scoring";
-import { Flame, Thermometer, Snowflake } from "lucide-react";
+import { Flame, Thermometer, Snowflake, Settings } from "lucide-react";
+import { ScoringSettingsDialog } from "@/components/scoring-settings-dialog";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function LeadsPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -59,8 +61,10 @@ export default function LeadsPage() {
   const [detailsModalLeadId, setDetailsModalLeadId] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [scoringSettingsOpen, setScoringSettingsOpen] = useState(false);
   const { toast } = useToast();
   const { t } = useLanguage();
+  const { user } = useAuth();
 
   const { data: leads, isLoading: leadsLoading } = useQuery<Lead[]>({
     queryKey: ["/api/leads"],
@@ -189,9 +193,17 @@ export default function LeadsPage() {
             {t.manageLeadsSubtitle}
           </p>
         </div>
-        <Link href="/leads/new">
-          <Button data-testid="button-add-lead">{t.addNewLead}</Button>
-        </Link>
+        <div className="flex gap-2">
+          {(user?.role === "super_admin" || user?.role === "admin" || user?.role === "sales_manager") && (
+            <Button variant="outline" size="sm" onClick={() => setScoringSettingsOpen(true)} data-testid="button-scoring-settings">
+              <Settings className="h-4 w-4 ltr:mr-1 rtl:ml-1" />
+              {t.leadScore}
+            </Button>
+          )}
+          <Link href="/leads/new">
+            <Button data-testid="button-add-lead">{t.addNewLead}</Button>
+          </Link>
+        </div>
       </div>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -524,6 +536,11 @@ export default function LeadsPage() {
         leadId={detailsModalLeadId}
         isOpen={!!detailsModalLeadId}
         onClose={() => setDetailsModalLeadId(null)}
+      />
+
+      <ScoringSettingsDialog
+        open={scoringSettingsOpen}
+        onClose={() => setScoringSettingsOpen(false)}
       />
     </div>
   );

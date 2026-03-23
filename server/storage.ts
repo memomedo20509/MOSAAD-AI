@@ -1,7 +1,8 @@
 import { db, pool } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, and, ne, isNotNull } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
+import { computeScore } from "./scoring";
 import {
   users,
   teams,
@@ -133,9 +134,12 @@ export interface IStorage {
   getCommunicationsByLead(leadId: string): Promise<Communication[]>;
   createCommunication(comm: InsertCommunication): Promise<Communication>;
 
+  // Scoring
+  refreshLeadScore(id: string): Promise<Lead | undefined>;
+
   // Team Load & Auto Assign
   getTeamLoad(): Promise<{ userId: string; userName: string; leadCount: number; role: string }[]>;
-  autoAssignLead(leadId: string): Promise<Lead | undefined>;
+  autoAssignLead(leadId: string, requestingUserTeamId?: string | null): Promise<Lead | undefined>;
 
   // Reminders
   getAllReminders(): Promise<Reminder[]>;
@@ -251,7 +255,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createLead(lead: InsertLead): Promise<Lead> {
-    const [newLead] = await db.insert(leads).values(lead).returning();
+    const score = computeScore(lead as any, 0);
+    const [newLead] = await db.insert(leads).values({ ...lead, score }).returning();
     await this.createHistory({
       leadId: newLead.id,
       action: "Lead Created",
@@ -262,7 +267,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateLead(id: string, data: Partial<Lead>): Promise<Lead | undefined> {
-    const [updated] = await db.update(leads).set({ ...data, updatedAt: new Date() }).where(eq(leads.id, id)).returning();
+    const existing = await this.getLead(id);
+    if (!existing) return undefined;
+    const merged = { ...existing, ...data };
+    const commCount = (await this.getCommunicationsByLead(id)).length;
+    const score = computeScore(merged as any, commCount);
+    const [updated] = await db.update(leads).set({ ...data, score, updatedAt: new Date() }).where(eq(leads.id, id)).returning();
     if (updated) {
       await this.createHistory({
         leadId: id,
@@ -271,6 +281,15 @@ export class DatabaseStorage implements IStorage {
         performedBy: "System",
       });
     }
+    return updated;
+  }
+
+  async refreshLeadScore(id: string): Promise<Lead | undefined> {
+    const lead = await this.getLead(id);
+    if (!lead) return undefined;
+    const commCount = (await this.getCommunicationsByLead(id)).length;
+    const score = computeScore(lead, commCount);
+    const [updated] = await db.update(leads).set({ score }).where(eq(leads.id, id)).returning();
     return updated;
   }
 
@@ -476,20 +495,34 @@ export class DatabaseStorage implements IStorage {
     const allUsers = await db.select().from(users).where(eq(users.isActive, true));
     const agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "sales_manager");
     const allLeads = await db.select().from(leads);
+    const doneStates = (await db.select().from(leadStates)).filter(s => ["Done Deal", "Canceled", "Not Interested"].includes(s.name)).map(s => s.id);
     return agents.map(agent => {
       const userName = `${agent.firstName || ""} ${agent.lastName || ""}`.trim() || agent.username;
-      const leadCount = allLeads.filter(l => l.assignedTo === agent.id).length;
+      const leadCount = allLeads.filter(l => l.assignedTo === agent.id && !doneStates.includes(l.stateId ?? "")).length;
       return { userId: agent.id, userName, leadCount, role: agent.role ?? "sales_agent" };
     }).sort((a, b) => a.leadCount - b.leadCount);
   }
 
-  async autoAssignLead(leadId: string): Promise<Lead | undefined> {
-    const teamLoad = await this.getTeamLoad();
-    if (teamLoad.length === 0) return undefined;
-    const agentWithLeastLeads = teamLoad[0];
+  async autoAssignLead(leadId: string, requestingUserTeamId?: string | null): Promise<Lead | undefined> {
+    const lead = await this.getLead(leadId);
+    if (!lead) return undefined;
+    const allUsers = await db.select().from(users).where(eq(users.isActive, true));
+    let candidates = allUsers.filter(u => u.role === "sales_agent" || u.role === "sales_manager");
+    if (requestingUserTeamId) {
+      const sameTeam = candidates.filter(u => u.teamId === requestingUserTeamId);
+      if (sameTeam.length > 0) candidates = sameTeam;
+    }
+    if (candidates.length === 0) return undefined;
+    const allLeads = await db.select().from(leads);
+    const doneStates = (await db.select().from(leadStates)).filter(s => ["Done Deal", "Canceled", "Not Interested"].includes(s.name)).map(s => s.id);
+    const agentWithLeast = candidates.reduce((min, agent) => {
+      const count = allLeads.filter(l => l.assignedTo === agent.id && !doneStates.includes(l.stateId ?? "")).length;
+      const minCount = allLeads.filter(l => l.assignedTo === min.id && !doneStates.includes(l.stateId ?? "")).length;
+      return count < minCount ? agent : min;
+    }, candidates[0]);
     const [updated] = await db
       .update(leads)
-      .set({ assignedTo: agentWithLeastLeads.userId })
+      .set({ assignedTo: agentWithLeast.id })
       .where(eq(leads.id, leadId))
       .returning();
     return updated;

@@ -44,6 +44,7 @@ export const leads = pgTable("leads", {
   updatedAt: timestamp("updated_at").defaultNow(),
   lastAction: text("last_action"),
   lastActionDate: timestamp("last_action_date"),
+  score: varchar("score", { length: 10 }).default("warm"),
 });
 
 export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true }).extend({
