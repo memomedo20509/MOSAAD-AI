@@ -662,12 +662,12 @@ export async function registerRoutes(
   app.post("/api/leads/:leadId/communications", isAuthenticated, async (req, res) => {
     try {
       const leadId = req.params.leadId as string;
-      const user = req.user as any;
+      const user = req.user;
       const data = insertCommunicationSchema.parse({
         ...req.body,
         leadId,
         userId: user?.id,
-        userName: user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username : "System",
+        userName: user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.username : "System",
       });
       const comm = await storage.createCommunication(data);
       res.status(201).json(comm);

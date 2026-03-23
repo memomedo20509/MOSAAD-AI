@@ -271,10 +271,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteLead(id: string): Promise<boolean> {
-    // Delete related tasks first
+    // Delete related records first to avoid FK constraint errors
     await db.delete(tasks).where(eq(tasks.leadId, id));
-    // Delete related history
     await db.delete(leadHistory).where(eq(leadHistory.leadId, id));
+    await db.delete(communications).where(eq(communications.leadId, id));
     const result = await db.delete(leads).where(eq(leads.id, id)).returning();
     return result.length > 0;
   }
