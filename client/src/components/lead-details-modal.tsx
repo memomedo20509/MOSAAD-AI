@@ -399,7 +399,29 @@ export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalPr
                 <CardTitle className="text-sm">{t.logCommunication}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-wrap gap-2">
+                    {([
+                      { type: "call", icon: <PhoneCall className="h-3.5 w-3.5" />, label: t.commTypeCall, cls: "border-blue-200 text-blue-600 hover:bg-blue-50" },
+                      { type: "no_answer", icon: <PhoneMissed className="h-3.5 w-3.5" />, label: t.commTypeNoAnswer, cls: "border-red-200 text-red-600 hover:bg-red-50" },
+                      { type: "whatsapp", icon: <MessageCircle className="h-3.5 w-3.5" />, label: t.commTypeWhatsapp, cls: "border-green-200 text-green-600 hover:bg-green-50" },
+                      { type: "meeting", icon: <Users className="h-3.5 w-3.5" />, label: t.commTypeMeeting, cls: "border-purple-200 text-purple-600 hover:bg-purple-50" },
+                      { type: "note", icon: <FileText className="h-3.5 w-3.5" />, label: t.commTypeNote, cls: "border-gray-200 text-gray-600 hover:bg-gray-50" },
+                    ] as const).map(({ type, icon, label, cls }) => (
+                      <Button
+                        key={type}
+                        size="sm"
+                        variant="outline"
+                        className={`h-7 gap-1.5 text-xs ${cls}`}
+                        disabled={createCommunicationMutation.isPending}
+                        onClick={() => createCommunicationMutation.mutate({ type, note: undefined })}
+                        data-testid={`button-quick-${type}`}
+                      >
+                        {icon}
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
                   <div className="flex gap-2">
                     <Select value={commType} onValueChange={setCommType}>
                       <SelectTrigger className="flex-1" data-testid="select-comm-type">

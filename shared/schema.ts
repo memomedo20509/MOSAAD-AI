@@ -204,7 +204,12 @@ export const communications = pgTable("communications", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertCommunicationSchema = createInsertSchema(communications).omit({ id: true, createdAt: true });
+export const COMMUNICATION_TYPES = ["call", "whatsapp", "email", "meeting", "note", "no_answer"] as const;
+export type CommunicationType = typeof COMMUNICATION_TYPES[number];
+
+export const insertCommunicationSchema = createInsertSchema(communications)
+  .omit({ id: true, createdAt: true })
+  .extend({ type: z.enum(COMMUNICATION_TYPES) });
 export type InsertCommunication = z.infer<typeof insertCommunicationSchema>;
 export type Communication = typeof communications.$inferSelect;
 
