@@ -233,5 +233,18 @@ export type InsertReminder = z.infer<typeof insertReminderSchema>;
 export type UpdateReminder = z.infer<typeof updateReminderSchema>;
 export type Reminder = typeof reminders.$inferSelect;
 
+// Scoring Configuration (single-row settings table)
+export const scoringConfig = pgTable("scoring_config", {
+  id: integer("id").primaryKey().default(1),
+  hotMaxDays: integer("hot_max_days").notNull().default(3),
+  coldMinDays: integer("cold_min_days").notNull().default(14),
+  weightRecency: integer("weight_recency").notNull().default(40),
+  weightEngagement: integer("weight_engagement").notNull().default(30),
+  weightTaskCompletion: integer("weight_task_completion").notNull().default(30),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type ScoringConfigRecord = typeof scoringConfig.$inferSelect;
+
 // Export auth models (users, teams, sessions)
 export * from "./models/auth";

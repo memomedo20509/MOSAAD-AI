@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated, requireRole } from "./auth";
-import { getScoringConfig, updateScoringConfig } from "./scoring";
+import { updateScoringConfig } from "./scoring";
 import { 
   insertLeadSchema, 
   insertLeadStateSchema, 
@@ -200,7 +200,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/leads", async (req, res) => {
+  app.post("/api/leads", isAuthenticated, async (req, res) => {
     try {
       const data = insertLeadSchema.parse(req.body);
       const user = req.user;
@@ -651,13 +651,19 @@ export async function registerRoutes(
   // ==================== SCORING CONFIG ====================
 
   app.get("/api/scoring-config", isAuthenticated, async (req, res) => {
-    res.json(getScoringConfig());
+    try {
+      const { getScoringConfig } = await import("./scoring");
+      const config = await getScoringConfig();
+      res.json(config);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch scoring config" });
+    }
   });
 
   app.post("/api/scoring-config", isAuthenticated, requireRole("super_admin", "admin", "sales_manager"), async (req, res) => {
     try {
-      const { hotMaxDays, coldMinDays } = req.body;
-      const config = updateScoringConfig({ hotMaxDays, coldMinDays });
+      const { hotMaxDays, coldMinDays, weightRecency, weightEngagement, weightTaskCompletion } = req.body;
+      const config = await updateScoringConfig({ hotMaxDays, coldMinDays, weightRecency, weightEngagement, weightTaskCompletion });
       storage.refreshAllLeadScores().catch(err => console.error("Background score refresh error:", err));
       res.json(config);
     } catch (error) {
@@ -677,6 +683,26 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching team load:", error);
       res.status(500).json({ error: "Failed to fetch team load" });
+    }
+  });
+
+  app.post("/api/leads/auto-assign", isAuthenticated, requireRole("super_admin", "admin", "sales_manager"), async (req, res) => {
+    try {
+      const { leadId, leadIds } = req.body;
+      const user = req.user;
+      const ids: string[] = leadId ? [leadId] : (Array.isArray(leadIds) ? leadIds : []);
+      if (ids.length === 0) {
+        return res.status(400).json({ error: "leadId or leadIds required" });
+      }
+      const results = await Promise.all(ids.map(id => storage.autoAssignLead(id, user?.teamId ?? null)));
+      const assigned = results.filter(Boolean);
+      if (assigned.length === 0) {
+        return res.status(400).json({ error: "No agents available for assignment" });
+      }
+      res.json(ids.length === 1 ? assigned[0] : assigned);
+    } catch (error) {
+      console.error("Error auto-assigning lead:", error);
+      res.status(500).json({ error: "Failed to auto-assign lead" });
     }
   });
 

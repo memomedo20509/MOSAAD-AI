@@ -2,7 +2,7 @@ import { db, pool } from "./db";
 import { eq, and, ne, isNotNull } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
-import { computeScore, type ScoringContext } from "./scoring";
+import { computeScore, getScoringConfig, type ScoringContext } from "./scoring";
 import {
   users,
   teams,
@@ -296,7 +296,8 @@ export class DatabaseStorage implements IStorage {
       lastActionDate: lead.lastActionDate ?? null,
       tags: lead.tags ?? null,
     };
-    const score = computeScore(leadForScoring, { commCount: 0, completedTaskCount: 0 });
+    const config = await getScoringConfig();
+    const score = computeScore(leadForScoring, { commCount: 0, completedTaskCount: 0 }, config);
     const [newLead] = await db.insert(leads).values({ ...lead, score }).returning();
     await this.createHistory({
       leadId: newLead.id,
@@ -316,7 +317,8 @@ export class DatabaseStorage implements IStorage {
     if (!existing) return undefined;
     const merged: Lead = { ...existing, ...data };
     const ctx = await this.buildScoringContext(id);
-    const score = computeScore(merged, ctx);
+    const config = await getScoringConfig();
+    const score = computeScore(merged, ctx, config);
     const [updated] = await db.update(leads).set({ ...data, score, updatedAt: new Date() }).where(eq(leads.id, id)).returning();
     if (updated) {
       await this.createHistory({
@@ -333,17 +335,19 @@ export class DatabaseStorage implements IStorage {
     const lead = await this.getLead(id);
     if (!lead) return undefined;
     const ctx = await this.buildScoringContext(id);
-    const score = computeScore(lead, ctx);
+    const config = await getScoringConfig();
+    const score = computeScore(lead, ctx, config);
     const [updated] = await db.update(leads).set({ score }).where(eq(leads.id, id)).returning();
     return updated;
   }
 
   async getAllLeadsWithRefreshedScores(): Promise<Lead[]> {
     const allLeads = await db.select().from(leads).orderBy(leads.createdAt);
+    const config = await getScoringConfig();
     const updated: Lead[] = [];
     for (const lead of allLeads) {
       const ctx = await this.buildScoringContext(lead.id);
-      const score = computeScore(lead, ctx);
+      const score = computeScore(lead, ctx, config);
       if (score !== lead.score) {
         const [refreshed] = await db.update(leads).set({ score }).where(eq(leads.id, lead.id)).returning();
         updated.push(refreshed ?? lead);
@@ -356,9 +360,10 @@ export class DatabaseStorage implements IStorage {
 
   async refreshAllLeadScores(): Promise<void> {
     const allLeads = await db.select().from(leads).orderBy(leads.createdAt);
+    const config = await getScoringConfig();
     for (const lead of allLeads) {
       const ctx = await this.buildScoringContext(lead.id);
-      const score = computeScore(lead, ctx);
+      const score = computeScore(lead, ctx, config);
       if (score !== lead.score) {
         await db.update(leads).set({ score }).where(eq(leads.id, lead.id));
       }
