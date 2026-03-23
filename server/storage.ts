@@ -77,7 +77,7 @@ export interface IStorage {
   // Leads
   getAllLeads(): Promise<Lead[]>;
   getLead(id: string): Promise<Lead | undefined>;
-  createLead(lead: InsertLead): Promise<Lead>;
+  createLead(lead: InsertLead, creatingUserTeamId?: string | null): Promise<Lead>;
   updateLead(id: string, data: Partial<Lead>): Promise<Lead | undefined>;
   deleteLead(id: string): Promise<boolean>;
 
@@ -136,9 +136,11 @@ export interface IStorage {
 
   // Scoring
   refreshLeadScore(id: string): Promise<Lead | undefined>;
+  refreshAllLeadScores(): Promise<void>;
+  getAllLeadsWithRefreshedScores(): Promise<Lead[]>;
 
   // Team Load & Auto Assign
-  getTeamLoad(): Promise<{ userId: string; userName: string; leadCount: number; role: string }[]>;
+  getTeamLoad(teamId?: string | null): Promise<{ userId: string; userName: string; leadCount: number; role: string }[]>;
   autoAssignLead(leadId: string, requestingUserTeamId?: string | null): Promise<Lead | undefined>;
 
   // Reminders
@@ -265,7 +267,7 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async createLead(lead: InsertLead): Promise<Lead> {
+  async createLead(lead: InsertLead, creatingUserTeamId?: string | null): Promise<Lead> {
     const leadForScoring: Lead = {
       id: "",
       createdAt: new Date(),
@@ -302,6 +304,10 @@ export class DatabaseStorage implements IStorage {
       description: `Lead was created`,
       performedBy: "System",
     });
+    if (!newLead.assignedTo) {
+      const assigned = await this.autoAssignLead(newLead.id, creatingUserTeamId ?? null);
+      return assigned ?? newLead;
+    }
     return newLead;
   }
 
@@ -330,6 +336,33 @@ export class DatabaseStorage implements IStorage {
     const score = computeScore(lead, ctx);
     const [updated] = await db.update(leads).set({ score }).where(eq(leads.id, id)).returning();
     return updated;
+  }
+
+  async getAllLeadsWithRefreshedScores(): Promise<Lead[]> {
+    const allLeads = await db.select().from(leads).orderBy(leads.createdAt);
+    const updated: Lead[] = [];
+    for (const lead of allLeads) {
+      const ctx = await this.buildScoringContext(lead.id);
+      const score = computeScore(lead, ctx);
+      if (score !== lead.score) {
+        const [refreshed] = await db.update(leads).set({ score }).where(eq(leads.id, lead.id)).returning();
+        updated.push(refreshed ?? lead);
+      } else {
+        updated.push(lead);
+      }
+    }
+    return updated;
+  }
+
+  async refreshAllLeadScores(): Promise<void> {
+    const allLeads = await db.select().from(leads).orderBy(leads.createdAt);
+    for (const lead of allLeads) {
+      const ctx = await this.buildScoringContext(lead.id);
+      const score = computeScore(lead, ctx);
+      if (score !== lead.score) {
+        await db.update(leads).set({ score }).where(eq(leads.id, lead.id));
+      }
+    }
   }
 
   async deleteLead(id: string): Promise<boolean> {
@@ -530,9 +563,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Team Load & Auto Assign
-  async getTeamLoad(): Promise<{ userId: string; userName: string; leadCount: number; role: string }[]> {
+  async getTeamLoad(teamId?: string | null): Promise<{ userId: string; userName: string; leadCount: number; role: string }[]> {
     const allUsers = await db.select().from(users).where(eq(users.isActive, true));
-    const agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "sales_manager");
+    let agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "sales_manager");
+    if (teamId) {
+      agents = agents.filter(u => u.teamId === teamId);
+    }
     const allLeads = await db.select().from(leads);
     const doneStates = (await db.select().from(leadStates)).filter(s => ["Done Deal", "Canceled", "Not Interested"].includes(s.name)).map(s => s.id);
     return agents.map(agent => {

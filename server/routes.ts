@@ -178,7 +178,7 @@ export async function registerRoutes(
   // Leads
   app.get("/api/leads", async (req, res) => {
     try {
-      const leads = await storage.getAllLeads();
+      const leads = await storage.getAllLeadsWithRefreshedScores();
       res.json(leads);
     } catch (error) {
       console.error("Error fetching leads:", error);
@@ -189,7 +189,7 @@ export async function registerRoutes(
   app.get("/api/leads/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const lead = await storage.getLead(id);
+      const lead = await storage.refreshLeadScore(id);
       if (!lead) {
         return res.status(404).json({ error: "Lead not found" });
       }
@@ -203,7 +203,8 @@ export async function registerRoutes(
   app.post("/api/leads", async (req, res) => {
     try {
       const data = insertLeadSchema.parse(req.body);
-      const lead = await storage.createLead(data);
+      const user = req.user;
+      const lead = await storage.createLead(data, user?.teamId ?? null);
       res.status(201).json(lead);
     } catch (error) {
       console.error("Error creating lead:", error);
@@ -657,6 +658,7 @@ export async function registerRoutes(
     try {
       const { hotMaxDays, coldMinDays } = req.body;
       const config = updateScoringConfig({ hotMaxDays, coldMinDays });
+      storage.refreshAllLeadScores().catch(err => console.error("Background score refresh error:", err));
       res.json(config);
     } catch (error) {
       console.error("Error updating scoring config:", error);
@@ -668,7 +670,9 @@ export async function registerRoutes(
 
   app.get("/api/team-load", isAuthenticated, async (req, res) => {
     try {
-      const teamLoad = await storage.getTeamLoad();
+      const user = req.user;
+      const teamId = user?.role === "sales_manager" ? user?.teamId ?? null : null;
+      const teamLoad = await storage.getTeamLoad(teamId);
       res.json(teamLoad);
     } catch (error) {
       console.error("Error fetching team load:", error);
