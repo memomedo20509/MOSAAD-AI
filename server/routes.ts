@@ -653,7 +653,7 @@ export async function registerRoutes(
     res.json(getScoringConfig());
   });
 
-  app.post("/api/scoring-config", isAuthenticated, requireRole(["super_admin", "admin", "sales_manager"]), async (req, res) => {
+  app.post("/api/scoring-config", isAuthenticated, requireRole("super_admin", "admin", "sales_manager"), async (req, res) => {
     try {
       const { hotMaxDays, coldMinDays } = req.body;
       const config = updateScoringConfig({ hotMaxDays, coldMinDays });
@@ -676,7 +676,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/leads/:leadId/auto-assign", isAuthenticated, requireRole(["super_admin", "admin", "sales_manager"]), async (req, res) => {
+  app.post("/api/leads/:leadId/auto-assign", isAuthenticated, requireRole("super_admin", "admin", "sales_manager"), async (req, res) => {
     try {
       const leadId = req.params.leadId as string;
       const user = req.user;

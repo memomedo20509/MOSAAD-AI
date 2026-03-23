@@ -2,7 +2,7 @@ import { db, pool } from "./db";
 import { eq, and, ne, isNotNull } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
-import { computeScore } from "./scoring";
+import { computeScore, type ScoringContext } from "./scoring";
 import {
   users,
   teams,
@@ -254,8 +254,47 @@ export class DatabaseStorage implements IStorage {
     return lead;
   }
 
+  private async buildScoringContext(leadId: string): Promise<ScoringContext> {
+    const [commRows, taskRows] = await Promise.all([
+      this.getCommunicationsByLead(leadId),
+      db.select().from(tasks).where(eq(tasks.leadId, leadId)),
+    ]);
+    return {
+      commCount: commRows.length,
+      completedTaskCount: taskRows.filter(t => t.completed === true).length,
+    };
+  }
+
   async createLead(lead: InsertLead): Promise<Lead> {
-    const score = computeScore(lead as any, 0);
+    const leadForScoring: Lead = {
+      id: "",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      score: lead.score ?? "warm",
+      name: lead.name ?? null,
+      email: lead.email ?? null,
+      phone: lead.phone ?? "",
+      phone2: lead.phone2 ?? null,
+      area: lead.area ?? null,
+      space: lead.space ?? null,
+      campaign: lead.campaign ?? null,
+      channel: lead.channel ?? null,
+      notes: lead.notes ?? null,
+      stateId: lead.stateId ?? null,
+      assignedTo: lead.assignedTo ?? null,
+      budget: lead.budget ?? null,
+      requestType: lead.requestType ?? null,
+      unitType: lead.unitType ?? null,
+      location: lead.location ?? null,
+      paymentType: lead.paymentType ?? null,
+      downPayment: lead.downPayment ?? null,
+      bedrooms: lead.bedrooms ?? null,
+      bathrooms: lead.bathrooms ?? null,
+      lastAction: lead.lastAction ?? null,
+      lastActionDate: lead.lastActionDate ?? null,
+      tags: lead.tags ?? null,
+    };
+    const score = computeScore(leadForScoring, { commCount: 0, completedTaskCount: 0 });
     const [newLead] = await db.insert(leads).values({ ...lead, score }).returning();
     await this.createHistory({
       leadId: newLead.id,
@@ -269,9 +308,9 @@ export class DatabaseStorage implements IStorage {
   async updateLead(id: string, data: Partial<Lead>): Promise<Lead | undefined> {
     const existing = await this.getLead(id);
     if (!existing) return undefined;
-    const merged = { ...existing, ...data };
-    const commCount = (await this.getCommunicationsByLead(id)).length;
-    const score = computeScore(merged as any, commCount);
+    const merged: Lead = { ...existing, ...data };
+    const ctx = await this.buildScoringContext(id);
+    const score = computeScore(merged, ctx);
     const [updated] = await db.update(leads).set({ ...data, score, updatedAt: new Date() }).where(eq(leads.id, id)).returning();
     if (updated) {
       await this.createHistory({
@@ -287,8 +326,8 @@ export class DatabaseStorage implements IStorage {
   async refreshLeadScore(id: string): Promise<Lead | undefined> {
     const lead = await this.getLead(id);
     if (!lead) return undefined;
-    const commCount = (await this.getCommunicationsByLead(id)).length;
-    const score = computeScore(lead, commCount);
+    const ctx = await this.buildScoringContext(id);
+    const score = computeScore(lead, ctx);
     const [updated] = await db.update(leads).set({ score }).where(eq(leads.id, id)).returning();
     return updated;
   }
@@ -506,15 +545,17 @@ export class DatabaseStorage implements IStorage {
   async autoAssignLead(leadId: string, requestingUserTeamId?: string | null): Promise<Lead | undefined> {
     const lead = await this.getLead(leadId);
     if (!lead) return undefined;
+    if (lead.assignedTo) return lead;
     const allUsers = await db.select().from(users).where(eq(users.isActive, true));
-    let candidates = allUsers.filter(u => u.role === "sales_agent" || u.role === "sales_manager");
+    let candidates = allUsers.filter(u => u.role === "sales_agent");
     if (requestingUserTeamId) {
-      const sameTeam = candidates.filter(u => u.teamId === requestingUserTeamId);
-      if (sameTeam.length > 0) candidates = sameTeam;
+      candidates = candidates.filter(u => u.teamId === requestingUserTeamId);
     }
     if (candidates.length === 0) return undefined;
     const allLeads = await db.select().from(leads);
-    const doneStates = (await db.select().from(leadStates)).filter(s => ["Done Deal", "Canceled", "Not Interested"].includes(s.name)).map(s => s.id);
+    const doneStates = (await db.select().from(leadStates))
+      .filter(s => ["Done Deal", "Canceled", "Not Interested"].includes(s.name))
+      .map(s => s.id);
     const agentWithLeast = candidates.reduce((min, agent) => {
       const count = allLeads.filter(l => l.assignedTo === agent.id && !doneStates.includes(l.stateId ?? "")).length;
       const minCount = allLeads.filter(l => l.assignedTo === min.id && !doneStates.includes(l.stateId ?? "")).length;

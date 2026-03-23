@@ -17,11 +17,17 @@ export function getScoringConfig(): ScoringConfig {
 }
 
 export function updateScoringConfig(updates: Partial<ScoringConfig>): ScoringConfig {
-  _config = { ..._config, ...updates };
+  if (updates.hotMaxDays !== undefined) _config.hotMaxDays = Math.max(1, updates.hotMaxDays);
+  if (updates.coldMinDays !== undefined) _config.coldMinDays = Math.max(_config.hotMaxDays + 1, updates.coldMinDays);
   return { ..._config };
 }
 
-export function computeScore(lead: Lead, commCount: number = 0): LeadScore {
+export interface ScoringContext {
+  commCount: number;
+  completedTaskCount: number;
+}
+
+export function computeScore(lead: Lead, ctx: ScoringContext = { commCount: 0, completedTaskCount: 0 }): LeadScore {
   const now = Date.now();
   const createdMs = lead.createdAt ? new Date(lead.createdAt).getTime() : now;
   const lastContactMs = lead.lastActionDate
@@ -29,15 +35,22 @@ export function computeScore(lead: Lead, commCount: number = 0): LeadScore {
     : createdMs;
 
   const daysSinceContact = (now - lastContactMs) / (1000 * 60 * 60 * 24);
-  const daysSinceCreation = (now - createdMs) / (1000 * 60 * 60 * 24);
+  const { commCount, completedTaskCount } = ctx;
+  const engagementScore = commCount + completedTaskCount;
 
-  if (daysSinceContact <= _config.hotMaxDays || (commCount >= 3 && daysSinceContact <= _config.hotMaxDays * 2)) {
+  if (daysSinceContact <= _config.hotMaxDays) {
     return "hot";
   }
-  if (daysSinceContact > _config.coldMinDays && commCount === 0 && daysSinceCreation > _config.coldMinDays) {
+  if (
+    daysSinceContact <= _config.hotMaxDays * 2 &&
+    engagementScore >= 3
+  ) {
+    return "hot";
+  }
+  if (daysSinceContact >= _config.coldMinDays && engagementScore === 0) {
     return "cold";
   }
-  if (daysSinceContact > _config.coldMinDays) {
+  if (daysSinceContact >= _config.coldMinDays) {
     return "cold";
   }
   return "warm";
