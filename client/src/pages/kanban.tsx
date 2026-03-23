@@ -15,10 +15,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Phone, Mail, MapPin, DollarSign, User, Search, Loader2, Calendar, Building2 } from "lucide-react";
+import { Phone, Mail, MapPin, DollarSign, User, Search, Loader2, Calendar, Building2, Flame, Thermometer, Snowflake } from "lucide-react";
 import type { Lead, LeadState, User as UserType } from "@shared/schema";
 import { useLanguage } from "@/lib/i18n";
 import { format } from "date-fns";
+import { computeLeadScore, SCORE_COLORS } from "@/lib/scoring";
 
 export default function KanbanPage() {
   const { user } = useAuth();
@@ -203,11 +204,23 @@ export default function KanbanPage() {
                                     <h4 className="font-medium text-sm line-clamp-1">
                                       {lead.name || t.noName}
                                     </h4>
-                                    {lead.channel && (
-                                      <Badge variant="outline" className="text-xs shrink-0">
-                                        {lead.channel}
-                                      </Badge>
-                                    )}
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      {(() => {
+                                        const { score } = computeLeadScore(lead);
+                                        const scoreLabel = score === "hot" ? t.scoreHot : score === "warm" ? t.scoreWarm : t.scoreCold;
+                                        const scoreIcon = score === "hot" ? <Flame className="h-2.5 w-2.5" /> : score === "warm" ? <Thermometer className="h-2.5 w-2.5" /> : <Snowflake className="h-2.5 w-2.5" />;
+                                        return (
+                                          <Badge className={`text-xs gap-0.5 border ${SCORE_COLORS[score]}`} data-testid={`badge-score-kanban-${lead.id}`}>
+                                            {scoreIcon}{scoreLabel}
+                                          </Badge>
+                                        );
+                                      })()}
+                                      {lead.channel && (
+                                        <Badge variant="outline" className="text-xs">
+                                          {lead.channel}
+                                        </Badge>
+                                      )}
+                                    </div>
                                   </div>
                                   <div className="space-y-1 text-xs text-muted-foreground">
                                     {lead.phone && (

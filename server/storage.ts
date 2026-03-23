@@ -133,6 +133,10 @@ export interface IStorage {
   getCommunicationsByLead(leadId: string): Promise<Communication[]>;
   createCommunication(comm: InsertCommunication): Promise<Communication>;
 
+  // Team Load & Auto Assign
+  getTeamLoad(): Promise<{ userId: string; userName: string; leadCount: number; role: string }[]>;
+  autoAssignLead(leadId: string): Promise<Lead | undefined>;
+
   // Reminders
   getAllReminders(): Promise<Reminder[]>;
   getRemindersByUser(userId: string): Promise<Reminder[]>;
@@ -465,6 +469,30 @@ export class DatabaseStorage implements IStorage {
   async createCommunication(comm: InsertCommunication): Promise<Communication> {
     const [newComm] = await db.insert(communications).values(comm).returning();
     return newComm;
+  }
+
+  // Team Load & Auto Assign
+  async getTeamLoad(): Promise<{ userId: string; userName: string; leadCount: number; role: string }[]> {
+    const allUsers = await db.select().from(users).where(eq(users.isActive, true));
+    const agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "sales_manager");
+    const allLeads = await db.select().from(leads);
+    return agents.map(agent => {
+      const userName = `${agent.firstName || ""} ${agent.lastName || ""}`.trim() || agent.username;
+      const leadCount = allLeads.filter(l => l.assignedTo === agent.id).length;
+      return { userId: agent.id, userName, leadCount, role: agent.role ?? "sales_agent" };
+    }).sort((a, b) => a.leadCount - b.leadCount);
+  }
+
+  async autoAssignLead(leadId: string): Promise<Lead | undefined> {
+    const teamLoad = await this.getTeamLoad();
+    if (teamLoad.length === 0) return undefined;
+    const agentWithLeastLeads = teamLoad[0];
+    const [updated] = await db
+      .update(leads)
+      .set({ assignedTo: agentWithLeastLeads.userId })
+      .where(eq(leads.id, leadId))
+      .returning();
+    return updated;
   }
 
   // Reminders

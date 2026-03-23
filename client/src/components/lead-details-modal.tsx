@@ -41,7 +41,12 @@ import {
   PhoneCall,
   PhoneMissed,
   Users,
+  Flame,
+  Thermometer,
+  Snowflake,
+  Shuffle,
 } from "lucide-react";
+import { computeLeadScore, SCORE_COLORS } from "@/lib/scoring";
 import { format } from "date-fns";
 import type { Lead, LeadState, LeadHistory, Task, Reminder, LeadUnitInterest, Unit, Project, Communication } from "@shared/schema";
 
@@ -132,6 +137,19 @@ export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalPr
     },
   });
 
+  const autoAssignMutation = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/leads/${leadId}/auto-assign`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", leadId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/team-load"] });
+      toast({ title: t.autoAssignSuccess });
+    },
+    onError: () => {
+      toast({ title: t.autoAssignError, variant: "destructive" });
+    },
+  });
+
   const createCommunicationMutation = useMutation({
     mutationFn: (data: { type: string; note?: string }) =>
       apiRequest("POST", `/api/leads/${leadId}/communications`, data),
@@ -171,20 +189,40 @@ export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalPr
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+          <DialogTitle className="flex items-center gap-3 flex-wrap">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 shrink-0">
               <User className="h-5 w-5 text-primary" />
             </div>
-            <div>
-              <span className="text-lg">{lead.name || t.noName}</span>
+            <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+              <span className="text-lg truncate">{lead.name || t.noName}</span>
               {currentState && (
                 <Badge
-                  className="mx-2"
                   style={{ backgroundColor: currentState.color, color: "white" }}
                 >
                   {currentState.name}
                 </Badge>
               )}
+              {(() => {
+                const { score, daysSinceContact } = computeLeadScore(lead);
+                const scoreLabel = score === "hot" ? t.scoreHot : score === "warm" ? t.scoreWarm : t.scoreCold;
+                const scoreIcon = score === "hot" ? <Flame className="h-3 w-3" /> : score === "warm" ? <Thermometer className="h-3 w-3" /> : <Snowflake className="h-3 w-3" />;
+                return (
+                  <Badge className={`gap-1 border ${SCORE_COLORS[score]}`} title={`${daysSinceContact} ${t.daysSinceContact}`} data-testid="badge-score-modal">
+                    {scoreIcon}{scoreLabel}
+                  </Badge>
+                );
+              })()}
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1 text-xs"
+                onClick={() => autoAssignMutation.mutate()}
+                disabled={autoAssignMutation.isPending}
+                data-testid="button-auto-assign"
+              >
+                <Shuffle className="h-3.5 w-3.5" />
+                {autoAssignMutation.isPending ? t.autoAssigning : t.autoAssign}
+              </Button>
             </div>
           </DialogTitle>
         </DialogHeader>

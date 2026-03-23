@@ -32,6 +32,8 @@ Preferred communication style: Simple, everyday language.
   - Dynamic Zod schema creation for translated validation messages
   - RTL search inputs with proper icon positioning (rtl:left-auto rtl:right-3)
   - CSV export headers translated
+  - Lead Scoring keys: scoreHot, scoreWarm, scoreCold, leadScore, daysSinceContact
+  - Auto-assign & team load keys: autoAssign, teamLoad, teamLoadSubtitle, noAgentsAvailable, leadsCount
 
 ### Backend Architecture
 - **Runtime**: Node.js with Express 5

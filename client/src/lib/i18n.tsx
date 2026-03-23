@@ -423,6 +423,23 @@ const translations = {
     whatsappChat: "محادثة واتساب",
     selectCommType: "اختر نوع التواصل",
     logComm: "تسجيل",
+
+    // Lead Scoring
+    scoreHot: "ساخن",
+    scoreWarm: "دافئ",
+    scoreCold: "بارد",
+    leadScore: "تقييم العميل",
+    daysSinceContact: "أيام منذ آخر تواصل",
+
+    // Auto Distribution & Team Load
+    autoAssign: "توزيع تلقائي",
+    autoAssigning: "جاري التوزيع...",
+    autoAssignSuccess: "تم توزيع العميل بنجاح",
+    autoAssignError: "فشل في توزيع العميل",
+    teamLoad: "حمل الفريق",
+    teamLoadSubtitle: "توزيع العملاء على المندوبين",
+    noAgentsAvailable: "لا يوجد مندوبين متاحين",
+    leadsCount: "العملاء",
     
     // Common
     loading: "جاري التحميل...",
@@ -856,6 +873,23 @@ const translations = {
     whatsappChat: "WhatsApp Chat",
     selectCommType: "Select Type",
     logComm: "Log",
+
+    // Lead Scoring
+    scoreHot: "Hot",
+    scoreWarm: "Warm",
+    scoreCold: "Cold",
+    leadScore: "Lead Score",
+    daysSinceContact: "Days since contact",
+
+    // Auto Distribution & Team Load
+    autoAssign: "Auto Assign",
+    autoAssigning: "Assigning...",
+    autoAssignSuccess: "Lead assigned successfully",
+    autoAssignError: "Failed to assign lead",
+    teamLoad: "Team Load",
+    teamLoadSubtitle: "Lead distribution across agents",
+    noAgentsAvailable: "No agents available",
+    leadsCount: "leads",
     
     // Common
     loading: "Loading...",

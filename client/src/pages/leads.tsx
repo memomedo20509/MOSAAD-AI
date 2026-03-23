@@ -47,6 +47,8 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/lib/i18n";
 import { format } from "date-fns";
+import { computeLeadScore, SCORE_COLORS } from "@/lib/scoring";
+import { Flame, Thermometer, Snowflake } from "lucide-react";
 
 export default function LeadsPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -346,6 +348,16 @@ export default function LeadsPage() {
                           {lead.name || "No Name"}
                         </h3>
                         {getStateBadge(lead.stateId)}
+                        {(() => {
+                          const { score } = computeLeadScore(lead);
+                          const scoreLabel = score === "hot" ? t.scoreHot : score === "warm" ? t.scoreWarm : t.scoreCold;
+                          const scoreIcon = score === "hot" ? <Flame className="h-2.5 w-2.5" /> : score === "warm" ? <Thermometer className="h-2.5 w-2.5" /> : <Snowflake className="h-2.5 w-2.5" />;
+                          return (
+                            <Badge className={`text-xs gap-0.5 border ${SCORE_COLORS[score]}`} data-testid={`badge-score-${lead.id}`}>
+                              {scoreIcon}{scoreLabel}
+                            </Badge>
+                          );
+                        })()}
                       </div>
 
                       <div className="mt-2 space-y-1 text-sm text-muted-foreground">
@@ -440,6 +452,21 @@ export default function LeadsPage() {
                         data-testid={`menu-full-details-${lead.id}`}
                       >
                         {t.leadDetails}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          apiRequest("POST", `/api/leads/${lead.id}/auto-assign`)
+                            .then(() => {
+                              queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+                              queryClient.invalidateQueries({ queryKey: ["/api/team-load"] });
+                              toast({ title: t.autoAssignSuccess });
+                            })
+                            .catch(() => toast({ title: t.autoAssignError, variant: "destructive" }));
+                        }}
+                        data-testid={`menu-auto-assign-${lead.id}`}
+                      >
+                        {t.autoAssign}
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={(e) => {

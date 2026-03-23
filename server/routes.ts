@@ -646,6 +646,32 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== TEAM LOAD & AUTO ASSIGN ====================
+
+  app.get("/api/team-load", isAuthenticated, async (req, res) => {
+    try {
+      const teamLoad = await storage.getTeamLoad();
+      res.json(teamLoad);
+    } catch (error) {
+      console.error("Error fetching team load:", error);
+      res.status(500).json({ error: "Failed to fetch team load" });
+    }
+  });
+
+  app.post("/api/leads/:leadId/auto-assign", isAuthenticated, async (req, res) => {
+    try {
+      const leadId = req.params.leadId as string;
+      const lead = await storage.autoAssignLead(leadId);
+      if (!lead) {
+        return res.status(400).json({ error: "No agents available for assignment" });
+      }
+      res.json(lead);
+    } catch (error) {
+      console.error("Error auto-assigning lead:", error);
+      res.status(500).json({ error: "Failed to auto-assign lead" });
+    }
+  });
+
   // ==================== COMMUNICATIONS ====================
 
   app.get("/api/leads/:leadId/communications", isAuthenticated, async (req, res) => {

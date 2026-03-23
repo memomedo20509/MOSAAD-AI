@@ -17,12 +17,17 @@ import {
   Activity,
   Target,
   ArrowRight,
+  Flame,
+  Thermometer,
+  Snowflake,
+  BarChart2,
 } from "lucide-react";
 import type { Lead, LeadState, Reminder, LeadHistory } from "@shared/schema";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { useLanguage } from "@/lib/i18n";
 import { format, isToday, isBefore, startOfToday, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import { Link } from "wouter";
+import { computeLeadScore } from "@/lib/scoring";
 
 interface DashboardStats {
   totalLeads: number;
@@ -57,6 +62,10 @@ export default function Dashboard() {
 
   const { data: history = [] } = useQuery<LeadHistory[]>({
     queryKey: ["/api/history"],
+  });
+
+  const { data: teamLoad = [] } = useQuery<{ userId: string; userName: string; leadCount: number; role: string }[]>({
+    queryKey: ["/api/team-load"],
   });
 
   const isLoading = statesLoading || leadsLoading;
@@ -316,37 +325,110 @@ export default function Dashboard() {
             </Card>
           </div>
 
-          <Card>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5 text-amber-500" />
+                  {t.leadsBySalesRep}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {stats?.delayedLeads && stats.delayedLeads.length > 0 ? (
+                  <div className="space-y-2">
+                    {stats.delayedLeads.map((item) => (
+                      <div
+                        key={item.assignedTo}
+                        className="flex items-center justify-between rounded-md border p-3"
+                        data-testid={`row-rep-${item.assignedTo}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10">
+                            <Users className="h-4 w-4 text-primary" />
+                          </div>
+                          <span className="font-medium">{item.assignedTo}</span>
+                        </div>
+                        <Badge variant="secondary">{item.count} {t.leads}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex h-20 items-center justify-center text-muted-foreground">
+                    {t.noAssignedLeadsYet}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-team-load">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart2 className="h-5 w-5 text-primary" />
+                  {t.teamLoad}
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">{t.teamLoadSubtitle}</p>
+              </CardHeader>
+              <CardContent>
+                {teamLoad.length > 0 ? (
+                  <div className="space-y-3">
+                    {teamLoad.map((agent) => {
+                      const maxCount = Math.max(...teamLoad.map(a => a.leadCount), 1);
+                      const pct = Math.round((agent.leadCount / maxCount) * 100);
+                      return (
+                        <div key={agent.userId} className="space-y-1" data-testid={`row-agent-load-${agent.userId}`}>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="font-medium truncate">{agent.userName}</span>
+                            <Badge variant="outline" className="text-xs">{agent.leadCount} {t.leadsCount}</Badge>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all"
+                              style={{
+                                width: `${pct}%`,
+                                backgroundColor: pct >= 80 ? "#ef4444" : pct >= 50 ? "#f59e0b" : "#22c55e",
+                              }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex h-20 items-center justify-center text-muted-foreground">
+                    {t.noAgentsAvailable}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card data-testid="card-lead-score-summary">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Target className="h-5 w-5 text-amber-500" />
-                {t.leadsBySalesRep}
+                <Flame className="h-5 w-5 text-red-500" />
+                {t.leadScore}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {stats?.delayedLeads && stats.delayedLeads.length > 0 ? (
-                <div className="space-y-2">
-                  {stats.delayedLeads.map((item) => (
-                    <div
-                      key={item.assignedTo}
-                      className="flex items-center justify-between rounded-md border p-3"
-                      data-testid={`row-rep-${item.assignedTo}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10">
-                          <Users className="h-4 w-4 text-primary" />
-                        </div>
-                        <span className="font-medium">{item.assignedTo}</span>
-                      </div>
-                      <Badge variant="secondary">{item.count} {t.leads}</Badge>
+              <div className="grid grid-cols-3 gap-4">
+                {(() => {
+                  const scores = (leads || []).map(l => computeLeadScore(l).score);
+                  const hot = scores.filter(s => s === "hot").length;
+                  const warm = scores.filter(s => s === "warm").length;
+                  const cold = scores.filter(s => s === "cold").length;
+                  return [
+                    { label: t.scoreHot, count: hot, icon: <Flame className="h-5 w-5 text-red-500" />, cls: "bg-red-50 border-red-200 dark:bg-red-950/20" },
+                    { label: t.scoreWarm, count: warm, icon: <Thermometer className="h-5 w-5 text-orange-500" />, cls: "bg-orange-50 border-orange-200 dark:bg-orange-950/20" },
+                    { label: t.scoreCold, count: cold, icon: <Snowflake className="h-5 w-5 text-blue-500" />, cls: "bg-blue-50 border-blue-200 dark:bg-blue-950/20" },
+                  ].map(({ label, count, icon, cls }) => (
+                    <div key={label} className={`flex flex-col items-center justify-center gap-2 rounded-lg border p-4 ${cls}`}>
+                      {icon}
+                      <span className="text-2xl font-bold">{count}</span>
+                      <span className="text-sm font-medium">{label}</span>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex h-20 items-center justify-center text-muted-foreground">
-                  {t.noAssignedLeadsYet}
-                </div>
-              )}
+                  ));
+                })()}
+              </div>
             </CardContent>
           </Card>
         </>
