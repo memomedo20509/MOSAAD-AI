@@ -234,7 +234,7 @@ export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalPr
                       >
                         <Button size="sm" variant="outline" className="h-7 gap-1 text-green-600 border-green-200 hover:bg-green-50" data-testid="button-whatsapp-primary">
                           <MessageCircle className="h-3.5 w-3.5" />
-                          WhatsApp
+                          {t.commTypeWhatsapp}
                         </Button>
                       </a>
                     </div>
@@ -253,7 +253,7 @@ export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalPr
                       >
                         <Button size="sm" variant="outline" className="h-7 gap-1 text-green-600 border-green-200 hover:bg-green-50" data-testid="button-whatsapp-secondary">
                           <MessageCircle className="h-3.5 w-3.5" />
-                          WhatsApp
+                          {t.commTypeWhatsapp}
                         </Button>
                       </a>
                     </div>
@@ -541,40 +541,89 @@ export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalPr
           <TabsContent value="timeline" className="mt-4">
             <Card>
               <CardContent className="pt-4">
-                {history.length > 0 ? (
-                  <div className="relative">
-                    <div className="absolute left-4 top-0 bottom-0 w-px bg-border" />
-                    <div className="space-y-4">
-                      {history
-                        .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
-                        .map((item) => (
-                          <div key={item.id} className="relative pl-10">
-                            <div className="absolute left-2 top-1 w-4 h-4 rounded-full bg-primary" />
+                {(() => {
+                  const commTypeLabels: Record<string, string> = {
+                    call: t.commTypeCall,
+                    no_answer: t.commTypeNoAnswer,
+                    whatsapp: t.commTypeWhatsapp,
+                    meeting: t.commTypeMeeting,
+                    email: t.commTypeEmail,
+                    note: t.commTypeNote,
+                  };
+                  const commTypeColors: Record<string, string> = {
+                    call: "bg-blue-500",
+                    no_answer: "bg-gray-400",
+                    whatsapp: "bg-green-500",
+                    meeting: "bg-purple-500",
+                    email: "bg-orange-500",
+                    note: "bg-yellow-500",
+                  };
+                  type TimelineEntry = {
+                    id: string;
+                    date: Date;
+                    kind: "history" | "communication";
+                    label: string;
+                    description?: string | null;
+                    by?: string | null;
+                    color: string;
+                  };
+                  const historyEntries: TimelineEntry[] = history.map((h) => ({
+                    id: h.id,
+                    date: new Date(h.createdAt!),
+                    kind: "history",
+                    label: h.action,
+                    description: h.description,
+                    by: h.performedBy,
+                    color: "bg-primary",
+                  }));
+                  const commEntries: TimelineEntry[] = commList.map((c) => ({
+                    id: c.id,
+                    date: new Date(c.createdAt!),
+                    kind: "communication",
+                    label: commTypeLabels[c.type] ?? c.type,
+                    description: c.note,
+                    by: c.userName,
+                    color: commTypeColors[c.type] ?? "bg-primary",
+                  }));
+                  const merged = [...historyEntries, ...commEntries].sort(
+                    (a, b) => b.date.getTime() - a.date.getTime()
+                  );
+                  if (merged.length === 0) {
+                    return (
+                      <div className="flex h-32 items-center justify-center text-muted-foreground">
+                        {t.noDataToDisplay}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="relative">
+                      <div className="absolute left-4 top-0 bottom-0 w-px bg-border" />
+                      <div className="space-y-4">
+                        {merged.map((item) => (
+                          <div key={`${item.kind}-${item.id}`} className="relative pl-10">
+                            <div className={`absolute left-2 top-1 w-4 h-4 rounded-full ${item.color}`} />
                             <div className="p-3 rounded-md border">
                               <div className="flex items-center justify-between">
-                                <span className="font-medium text-sm">{item.action}</span>
+                                <span className="font-medium text-sm">{item.label}</span>
                                 <span className="text-xs text-muted-foreground">
-                                  {item.createdAt && format(new Date(item.createdAt), "MMM dd, HH:mm")}
+                                  {format(item.date, "MMM dd, HH:mm")}
                                 </span>
                               </div>
                               {item.description && (
                                 <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
                               )}
-                              {item.performedBy && (
+                              {item.by && (
                                 <p className="text-xs text-muted-foreground mt-1">
-                                  {t.performedBy}: {item.performedBy}
+                                  {t.performedBy}: {item.by}
                                 </p>
                               )}
                             </div>
                           </div>
                         ))}
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="flex h-32 items-center justify-center text-muted-foreground">
-                    {t.noDataToDisplay}
-                  </div>
-                )}
+                  );
+                })()}
               </CardContent>
             </Card>
           </TabsContent>
