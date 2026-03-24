@@ -399,6 +399,18 @@ export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalPr
                       <span>{format(new Date(lead.createdAt), "MMM dd, yyyy")}</span>
                     </div>
                   )}
+                  {lead.campaignName && (
+                    <div>
+                      <span className="text-muted-foreground">{t.campaignName}: </span>
+                      <span>{lead.campaignName}</span>
+                    </div>
+                  )}
+                  {lead.marketingCost && (
+                    <div>
+                      <span className="text-muted-foreground">{t.marketingCost}: </span>
+                      <span>{Number(lead.marketingCost).toLocaleString()} {t.currency}</span>
+                    </div>
+                  )}
                 </div>
                 {lead.notes && (
                   <div className="mt-4 p-3 bg-muted rounded-md">

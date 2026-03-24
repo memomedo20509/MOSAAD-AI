@@ -321,6 +321,7 @@ export class DatabaseStorage implements IStorage {
       area: lead.area ?? null,
       space: lead.space ?? null,
       campaign: lead.campaign ?? null,
+      campaignName: lead.campaignName ?? null,
       channel: lead.channel ?? null,
       notes: lead.notes ?? null,
       stateId: lead.stateId ?? null,
@@ -336,6 +337,7 @@ export class DatabaseStorage implements IStorage {
       lastAction: lead.lastAction ?? null,
       lastActionDate: lead.lastActionDate ?? null,
       tags: lead.tags ?? null,
+      marketingCost: lead.marketingCost ?? null,
       firstContactAt: null,
       responseTimeMinutes: null,
     };

@@ -37,6 +37,7 @@ const createFormSchema = (phoneRequiredMsg: string) => z.object({
   stateId: z.string().optional(),
   channel: z.string().optional(),
   campaign: z.string().optional(),
+  campaignName: z.string().optional(),
   assignedTo: z.string().optional(),
   requestType: z.string().optional(),
   unitType: z.string().optional(),
@@ -49,6 +50,7 @@ const createFormSchema = (phoneRequiredMsg: string) => z.object({
   paymentType: z.string().optional(),
   downPayment: z.string().optional(),
   notes: z.string().optional(),
+  marketingCost: z.coerce.number().optional(),
 });
 
 type FormData = z.infer<ReturnType<typeof createFormSchema>>;
@@ -73,6 +75,7 @@ export default function AddLeadPage() {
       stateId: "",
       channel: "",
       campaign: "",
+      campaignName: "",
       assignedTo: "",
       requestType: "",
       unitType: "",
@@ -500,6 +503,50 @@ export default function AddLeadPage() {
                         rows={4}
                         {...field}
                         data-testid="textarea-lead-notes"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t.marketingAnalytics}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FormField
+                control={form.control}
+                name="campaignName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t.campaignName}</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder={t.campaignNamePlaceholder}
+                        {...field}
+                        data-testid="input-lead-campaign-name"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="marketingCost"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t.marketingCost} ({t.optional})</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        placeholder={t.marketingCostPlaceholder}
+                        {...field}
+                        onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
+                        data-testid="input-lead-marketing-cost"
                       />
                     </FormControl>
                     <FormMessage />

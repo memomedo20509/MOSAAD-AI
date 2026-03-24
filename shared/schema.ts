@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, numeric, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { users } from "./models/auth";
@@ -41,6 +41,8 @@ export const leads = pgTable("leads", {
   downPayment: text("down_payment"),
   notes: text("notes"),
   tags: text("tags").array(),
+  marketingCost: numeric("marketing_cost", { mode: "number" }),
+  campaignName: text("campaign_name"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   lastAction: text("last_action"),
@@ -48,8 +50,6 @@ export const leads = pgTable("leads", {
   firstContactAt: timestamp("first_contact_at"),
   responseTimeMinutes: integer("response_time_minutes"),
   score: varchar("score", { length: 10 }).default("warm"),
-  firstContactAt: timestamp("first_contact_at"),
-  responseTimeMinutes: integer("response_time_minutes"),
 });
 
 export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true, firstContactAt: true, responseTimeMinutes: true }).extend({

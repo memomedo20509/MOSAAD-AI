@@ -804,6 +804,119 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== MARKETING ANALYTICS REPORT ====================
+
+  app.get("/api/reports/marketing", isAuthenticated, requireRole("super_admin", "admin", "sales_manager"), async (req, res) => {
+    try {
+      const { from, to } = req.query as { from?: string; to?: string };
+      const [allLeads, allCommissions, allStates] = await Promise.all([
+        storage.getAllLeads(),
+        storage.getAllCommissions(),
+        storage.getAllStates(),
+      ]);
+
+      const startDate = from ? new Date(from) : null;
+      const endDate = to ? new Date(to) : null;
+
+      const filteredLeads = allLeads.filter((lead) => {
+        if (!lead.createdAt) return false;
+        const created = new Date(lead.createdAt);
+        if (startDate && created < startDate) return false;
+        if (endDate && created > endDate) return false;
+        return true;
+      });
+
+      const convertedStateIds = allStates
+        .filter(
+          (s) =>
+            s.name.toLowerCase().includes("done") ||
+            s.name.toLowerCase().includes("closed") ||
+            s.name.includes("صفقة")
+        )
+        .map((s) => s.id);
+
+      // Build commission revenue per lead — commissionAmount is the actual earned revenue per source
+      const commissionsByLead = new Map<string, { commissionAmount: number }[]>();
+      for (const c of allCommissions) {
+        if (!c.leadId) continue;
+        if (!commissionsByLead.has(c.leadId)) commissionsByLead.set(c.leadId, []);
+        commissionsByLead.get(c.leadId)!.push({ commissionAmount: c.commissionAmount });
+      }
+
+      const sourceMap: Record<string, {
+        source: string;
+        leadCount: number;
+        convertedCount: number;
+        totalMarketingCost: number;
+        totalRevenue: number;
+        dealValues: number[];
+      }> = {};
+
+      for (const lead of filteredLeads) {
+        const source = lead.channel || "Unknown";
+        if (!sourceMap[source]) {
+          sourceMap[source] = {
+            source,
+            leadCount: 0,
+            convertedCount: 0,
+            totalMarketingCost: 0,
+            totalRevenue: 0,
+            dealValues: [],
+          };
+        }
+        sourceMap[source].leadCount++;
+
+        if (lead.stateId && convertedStateIds.includes(lead.stateId)) {
+          sourceMap[source].convertedCount++;
+          // Revenue from commissions: use commissionAmount (actual commission revenue) per lead
+          const leadCommissions = commissionsByLead.get(lead.id);
+          if (leadCommissions && leadCommissions.length > 0) {
+            for (const c of leadCommissions) {
+              if (c.commissionAmount > 0) {
+                sourceMap[source].totalRevenue += c.commissionAmount;
+                sourceMap[source].dealValues.push(c.commissionAmount);
+              }
+            }
+          }
+        }
+
+        if (lead.marketingCost) {
+          sourceMap[source].totalMarketingCost += Number(lead.marketingCost);
+        }
+      }
+
+      const results = Object.values(sourceMap)
+        .map((item) => ({
+          source: item.source,
+          leadCount: item.leadCount,
+          convertedCount: item.convertedCount,
+          totalMarketingCost: parseFloat(item.totalMarketingCost.toFixed(2)),
+          totalRevenue: parseFloat(item.totalRevenue.toFixed(2)),
+          avgDealValue: item.dealValues.length > 0
+            ? parseFloat((item.dealValues.reduce((a, b) => a + b, 0) / item.dealValues.length).toFixed(2))
+            : null,
+          conversionRate: item.leadCount > 0
+            ? parseFloat(((item.convertedCount / item.leadCount) * 100).toFixed(1))
+            : 0,
+          roi: item.totalMarketingCost > 0 && item.totalRevenue > 0
+            ? parseFloat(((item.totalRevenue - item.totalMarketingCost) / item.totalMarketingCost * 100).toFixed(1))
+            : (item.totalMarketingCost > 0 ? -100 : null),
+          costPerLead: item.leadCount > 0 && item.totalMarketingCost > 0
+            ? parseFloat((item.totalMarketingCost / item.leadCount).toFixed(2))
+            : 0,
+          costPerConversion: item.convertedCount > 0 && item.totalMarketingCost > 0
+            ? parseFloat((item.totalMarketingCost / item.convertedCount).toFixed(2))
+            : null,
+        }))
+        .sort((a, b) => b.totalRevenue - a.totalRevenue || b.leadCount - a.leadCount);
+
+      res.json(results);
+    } catch (error) {
+      console.error("Error fetching marketing report:", error);
+      res.status(500).json({ error: "Failed to fetch marketing report" });
+    }
+  });
+
   // ==================== RESPONSE TIME REPORTS ====================
 
   app.get("/api/reports/response-time", isAuthenticated, requireRole("super_admin", "admin", "sales_manager"), async (req, res) => {
