@@ -3,6 +3,7 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { seedDefaultAdmin, seedDefaultLeadStates } from "./seed";
+import { pool } from "./db";
 
 const app = express();
 const httpServer = createServer(app);
@@ -61,6 +62,16 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Run DB migrations to ensure new tables exist
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS role_permissions (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      role VARCHAR NOT NULL UNIQUE,
+      permissions JSONB NOT NULL,
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
   await registerRoutes(httpServer, app);
   
   await seedDefaultAdmin();

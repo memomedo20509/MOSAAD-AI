@@ -19,6 +19,7 @@ import {
   BarChart3,
   Bell,
   DollarSign,
+  Shield,
 } from "lucide-react";
 import {
   Sidebar,
@@ -39,10 +40,14 @@ import {
 } from "@/components/ui/collapsible";
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/i18n";
-import type { UserRole } from "@shared/models/auth";
+import { ROLE_ARABIC_NAMES, type UserRole } from "@shared/models/auth";
 
-const isAdmin = (role: UserRole | undefined): boolean => {
-  return role === "super_admin" || role === "admin";
+const isAdmin = (role: string | null | undefined): boolean => {
+  return role === "super_admin" || role === "admin" || role === "sales_admin";
+};
+
+const isSuperAdmin = (role: string | null | undefined): boolean => {
+  return role === "super_admin";
 };
 
 export function AppSidebar() {
@@ -153,6 +158,12 @@ export function AppSidebar() {
   const filteredSettingsItems = settingsItems.filter(
     (item) => !item.adminOnly || isAdmin(userRole)
   );
+
+  const permissionsLink = isSuperAdmin(userRole) ? {
+    title: t.permissionsManagement,
+    url: "/settings/permissions",
+    icon: Shield,
+  } : null;
 
   return (
     <Sidebar side={isRTL ? "right" : "left"}>
@@ -310,6 +321,16 @@ export function AppSidebar() {
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
+                  {permissionsLink && (
+                    <SidebarMenuItem key={permissionsLink.url}>
+                      <SidebarMenuButton asChild isActive={location === permissionsLink.url}>
+                        <Link href={permissionsLink.url} data-testid="link-nav-settings-permissions">
+                          <permissionsLink.icon className="h-4 w-4" />
+                          <span>{permissionsLink.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )}
                 </SidebarMenu>
               </SidebarGroupContent>
             </CollapsibleContent>
@@ -317,6 +338,18 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="p-4">
+        {user && (
+          <div className="mb-2 flex flex-col gap-0.5" data-testid="sidebar-user-profile">
+            <span className="text-sm font-medium truncate" data-testid="text-sidebar-username">
+              {user.firstName && user.lastName
+                ? `${user.firstName} ${user.lastName}`
+                : user.username}
+            </span>
+            <span className="text-xs text-muted-foreground" data-testid="text-sidebar-role">
+              {userRole ? ROLE_ARABIC_NAMES[userRole] ?? user.role : user.role}
+            </span>
+          </div>
+        )}
         <div className="text-xs text-muted-foreground">
           {t.appName} - {t.version}
         </div>

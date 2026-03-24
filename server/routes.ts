@@ -4,7 +4,8 @@ import path from "path";
 import fs from "fs";
 import multer from "multer";
 import { storage } from "./storage";
-import { setupAuth, registerAuthRoutes, isAuthenticated, requireRole } from "./auth";
+import { setupAuth, registerAuthRoutes, isAuthenticated, requireRole, requirePermission } from "./auth";
+import { hashPassword } from "./auth";
 import { updateScoringConfig } from "./scoring";
 import { 
   insertLeadSchema, 
@@ -17,6 +18,7 @@ import {
   insertTeamSchema,
   updateTeamSchema,
   updateUserSchema,
+  insertUserSchema,
   insertDeveloperSchema,
   updateDeveloperSchema,
   insertProjectSchema,
@@ -76,7 +78,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/teams", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
+  app.post("/api/teams", isAuthenticated, requirePermission("canManageTeams"), async (req, res) => {
     try {
       const data = insertTeamSchema.parse(req.body);
       const team = await storage.createTeam(data);
@@ -87,7 +89,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/teams/:id", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
+  app.patch("/api/teams/:id", isAuthenticated, requirePermission("canManageTeams"), async (req, res) => {
     try {
       const id = req.params.id as string;
       const data = updateTeamSchema.parse(req.body);
@@ -120,7 +122,8 @@ export async function registerRoutes(
   app.get("/api/users", isAuthenticated, async (req, res) => {
     try {
       const users = await storage.getAllUsers();
-      res.json(users);
+      const safeUsers = users.map(({ password: _, ...u }) => u);
+      res.json(safeUsers);
     } catch (error) {
       console.error("Error fetching users:", error);
       res.status(500).json({ error: "Failed to fetch users" });
@@ -141,20 +144,71 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/users/:id", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
+  app.patch("/api/users/:id", isAuthenticated, requirePermission("canManageUsers"), async (req, res) => {
     try {
       const id = req.params.id as string;
       const data = updateUserSchema.parse(req.body);
+      const requestingUserRole = req.user?.role;
+      const privilegedRoles = ["super_admin", "company_owner"];
+      if (requestingUserRole !== "super_admin" && data.role && privilegedRoles.includes(data.role)) {
+        return res.status(403).json({ error: "Insufficient permissions to assign this role" });
+      }
+      if (data.password) {
+        data.password = await hashPassword(data.password);
+      }
       const user = await storage.updateUser(id, data);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
-      res.json(user);
+      const { password: _, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
     } catch (error) {
       console.error("Error updating user:", error);
       res.status(400).json({ error: "Failed to update user" });
     }
   });
+
+  app.post("/api/users", isAuthenticated, requirePermission("canManageUsers"), async (req, res) => {
+    try {
+      const { username, password, email, firstName, lastName, phone, role, teamId, isActive } = req.body;
+      if (!username || !password) {
+        return res.status(400).json({ error: "Username and password are required" });
+      }
+      const requestingUserRole = req.user?.role;
+      const privilegedRoles = ["super_admin", "company_owner"];
+      if (requestingUserRole !== "super_admin" && role && privilegedRoles.includes(role)) {
+        return res.status(403).json({ error: "Insufficient permissions to assign this role" });
+      }
+      const existingUser = await storage.getUserByUsername(username);
+      if (existingUser) {
+        return res.status(400).json({ error: "Username already exists" });
+      }
+      if (email) {
+        const existingEmail = await storage.getUserByEmail(email);
+        if (existingEmail) {
+          return res.status(400).json({ error: "Email already exists" });
+        }
+      }
+      const hashedPassword = await hashPassword(password);
+      const newUser = await storage.createUser({
+        username,
+        password: hashedPassword,
+        email: email || null,
+        firstName: firstName || null,
+        lastName: lastName || null,
+        phone: phone || null,
+        role: role || "sales_agent",
+        teamId: teamId || null,
+        isActive: isActive !== undefined ? isActive : true,
+      });
+      const { password: _, ...userWithoutPassword } = newUser;
+      res.status(201).json(userWithoutPassword);
+    } catch (error) {
+      console.error("Error creating user:", error);
+      res.status(400).json({ error: "Failed to create user" });
+    }
+  });
+
   // Lead States
   app.get("/api/states", async (req, res) => {
     try {
@@ -207,9 +261,18 @@ export async function registerRoutes(
   });
 
   // Leads
-  app.get("/api/leads", async (req, res) => {
+  app.get("/api/leads", isAuthenticated, async (req, res) => {
     try {
-      const leads = await storage.getAllLeadsWithRefreshedScores();
+      const user = req.user;
+      const role = user?.role ?? "sales_agent";
+      const userId = user?.id ?? "";
+      const teamId = user?.teamId ?? null;
+      let leads;
+      if (role === "sales_agent" || role === "team_leader") {
+        leads = await storage.getLeadsByRole(userId, role, teamId, user?.username);
+      } else {
+        leads = await storage.getAllLeadsWithRefreshedScores();
+      }
       res.json(leads);
     } catch (error) {
       console.error("Error fetching leads:", error);
@@ -217,12 +280,16 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/leads/:id", async (req, res) => {
+  app.get("/api/leads/:id", isAuthenticated, async (req, res) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
       const lead = await storage.refreshLeadScore(id);
       if (!lead) {
         return res.status(404).json({ error: "Lead not found" });
+      }
+      const allowed = await canAccessLead(req.user, id);
+      if (!allowed) {
+        return res.status(403).json({ error: "Access denied" });
       }
       res.json(lead);
     } catch (error) {
@@ -243,9 +310,13 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/leads/:id", async (req, res) => {
+  app.patch("/api/leads/:id", isAuthenticated, async (req, res) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
+      const allowed = await canAccessLead(req.user, id);
+      if (!allowed) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const data = updateLeadSchema.parse(req.body);
       const lead = await storage.updateLead(id, data);
       if (!lead) {
@@ -258,9 +329,9 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/leads/:id", async (req, res) => {
+  app.delete("/api/leads/:id", isAuthenticated, requirePermission("canDeleteData"), async (req, res) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
       const deleted = await storage.deleteLead(id);
       if (!deleted) {
         return res.status(404).json({ error: "Lead not found" });
@@ -272,10 +343,36 @@ export async function registerRoutes(
     }
   });
 
-  // Lead Tasks
-  app.get("/api/leads/:leadId/tasks", async (req, res) => {
+  // Lead Transfer - controlled by dynamic canTransferLeads permission
+  app.post("/api/leads/:id/transfer", isAuthenticated, requirePermission("canTransferLeads"), async (req, res) => {
     try {
-      const { leadId } = req.params;
+      const id = req.params.id as string;
+      const { toUserId } = req.body;
+      if (!toUserId) {
+        return res.status(400).json({ error: "toUserId is required" });
+      }
+      const user = req.user;
+      const performedByName = user
+        ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.username
+        : "System";
+      const lead = await storage.transferLead(id, toUserId, performedByName);
+      if (!lead) {
+        return res.status(404).json({ error: "Lead or target user not found" });
+      }
+      res.json(lead);
+    } catch (error) {
+      console.error("Error transferring lead:", error);
+      res.status(500).json({ error: "Failed to transfer lead" });
+    }
+  });
+
+  // Lead Tasks
+  app.get("/api/leads/:leadId/tasks", isAuthenticated, async (req, res) => {
+    try {
+      const leadId = req.params.leadId as string;
+      if (!(await canAccessLead(req.user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const tasks = await storage.getTasksByLeadId(leadId);
       res.json(tasks);
     } catch (error) {
@@ -285,9 +382,12 @@ export async function registerRoutes(
   });
 
   // Lead History
-  app.get("/api/leads/:leadId/history", async (req, res) => {
+  app.get("/api/leads/:leadId/history", isAuthenticated, async (req, res) => {
     try {
-      const { leadId } = req.params;
+      const leadId = req.params.leadId as string;
+      if (!(await canAccessLead(req.user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const history = await storage.getHistoryByLeadId(leadId);
       res.json(history);
     } catch (error) {
@@ -297,7 +397,7 @@ export async function registerRoutes(
   });
 
   // All History (for actions log page)
-  app.get("/api/history", async (req, res) => {
+  app.get("/api/history", isAuthenticated, async (req, res) => {
     try {
       const history = await storage.getAllHistory();
       res.json(history);
@@ -308,9 +408,12 @@ export async function registerRoutes(
   });
 
   // Tasks
-  app.post("/api/tasks", async (req, res) => {
+  app.post("/api/tasks", isAuthenticated, async (req, res) => {
     try {
       const data = insertTaskSchema.parse(req.body);
+      if (data.leadId && !(await canAccessLead(req.user, data.leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const task = await storage.createTask(data);
       res.status(201).json(task);
     } catch (error) {
@@ -319,9 +422,13 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/tasks/:id", async (req, res) => {
+  app.patch("/api/tasks/:id", isAuthenticated, async (req, res) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
+      const existing = await storage.getTask(id);
+      if (existing?.leadId && !(await canAccessLead(req.user, existing.leadId as string))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const data = updateTaskSchema.parse(req.body);
       const task = await storage.updateTask(id, data);
       if (!task) {
@@ -334,9 +441,13 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/tasks/:id", async (req, res) => {
+  app.delete("/api/tasks/:id", isAuthenticated, async (req, res) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
+      const existing = await storage.getTask(id);
+      if (existing?.leadId && !(await canAccessLead(req.user, existing.leadId as string))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const deleted = await storage.deleteTask(id);
       if (!deleted) {
         return res.status(404).json({ error: "Task not found" });
@@ -687,6 +798,9 @@ export async function registerRoutes(
   app.get("/api/leads/:leadId/unit-interests", isAuthenticated, async (req, res) => {
     try {
       const leadId = req.params.leadId as string;
+      if (!(await canAccessLead(req.user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const interests = await storage.getLeadUnitInterests(leadId);
       res.json(interests);
     } catch (error) {
@@ -709,6 +823,9 @@ export async function registerRoutes(
   app.post("/api/lead-unit-interests", isAuthenticated, async (req, res) => {
     try {
       const data = insertLeadUnitInterestSchema.parse(req.body);
+      if (data.leadId && !(await canAccessLead(req.user, data.leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const interest = await storage.createLeadUnitInterest(data);
       res.status(201).json(interest);
     } catch (error) {
@@ -720,6 +837,10 @@ export async function registerRoutes(
   app.delete("/api/lead-unit-interests/:id", isAuthenticated, async (req, res) => {
     try {
       const id = req.params.id as string;
+      const existing = await storage.getLeadUnitInterest(id);
+      if (existing && !(await canAccessLead(req.user, existing.leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const deleted = await storage.deleteLeadUnitInterest(id);
       if (!deleted) {
         return res.status(404).json({ error: "Interest not found" });
@@ -760,7 +881,7 @@ export async function registerRoutes(
   app.get("/api/team-load", isAuthenticated, async (req, res) => {
     try {
       const user = req.user;
-      const teamId = user?.role === "sales_manager" ? user?.teamId ?? null : null;
+      const teamId = (user?.role === "team_leader" || user?.role === "sales_manager") ? user?.teamId ?? null : null;
       const teamLoad = await storage.getTeamLoad(teamId);
       res.json(teamLoad);
     } catch (error) {
@@ -769,7 +890,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/leads/auto-assign", isAuthenticated, requireRole("super_admin", "admin", "sales_manager"), async (req, res) => {
+  app.post("/api/leads/auto-assign", isAuthenticated, requireRole("super_admin", "sales_admin", "team_leader", "admin", "sales_manager"), async (req, res) => {
     try {
       const { leadId, leadIds } = req.body;
       const user = req.user;
@@ -789,7 +910,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/leads/:leadId/auto-assign", isAuthenticated, requireRole("super_admin", "admin", "sales_manager"), async (req, res) => {
+  app.post("/api/leads/:leadId/auto-assign", isAuthenticated, requireRole("super_admin", "sales_admin", "team_leader", "admin", "sales_manager"), async (req, res) => {
     try {
       const leadId = req.params.leadId as string;
       const user = req.user;
@@ -919,7 +1040,7 @@ export async function registerRoutes(
 
   // ==================== RESPONSE TIME REPORTS ====================
 
-  app.get("/api/reports/response-time", isAuthenticated, requireRole("super_admin", "admin", "sales_manager"), async (req, res) => {
+  app.get("/api/reports/response-time", isAuthenticated, requireRole("super_admin", "company_owner", "sales_admin", "team_leader", "admin", "sales_manager"), async (req, res) => {
     try {
       const report = await storage.getResponseTimeReport();
       res.json(report);
@@ -929,7 +1050,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/dashboard/team-activity", isAuthenticated, requireRole("super_admin", "admin", "sales_manager"), async (req, res) => {
+  app.get("/api/dashboard/team-activity", isAuthenticated, requireRole("super_admin", "company_owner", "sales_admin", "team_leader", "admin", "sales_manager"), async (req, res) => {
     try {
       const activity = await storage.getTeamActivityToday();
       res.json(activity);
@@ -944,6 +1065,9 @@ export async function registerRoutes(
   app.get("/api/leads/:leadId/communications", isAuthenticated, async (req, res) => {
     try {
       const leadId = req.params.leadId as string;
+      if (!(await canAccessLead(req.user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const comms = await storage.getCommunicationsByLead(leadId);
       res.json(comms);
     } catch (error) {
@@ -955,6 +1079,9 @@ export async function registerRoutes(
   app.post("/api/leads/:leadId/communications", isAuthenticated, async (req, res) => {
     try {
       const leadId = req.params.leadId as string;
+      if (!(await canAccessLead(req.user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const user = req.user;
       const data = insertCommunicationSchema.parse({
         ...req.body,
@@ -996,6 +1123,9 @@ export async function registerRoutes(
   app.get("/api/leads/:leadId/reminders", isAuthenticated, async (req, res) => {
     try {
       const leadId = req.params.leadId as string;
+      if (!(await canAccessLead(req.user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const reminders = await storage.getRemindersByLead(leadId);
       res.json(reminders);
     } catch (error) {
@@ -1046,15 +1176,24 @@ export async function registerRoutes(
 
   // ==================== DOCUMENTS ====================
 
-  // Authorization helper: checks if the requesting user can access a lead's documents.
-  // super_admin, admin, sales_manager can access any lead.
-  // sales_agent can only access leads assigned to them (by username or by userId stored in assignedTo).
+  // Authorization helper: checks if the requesting user can access a specific lead.
+  // super_admin, company_owner, sales_admin, admin, sales_manager can access any lead.
+  // team_leader can only access leads assigned to members of their team.
+  // sales_agent can only access leads assigned to them.
   async function canAccessLead(user: Express.User | undefined, leadId: string): Promise<boolean> {
     if (!user) return false;
-    if (user.role === "super_admin" || user.role === "admin" || user.role === "sales_manager") return true;
+    const globalRoles = ["super_admin", "company_owner", "sales_admin", "admin", "sales_manager"];
+    if (globalRoles.includes(user.role ?? "")) return true;
     const lead = await storage.getLead(leadId);
     if (!lead) return false;
-    return lead.assignedTo === user.username || lead.assignedTo === user.id;
+    if (user.role === "team_leader" && user.teamId) {
+      const teamUsers = await storage.getAllUsers().then(users =>
+        users.filter(u => u.teamId === user.teamId).map(u => u.id)
+      );
+      return lead.assignedTo !== null && teamUsers.includes(lead.assignedTo);
+    }
+    // Support both id-based and legacy username-based assignment
+    return lead.assignedTo === user.id || lead.assignedTo === user.username;
   }
 
   // Authorization helper: clients are accessible by super_admin, admin, sales_manager and the agent
@@ -1344,7 +1483,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/commissions/:id", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
+  app.delete("/api/commissions/:id", isAuthenticated, requireRole("super_admin", "sales_admin"), async (req, res) => {
     try {
       const id = req.params.id as string;
       const deleted = await storage.deleteCommission(id);
@@ -1355,6 +1494,30 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting commission:", error);
       res.status(500).json({ error: "Failed to delete commission" });
+    }
+  });
+
+  // ==================== ROLE PERMISSIONS ====================
+
+  app.get("/api/role-permissions", isAuthenticated, requireRole("super_admin"), async (req, res) => {
+    try {
+      const permissions = await storage.getRolePermissions();
+      res.json(permissions);
+    } catch (error) {
+      console.error("Error fetching role permissions:", error);
+      res.status(500).json({ error: "Failed to fetch role permissions" });
+    }
+  });
+
+  app.put("/api/role-permissions/:role", isAuthenticated, requireRole("super_admin"), async (req, res) => {
+    try {
+      const role = req.params.role as string;
+      const permissions = req.body;
+      await storage.setRolePermissions(role, permissions);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating role permissions:", error);
+      res.status(400).json({ error: "Failed to update role permissions" });
     }
   });
 

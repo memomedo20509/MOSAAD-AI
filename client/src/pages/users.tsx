@@ -9,30 +9,30 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Edit, UserCheck, UserX, Search } from "lucide-react";
+import { Users, Edit, UserCheck, UserX, Search, Plus } from "lucide-react";
 import type { User, Team } from "@shared/schema";
 import { useLanguage } from "@/lib/i18n";
+import { useAuth } from "@/hooks/use-auth";
+import { ROLE_ARABIC_NAMES, ROLE_COLORS } from "@shared/models/auth";
+
+function getRoleName(role: string | null | undefined): string {
+  return ROLE_ARABIC_NAMES[(role ?? "sales_agent") as keyof typeof ROLE_ARABIC_NAMES] || role || "سيلز";
+}
+
+function getRoleColor(role: string | null | undefined): string {
+  return ROLE_COLORS[(role ?? "sales_agent") as keyof typeof ROLE_COLORS] || "bg-gray-500/10 text-gray-600";
+}
 
 export default function UsersPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
+  const { user: currentUser } = useAuth();
   const [search, setSearch] = useState("");
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
-  const ROLE_LABELS: Record<string, string> = {
-    super_admin: t.superAdmin,
-    admin: t.admin,
-    sales_manager: t.salesManager,
-    sales_agent: t.salesAgent,
-  };
-
-  const ROLE_COLORS: Record<string, string> = {
-    super_admin: "bg-red-500/10 text-red-600",
-    admin: "bg-purple-500/10 text-purple-600",
-    sales_manager: "bg-blue-500/10 text-blue-600",
-    sales_agent: "bg-green-500/10 text-green-600",
-  };
+  const isAdmin = currentUser?.role === "super_admin" || currentUser?.role === "sales_admin";
 
   const { data: users = [], isLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -44,12 +44,13 @@ export default function UsersPage() {
 
   const updateUserMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<User> }) => {
-      return apiRequest("PATCH", `/api/users/${id}`, data);
+      const res = await apiRequest("PATCH", `/api/users/${id}`, data);
+      return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({ title: t.userUpdatedSuccess });
-      setIsDialogOpen(false);
+      setIsEditDialogOpen(false);
       setEditingUser(null);
     },
     onError: () => {
@@ -57,11 +58,27 @@ export default function UsersPage() {
     },
   });
 
+  const createUserMutation = useMutation({
+    mutationFn: async (data: Record<string, unknown>) => {
+      const res = await apiRequest("POST", "/api/users", data);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({ title: t.userCreatedSuccess });
+      setIsAddDialogOpen(false);
+    },
+    onError: () => {
+      toast({ title: t.userCreatedError, variant: "destructive" });
+    },
+  });
+
   const filteredUsers = users.filter(
     (user) =>
       user.email?.toLowerCase().includes(search.toLowerCase()) ||
       user.firstName?.toLowerCase().includes(search.toLowerCase()) ||
-      user.lastName?.toLowerCase().includes(search.toLowerCase())
+      user.lastName?.toLowerCase().includes(search.toLowerCase()) ||
+      user.username?.toLowerCase().includes(search.toLowerCase())
   );
 
   const handleEditSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -69,13 +86,37 @@ export default function UsersPage() {
     if (!editingUser) return;
 
     const formData = new FormData(e.currentTarget);
+    const password = formData.get("password") as string;
+    const updateData: Record<string, unknown> = {
+      role: formData.get("role") as string,
+      teamId: (formData.get("teamId") as string) || null,
+      isActive: formData.get("isActive") === "true",
+      firstName: formData.get("firstName") as string || null,
+      lastName: formData.get("lastName") as string || null,
+      phone: formData.get("phone") as string || null,
+    };
+    if (password) {
+      updateData.password = password;
+    }
     updateUserMutation.mutate({
       id: editingUser.id,
-      data: {
-        role: formData.get("role") as string,
-        teamId: formData.get("teamId") as string || null,
-        isActive: formData.get("isActive") === "true",
-      },
+      data: updateData,
+    });
+  };
+
+  const handleAddSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    createUserMutation.mutate({
+      username: formData.get("username") as string,
+      password: formData.get("password") as string,
+      email: formData.get("email") as string || null,
+      firstName: formData.get("firstName") as string || null,
+      lastName: formData.get("lastName") as string || null,
+      phone: formData.get("phone") as string || null,
+      role: formData.get("role") as string || "sales_agent",
+      teamId: (formData.get("teamId") as string) || null,
+      isActive: true,
     });
   };
 
@@ -87,6 +128,14 @@ export default function UsersPage() {
     );
   }
 
+  const ROLE_OPTIONS = [
+    { value: "super_admin", label: "مدير النظام" },
+    { value: "company_owner", label: "صاحب الشركة" },
+    { value: "sales_admin", label: "سيلز ادمن" },
+    { value: "team_leader", label: "تيم ليدر" },
+    { value: "sales_agent", label: "سيلز" },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -94,6 +143,81 @@ export default function UsersPage() {
           <h1 className="text-2xl font-bold" data-testid="text-page-title">{t.usersTitle}</h1>
           <p className="text-muted-foreground">{t.usersSubtitle}</p>
         </div>
+        {isAdmin && (
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-add-user">
+                <Plus className="h-4 w-4 mr-2 rtl:mr-0 rtl:ml-2" />
+                {t.addUser}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>{t.addUser}</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleAddSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>{t.firstName}</Label>
+                    <Input name="firstName" placeholder={t.firstName} data-testid="input-first-name" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t.lastName}</Label>
+                    <Input name="lastName" placeholder={t.lastName} data-testid="input-last-name" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>{t.username} *</Label>
+                  <Input name="username" required placeholder={t.username} data-testid="input-username" />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t.email}</Label>
+                  <Input name="email" type="email" placeholder={t.email} data-testid="input-email" />
+                </div>
+                <div className="space-y-2">
+                  <Label>رقم التليفون</Label>
+                  <Input name="phone" placeholder="01xxxxxxxxx" data-testid="input-phone" />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t.password} *</Label>
+                  <Input name="password" type="password" required placeholder={t.password} data-testid="input-password" />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t.role}</Label>
+                  <Select name="role" defaultValue="sales_agent">
+                    <SelectTrigger data-testid="select-role-add">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ROLE_OPTIONS.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>{t.team}</Label>
+                  <Select name="teamId" defaultValue="">
+                    <SelectTrigger data-testid="select-team-add">
+                      <SelectValue placeholder={t.selectTeam} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">{t.noTeam}</SelectItem>
+                      {teams.map((team) => (
+                        <SelectItem key={team.id} value={team.id}>
+                          {team.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button type="submit" className="w-full" disabled={createUserMutation.isPending} data-testid="button-save-new-user">
+                  {createUserMutation.isPending ? t.saving : t.create}
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       <Card>
@@ -138,99 +262,116 @@ export default function UsersPage() {
                   <div>
                     <div className="font-medium">
                       {user.firstName} {user.lastName}
+                      {!user.firstName && !user.lastName && <span className="text-muted-foreground">{user.username}</span>}
                     </div>
-                    <div className="text-sm text-muted-foreground">{user.email}</div>
+                    <div className="text-sm text-muted-foreground">{user.email || user.username}</div>
+                    {user.phone && <div className="text-xs text-muted-foreground">{user.phone}</div>}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4">
-                  <Badge className={ROLE_COLORS[user.role || "sales_agent"]}>
-                    {ROLE_LABELS[user.role || "sales_agent"]}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <Badge className={getRoleColor(user.role)} data-testid={`badge-role-${user.id}`}>
+                    {getRoleName(user.role)}
                   </Badge>
                   {user.isActive ? (
-                    <Badge variant="outline" className="text-green-600">
+                    <Badge variant="outline" className="text-green-600" data-testid={`badge-status-${user.id}`}>
                       <UserCheck className="h-3 w-3 mr-1" /> {t.active}
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="text-red-600">
+                    <Badge variant="outline" className="text-red-600" data-testid={`badge-status-${user.id}`}>
                       <UserX className="h-3 w-3 mr-1" /> {t.inactive}
                     </Badge>
                   )}
 
-                  <Dialog open={isDialogOpen && editingUser?.id === user.id} onOpenChange={(open) => {
-                    setIsDialogOpen(open);
-                    if (!open) setEditingUser(null);
-                  }}>
-                    <DialogTrigger asChild>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setEditingUser(user);
-                          setIsDialogOpen(true);
-                        }}
-                        data-testid={`button-edit-user-${user.id}`}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>{t.editUser}</DialogTitle>
-                      </DialogHeader>
-                      <form onSubmit={handleEditSubmit} className="space-y-4">
-                        <div className="space-y-2">
-                          <Label>{t.email}</Label>
-                          <Input value={user.email || ""} disabled />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>{t.role}</Label>
-                          <Select name="role" defaultValue={user.role || "sales_agent"}>
-                            <SelectTrigger data-testid="select-role">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="super_admin">{t.superAdmin}</SelectItem>
-                              <SelectItem value="admin">{t.admin}</SelectItem>
-                              <SelectItem value="sales_manager">{t.salesManager}</SelectItem>
-                              <SelectItem value="sales_agent">{t.salesAgent}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>{t.team}</Label>
-                          <Select name="teamId" defaultValue={user.teamId || ""}>
-                            <SelectTrigger data-testid="select-team">
-                              <SelectValue placeholder={t.selectTeam} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="">{t.noTeam}</SelectItem>
-                              {teams.map((team) => (
-                                <SelectItem key={team.id} value={team.id}>
-                                  {team.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>{t.status}</Label>
-                          <Select name="isActive" defaultValue={user.isActive ? "true" : "false"}>
-                            <SelectTrigger data-testid="select-status">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="true">{t.active}</SelectItem>
-                              <SelectItem value="false">{t.inactive}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <Button type="submit" className="w-full" data-testid="button-save-user">
-                          {t.save}
+                  {isAdmin && (
+                    <Dialog open={isEditDialogOpen && editingUser?.id === user.id} onOpenChange={(open) => {
+                      setIsEditDialogOpen(open);
+                      if (!open) setEditingUser(null);
+                    }}>
+                      <DialogTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setEditingUser(user);
+                            setIsEditDialogOpen(true);
+                          }}
+                          data-testid={`button-edit-user-${user.id}`}
+                        >
+                          <Edit className="h-4 w-4" />
                         </Button>
-                      </form>
-                    </DialogContent>
-                  </Dialog>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>{t.editUser}: {user.username}</DialogTitle>
+                        </DialogHeader>
+                        <form onSubmit={handleEditSubmit} className="space-y-4">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-2">
+                              <Label>{t.firstName}</Label>
+                              <Input name="firstName" defaultValue={user.firstName || ""} data-testid="input-edit-first-name" />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>{t.lastName}</Label>
+                              <Input name="lastName" defaultValue={user.lastName || ""} data-testid="input-edit-last-name" />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>رقم التليفون</Label>
+                            <Input name="phone" defaultValue={user.phone || ""} data-testid="input-edit-phone" />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>{t.password} (اتركه فارغاً للإبقاء على القديم)</Label>
+                            <Input name="password" type="password" placeholder="كلمة سر جديدة" data-testid="input-edit-password" />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>{t.role}</Label>
+                            <Select name="role" defaultValue={user.role || "sales_agent"}>
+                              <SelectTrigger data-testid="select-role">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {ROLE_OPTIONS.map(opt => (
+                                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>{t.team}</Label>
+                            <Select name="teamId" defaultValue={user.teamId || ""}>
+                              <SelectTrigger data-testid="select-team">
+                                <SelectValue placeholder={t.selectTeam} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="">{t.noTeam}</SelectItem>
+                                {teams.map((team) => (
+                                  <SelectItem key={team.id} value={team.id}>
+                                    {team.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>{t.status}</Label>
+                            <Select name="isActive" defaultValue={user.isActive ? "true" : "false"}>
+                              <SelectTrigger data-testid="select-status">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="true">{t.active}</SelectItem>
+                                <SelectItem value="false">{t.inactive}</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Button type="submit" className="w-full" disabled={updateUserMutation.isPending} data-testid="button-save-user">
+                            {updateUserMutation.isPending ? t.saving : t.save}
+                          </Button>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
+                  )}
                 </div>
               </div>
             ))}

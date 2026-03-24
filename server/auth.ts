@@ -5,7 +5,7 @@ import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
-import { User as SelectUser, UserRole } from "@shared/models/auth";
+import { User as SelectUser, UserRole, ROLE_ARABIC_NAMES, DEFAULT_ROLE_PERMISSIONS, type RolePermissions } from "@shared/models/auth";
 
 declare global {
   namespace Express {
@@ -164,6 +164,24 @@ export function requireRole(...roles: UserRole[]) {
     }
     const user = req.user as SelectUser;
     if (!roles.includes(user.role as UserRole)) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    next();
+  };
+}
+
+export function requirePermission(permission: keyof RolePermissions) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const user = req.user as SelectUser;
+    const role = user.role as UserRole;
+
+    const dbPerms = await storage.getPermissionsForRole(role);
+    const perms: RolePermissions = dbPerms ?? DEFAULT_ROLE_PERMISSIONS[role] ?? { canViewAllLeads: false, canManageUsers: false, canManageTeams: false, canViewAllReports: false, canDeleteData: false, canTransferLeads: false };
+
+    if (!perms[permission]) {
       return res.status(403).json({ error: "Forbidden" });
     }
     next();

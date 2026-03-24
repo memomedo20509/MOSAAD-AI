@@ -293,5 +293,5 @@ export type InsertCommission = z.infer<typeof insertCommissionSchema>;
 export type UpdateCommission = z.infer<typeof updateCommissionSchema>;
 export type Commission = typeof commissions.$inferSelect;
 
-// Export auth models (users, teams, sessions)
+// Export auth models (users, teams, sessions, role_permissions)
 export * from "./models/auth";

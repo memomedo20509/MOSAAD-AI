@@ -23,6 +23,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Phone,
   Mail,
   User,
@@ -35,11 +42,14 @@ import {
   Plus,
   Trash2,
   Paperclip,
+  ArrowRightLeft,
 } from "lucide-react";
 import type { Lead, LeadState, Task, LeadHistory } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { useAuth } from "@/hooks/use-auth";
+import { useLanguage } from "@/lib/i18n";
 import { DocumentsTab } from "./documents-tab";
 
 interface LeadDetailPanelProps {
@@ -48,6 +58,8 @@ interface LeadDetailPanelProps {
   onClose: () => void;
   onUpdate: (data: Partial<Lead>) => void;
 }
+
+type UserSummary = { id: string; username: string; fullName: string; role: string };
 
 export function LeadDetailPanel({
   lead,
@@ -58,7 +70,35 @@ export function LeadDetailPanel({
   const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState<Partial<Lead>>({});
   const [newTask, setNewTask] = useState({ title: "", type: "", description: "" });
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [transferToUserId, setTransferToUserId] = useState("");
   const { toast } = useToast();
+  const { user: currentUser } = useAuth();
+  const { t } = useLanguage();
+
+  const canTransfer = currentUser?.role === "super_admin" || currentUser?.role === "sales_admin" || currentUser?.role === "admin";
+
+  const { data: salesAgents } = useQuery<UserSummary[]>({
+    queryKey: ["/api/users"],
+    enabled: showTransferDialog && canTransfer,
+    select: (users: UserSummary[]) => users.filter((u) => u.role === "sales_agent" || u.role === "sales_admin" || u.role === "team_leader"),
+  });
+
+  const transferMutation = useMutation({
+    mutationFn: async ({ leadId, toUserId }: { leadId: string; toUserId: string }) => {
+      const res = await apiRequest("POST", `/api/leads/${leadId}/transfer`, { toUserId });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      setShowTransferDialog(false);
+      setTransferToUserId("");
+      toast({ title: t.transferLeadSuccess });
+    },
+    onError: () => {
+      toast({ title: t.transferLeadError, variant: "destructive" });
+    },
+  });
 
   const { data: tasks, isLoading: tasksLoading } = useQuery<Task[]>({
     queryKey: ["/api/leads", lead?.id, "tasks"],
@@ -122,6 +162,7 @@ export function LeadDetailPanel({
   const currentState = states.find((s) => s.id === lead.stateId);
 
   return (
+    <>
     <Sheet open={!!lead} onOpenChange={(open) => !open && onClose()}>
       <SheetContent className="w-full sm:max-w-xl overflow-hidden flex flex-col">
         <SheetHeader className="pb-4 border-b">
@@ -144,6 +185,17 @@ export function LeadDetailPanel({
               )}
             </div>
             <div className="flex gap-2">
+              {canTransfer && !editMode && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowTransferDialog(true)}
+                  data-testid="button-transfer-lead"
+                >
+                  <ArrowRightLeft className="h-4 w-4 mr-1 rtl:mr-0 rtl:ml-1" />
+                  {t.transferLead}
+                </Button>
+              )}
               {editMode ? (
                 <>
                   <Button size="sm" variant="outline" onClick={() => setEditMode(false)}>
@@ -605,5 +657,40 @@ export function LeadDetailPanel({
         </Tabs>
       </SheetContent>
     </Sheet>
+
+    <Dialog open={showTransferDialog} onOpenChange={setShowTransferDialog}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t.transferLeadTo}</DialogTitle>
+        </DialogHeader>
+        <div className="py-4">
+          <Select value={transferToUserId} onValueChange={setTransferToUserId}>
+            <SelectTrigger data-testid="select-transfer-agent">
+              <SelectValue placeholder={t.transferLeadTo} />
+            </SelectTrigger>
+            <SelectContent>
+              {(salesAgents || []).map((agent) => (
+                <SelectItem key={agent.id} value={agent.id} data-testid={`option-agent-${agent.id}`}>
+                  {agent.fullName || agent.username}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowTransferDialog(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => lead && transferToUserId && transferMutation.mutate({ leadId: lead.id, toUserId: transferToUserId })}
+            disabled={!transferToUserId || transferMutation.isPending}
+            data-testid="button-confirm-transfer"
+          >
+            {t.transferLead}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

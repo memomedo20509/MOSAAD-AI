@@ -33,6 +33,7 @@ import AllUnitsPage from "@/pages/all-units";
 import KanbanPage from "@/pages/kanban";
 import ReportsPage from "@/pages/reports";
 import CommissionsPage from "@/pages/commissions";
+import PermissionsPage from "@/pages/permissions";
 
 function LogoutButton() {
   const { logoutMutation } = useAuth();
@@ -73,6 +74,7 @@ function Router() {
       <Route path="/inventory/units" component={AllUnitsPage} />
       <Route path="/inventory/projects/:projectId/units" component={UnitsPage} />
       <Route path="/commissions" component={CommissionsPage} />
+      <Route path="/settings/permissions" component={PermissionsPage} />
       <Route component={NotFound} />
     </Switch>
   );

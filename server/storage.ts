@@ -19,6 +19,7 @@ import {
   reminders,
   documents,
   commissions,
+  rolePermissions,
   type User,
   type InsertUser,
   type UpdateUser,
@@ -51,6 +52,9 @@ import {
   type Commission,
   type InsertCommission,
   type UpdateCommission,
+  type RolePermissions,
+  DEFAULT_ROLE_PERMISSIONS,
+  type UserRole,
 } from "@shared/schema";
 
 const PostgresSessionStore = connectPg(session);
@@ -133,6 +137,7 @@ export interface IStorage {
 
   // Lead Unit Interests
   getLeadUnitInterests(leadId: string): Promise<LeadUnitInterest[]>;
+  getLeadUnitInterest(id: string): Promise<LeadUnitInterest | undefined>;
   getUnitInterests(unitId: string): Promise<LeadUnitInterest[]>;
   createLeadUnitInterest(interest: InsertLeadUnitInterest): Promise<LeadUnitInterest>;
   deleteLeadUnitInterest(id: string): Promise<boolean>;
@@ -192,6 +197,15 @@ export interface IStorage {
   updateCommission(id: string, data: UpdateCommission): Promise<Commission | undefined>;
   deleteCommission(id: string): Promise<boolean>;
   getCommissionSummary(agentId?: string, teamMemberIds?: string[]): Promise<{ agentId: string; agentName: string; month: string; total: number; count: number }[]>;
+
+  // Role Permissions (dynamic, per super_admin)
+  getRolePermissions(): Promise<Record<string, RolePermissions>>;
+  getPermissionsForRole(role: string): Promise<RolePermissions | null>;
+  setRolePermissions(role: string, permissions: RolePermissions): Promise<void>;
+  
+  // Lead filtering by role
+  getLeadsByRole(userId: string, role: string, teamId?: string | null, username?: string | null): Promise<Lead[]>;
+  transferLead(leadId: string, toUserId: string, performedBy: string): Promise<Lead | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -599,6 +613,11 @@ export class DatabaseStorage implements IStorage {
     return newInterest;
   }
 
+  async getLeadUnitInterest(id: string): Promise<LeadUnitInterest | undefined> {
+    const [interest] = await db.select().from(leadUnitInterests).where(eq(leadUnitInterests.id, id));
+    return interest;
+  }
+
   async deleteLeadUnitInterest(id: string): Promise<boolean> {
     const result = await db.delete(leadUnitInterests).where(eq(leadUnitInterests.id, id)).returning();
     return result.length > 0;
@@ -877,6 +896,66 @@ export class DatabaseStorage implements IStorage {
       grouped[key].count += 1;
     }
     return Object.values(grouped).sort((a, b) => b.month.localeCompare(a.month));
+  }
+
+  // Role Permissions (dynamic overrides)
+  async getRolePermissions(): Promise<Record<string, RolePermissions>> {
+    const rows = await db.select().from(rolePermissions);
+    const result: Record<string, RolePermissions> = { ...DEFAULT_ROLE_PERMISSIONS };
+    for (const row of rows) {
+      result[row.role] = row.permissions as RolePermissions;
+    }
+    return result;
+  }
+
+  async getPermissionsForRole(role: string): Promise<RolePermissions | null> {
+    const [row] = await db.select().from(rolePermissions).where(eq(rolePermissions.role, role));
+    return row ? (row.permissions as RolePermissions) : null;
+  }
+
+  async setRolePermissions(role: string, permissions: RolePermissions): Promise<void> {
+    const existing = await db.select().from(rolePermissions).where(eq(rolePermissions.role, role));
+    if (existing.length > 0) {
+      await db.update(rolePermissions)
+        .set({ permissions: permissions as unknown, updatedAt: new Date() })
+        .where(eq(rolePermissions.role, role));
+    } else {
+      await db.insert(rolePermissions).values({ role, permissions: permissions as unknown });
+    }
+  }
+
+  // Lead filtering by role
+  async getLeadsByRole(userId: string, role: string, teamId?: string | null, username?: string | null): Promise<Lead[]> {
+    const allLeads = await this.getAllLeadsWithRefreshedScores();
+    if (role === "sales_agent") {
+      // Support both id-based and legacy username-based assignment
+      return allLeads.filter(l => l.assignedTo === userId || (username && l.assignedTo === username));
+    }
+    if (role === "team_leader" && teamId) {
+      const teamUsers = await this.getAllUsers().then(users => users.filter(u => u.teamId === teamId).map(u => u.id));
+      return allLeads.filter(l => l.assignedTo && teamUsers.includes(l.assignedTo));
+    }
+    return allLeads;
+  }
+
+  async transferLead(leadId: string, toUserId: string, performedBy: string): Promise<Lead | undefined> {
+    const lead = await this.getLead(leadId);
+    if (!lead) return undefined;
+    const toUser = await this.getUser(toUserId);
+    if (!toUser) return undefined;
+    const toUserName = `${toUser.firstName ?? ""} ${toUser.lastName ?? ""}`.trim() || toUser.username;
+    const [updated] = await db
+      .update(leads)
+      .set({ assignedTo: toUserId, updatedAt: new Date() })
+      .where(eq(leads.id, leadId))
+      .returning();
+    await this.createHistory({
+      leadId,
+      action: "Lead Transferred",
+      description: `تم تحويل الليد إلى ${toUserName}`,
+      performedBy,
+    });
+    return updated;
   }
 }
 
