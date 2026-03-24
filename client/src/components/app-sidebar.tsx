@@ -18,6 +18,7 @@ import {
   Kanban,
   BarChart3,
   Bell,
+  DollarSign,
 } from "lucide-react";
 import {
   Sidebar,
@@ -273,6 +274,14 @@ export function AppSidebar() {
                   <Link href="/clients" data-testid="link-nav-clients">
                     <Users className="h-4 w-4" />
                     <span>{t.allClients}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/commissions"}>
+                  <Link href="/commissions" data-testid="link-nav-commissions">
+                    <DollarSign className="h-4 w-4" />
+                    <span>{t.commissionsTitle}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

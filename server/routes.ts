@@ -27,6 +27,8 @@ import {
   insertCommunicationSchema,
   insertReminderSchema,
   updateReminderSchema,
+  insertCommissionSchema,
+  updateCommissionSchema,
 } from "@shared/schema";
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
@@ -371,10 +373,62 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/clients", async (req, res) => {
+  app.post("/api/clients", isAuthenticated, async (req, res) => {
     try {
       const data = insertClientSchema.parse(req.body);
       const client = await storage.createClient(data);
+
+      // Auto-create commission record when a deal is closed
+      try {
+        const user = req.user;
+        const now = new Date();
+        const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        // Default commission percent: configurable via environment or fallback to 2%
+        const DEFAULT_COMMISSION_PERCENT = parseInt(process.env.DEFAULT_COMMISSION_PERCENT ?? "2", 10) || 2;
+        let agentId = user?.id ?? "";
+        let agentName = user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.username : "";
+
+        // Derive unit price from lead's budget or related unit interests
+        let unitPrice = 0;
+        if (data.leadId) {
+          const lead = await storage.getLead(data.leadId);
+          if (lead?.assignedTo) {
+            agentId = lead.assignedTo;
+            const agentUser = await storage.getUser(lead.assignedTo);
+            if (agentUser) {
+              agentName = `${agentUser.firstName ?? ""} ${agentUser.lastName ?? ""}`.trim() || agentUser.username;
+            }
+          }
+          // Try to get unit price from lead unit interests
+          const unitInterests = await storage.getLeadUnitInterests(lead?.id ?? "");
+          if (unitInterests.length > 0) {
+            const firstUnit = await storage.getUnit(unitInterests[0].unitId);
+            if (firstUnit?.price) {
+              unitPrice = firstUnit.price;
+            }
+          }
+        }
+
+        const commissionAmount = Math.round((unitPrice * DEFAULT_COMMISSION_PERCENT) / 100);
+
+        await storage.createCommission({
+          clientId: client.id,
+          leadId: data.leadId ?? null,
+          agentId,
+          agentName,
+          unitPrice,
+          commissionPercent: DEFAULT_COMMISSION_PERCENT,
+          commissionAmount,
+          month,
+          project: data.project ?? null,
+          notes: null,
+        });
+      } catch (commErr) {
+        console.error("Failed to auto-create commission for client", client.id, ":", commErr);
+        // Note: commission creation failure does not roll back client creation,
+        // but it is logged so admins can manually create the commission record.
+      }
+
       res.status(201).json(client);
     } catch (error) {
       console.error("Error creating client:", error);
@@ -1049,6 +1103,145 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting document:", error);
       res.status(500).json({ error: "Failed to delete document" });
+    }
+  });
+
+  // ==================== COMMISSIONS ====================
+
+  app.get("/api/commissions/summary", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user;
+      const role = user?.role;
+      let agentId: string | undefined;
+      let teamMemberIds: string[] | undefined;
+      if (role === "sales_agent") {
+        agentId = user?.id;
+      } else if (role === "sales_manager") {
+        const allUsers = await storage.getAllUsers();
+        teamMemberIds = allUsers
+          .filter(u => u.teamId === user?.teamId)
+          .map(u => u.id);
+      }
+      const summary = await storage.getCommissionSummary(agentId, teamMemberIds);
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching commission summary:", error);
+      res.status(500).json({ error: "Failed to fetch commission summary" });
+    }
+  });
+
+  app.get("/api/commissions", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user;
+      const role = user?.role;
+      let allCommissions = await storage.getAllCommissions();
+      if (role === "sales_agent") {
+        allCommissions = allCommissions.filter(c => c.agentId === user?.id);
+      } else if (role === "sales_manager") {
+        const teamUsers = await storage.getAllUsers();
+        const teamMemberIds = teamUsers
+          .filter(u => u.teamId === user?.teamId)
+          .map(u => u.id);
+        allCommissions = allCommissions.filter(c => c.agentId && teamMemberIds.includes(c.agentId));
+      }
+      res.json(allCommissions);
+    } catch (error) {
+      console.error("Error fetching commissions:", error);
+      res.status(500).json({ error: "Failed to fetch commissions" });
+    }
+  });
+
+  app.get("/api/commissions/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const user = req.user;
+      const role = user?.role;
+      const commission = await storage.getCommission(id);
+      if (!commission) {
+        return res.status(404).json({ error: "Commission not found" });
+      }
+      // Access control: agents can only see their own commissions
+      if (role === "sales_agent" && commission.agentId !== user?.id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      // Managers can only see their team's commissions
+      if (role === "sales_manager") {
+        const allUsers = await storage.getAllUsers();
+        const teamMemberIds = allUsers
+          .filter(u => u.teamId === user?.teamId)
+          .map(u => u.id);
+        if (commission.agentId && !teamMemberIds.includes(commission.agentId)) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+      }
+      res.json(commission);
+    } catch (error) {
+      console.error("Error fetching commission:", error);
+      res.status(500).json({ error: "Failed to fetch commission" });
+    }
+  });
+
+  app.post("/api/commissions", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
+    try {
+      const data = insertCommissionSchema.parse(req.body);
+      const commission = await storage.createCommission(data);
+      res.status(201).json(commission);
+    } catch (error) {
+      console.error("Error creating commission:", error);
+      res.status(400).json({ error: "Failed to create commission" });
+    }
+  });
+
+  app.patch("/api/commissions/:id", isAuthenticated, requireRole("super_admin", "admin", "sales_manager"), async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const user = req.user;
+      const role = user?.role;
+      const existing = await storage.getCommission(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Commission not found" });
+      }
+      // Managers can only edit commissions belonging to their team
+      if (role === "sales_manager") {
+        const allUsers = await storage.getAllUsers();
+        const teamMemberIds = allUsers
+          .filter(u => u.teamId === user?.teamId)
+          .map(u => u.id);
+        if (existing.agentId && !teamMemberIds.includes(existing.agentId)) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+      }
+      // Only allow editing mutable fields — ownership/linkage fields are immutable
+      const mutableFieldsSchema = updateCommissionSchema.pick({
+        unitPrice: true,
+        commissionPercent: true,
+        commissionAmount: true,
+        project: true,
+        notes: true,
+      });
+      const data = mutableFieldsSchema.parse(req.body);
+      const commission = await storage.updateCommission(id, data);
+      if (!commission) {
+        return res.status(404).json({ error: "Commission not found" });
+      }
+      res.json(commission);
+    } catch (error) {
+      console.error("Error updating commission:", error);
+      res.status(400).json({ error: "Failed to update commission" });
+    }
+  });
+
+  app.delete("/api/commissions/:id", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const deleted = await storage.deleteCommission(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Commission not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting commission:", error);
+      res.status(500).json({ error: "Failed to delete commission" });
     }
   });
 

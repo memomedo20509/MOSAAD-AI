@@ -32,6 +32,7 @@ import UnitsPage from "@/pages/units";
 import AllUnitsPage from "@/pages/all-units";
 import KanbanPage from "@/pages/kanban";
 import ReportsPage from "@/pages/reports";
+import CommissionsPage from "@/pages/commissions";
 
 function LogoutButton() {
   const { logoutMutation } = useAuth();
@@ -71,6 +72,7 @@ function Router() {
       <Route path="/inventory/projects" component={ProjectsPage} />
       <Route path="/inventory/units" component={AllUnitsPage} />
       <Route path="/inventory/projects/:projectId/units" component={UnitsPage} />
+      <Route path="/commissions" component={CommissionsPage} />
       <Route component={NotFound} />
     </Switch>
   );

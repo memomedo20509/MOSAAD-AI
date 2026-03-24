@@ -470,8 +470,7 @@ const translations = {
     noTeamActivity: "لا يوجد نشاط اليوم",
     minutesAbbr: "د",
     hoursAbbr: "س",
-    
-    // Documents
+        // Documents
     documents: "المستندات",
     uploadDocument: "رفع مستند",
     documentUploading: "جاري الرفع...",
@@ -492,6 +491,28 @@ const translations = {
     deleteDocument: "حذف المستند",
     deleteDocumentConfirm: "هل أنت متأكد من حذف هذا المستند؟",
 
+    // Commissions
+    commissionsTitle: "العمولات",
+    commissionsSubtitle: "تتبع وإدارة عمولات المبيعات",
+    commissionDeals: "صفقة",
+    totalClosedDeals: "إجمالي الصفقات المغلقة",
+    myCommissionsThisMonth: "عمولاتي هذا الشهر",
+    teamCommissionsThisMonth: "عمولات الفريق هذا الشهر",
+    totalCommissions: "إجمالي العمولات",
+    unitPrice: "سعر الوحدة",
+    commissionPercent: "نسبة العمولة (%)",
+    commissionAmount: "مبلغ العمولة",
+    editCommission: "تعديل العمولة",
+    commissionUpdatedSuccess: "تم تحديث العمولة بنجاح",
+    commissionUpdatedError: "فشل في تحديث العمولة",
+    commissionDeletedSuccess: "تم حذف العمولة بنجاح",
+    commissionDeletedError: "فشل في حذف العمولة",
+    deleteCommissionConfirm: "هل أنت متأكد من حذف هذه العمولة؟",
+    noCommissionsFound: "لا توجد عمولات",
+    allMonths: "جميع الأشهر",
+    month: "الشهر",
+    commissionSummaryByAgent: "ملخص العمولات حسب المندوب",
+    
     // Common
     loading: "جاري التحميل...",
     error: "خطأ",
@@ -1019,6 +1040,28 @@ const translations = {
     uploadDate: "Upload Date",
     deleteDocument: "Delete Document",
     deleteDocumentConfirm: "Are you sure you want to delete this document?",
+
+    // Commissions
+    commissionsTitle: "Commissions",
+    commissionsSubtitle: "Track and manage sales commissions",
+    commissionDeals: "deals",
+    totalClosedDeals: "Total closed deals",
+    myCommissionsThisMonth: "My Commissions This Month",
+    teamCommissionsThisMonth: "Team Commissions This Month",
+    totalCommissions: "Total Commissions",
+    unitPrice: "Unit Price",
+    commissionPercent: "Commission %",
+    commissionAmount: "Commission Amount",
+    editCommission: "Edit Commission",
+    commissionUpdatedSuccess: "Commission updated successfully",
+    commissionUpdatedError: "Failed to update commission",
+    commissionDeletedSuccess: "Commission deleted successfully",
+    commissionDeletedError: "Failed to delete commission",
+    deleteCommissionConfirm: "Are you sure you want to delete this commission?",
+    noCommissionsFound: "No commissions found",
+    allMonths: "All Months",
+    month: "Month",
+    commissionSummaryByAgent: "Commission Summary by Agent",
 
     // Common
     loading: "Loading...",

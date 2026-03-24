@@ -45,6 +45,8 @@ export const leads = pgTable("leads", {
   updatedAt: timestamp("updated_at").defaultNow(),
   lastAction: text("last_action"),
   lastActionDate: timestamp("last_action_date"),
+  firstContactAt: timestamp("first_contact_at"),
+  responseTimeMinutes: integer("response_time_minutes"),
   score: varchar("score", { length: 10 }).default("warm"),
   firstContactAt: timestamp("first_contact_at"),
   responseTimeMinutes: integer("response_time_minutes"),
@@ -268,6 +270,28 @@ export const documents = pgTable("documents", {
 export const insertDocumentSchema = createInsertSchema(documents).omit({ id: true, createdAt: true });
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
 export type Document = typeof documents.$inferSelect;
+
+// Commissions (linked to clients/deals)
+export const commissions = pgTable("commissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").references(() => clients.id),
+  leadId: varchar("lead_id").references(() => leads.id),
+  agentId: varchar("agent_id"),
+  agentName: text("agent_name"),
+  unitPrice: integer("unit_price").notNull().default(0),
+  commissionPercent: integer("commission_percent").notNull().default(2),
+  commissionAmount: integer("commission_amount").notNull().default(0),
+  month: text("month").notNull(),
+  project: text("project"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertCommissionSchema = createInsertSchema(commissions).omit({ id: true, createdAt: true });
+export const updateCommissionSchema = insertCommissionSchema.partial();
+export type InsertCommission = z.infer<typeof insertCommissionSchema>;
+export type UpdateCommission = z.infer<typeof updateCommissionSchema>;
+export type Commission = typeof commissions.$inferSelect;
 
 // Export auth models (users, teams, sessions)
 export * from "./models/auth";

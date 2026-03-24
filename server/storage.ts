@@ -18,6 +18,7 @@ import {
   communications,
   reminders,
   documents,
+  commissions,
   type User,
   type InsertUser,
   type UpdateUser,
@@ -47,6 +48,9 @@ import {
   type InsertReminder,
   type Document,
   type InsertDocument,
+  type Commission,
+  type InsertCommission,
+  type UpdateCommission,
 } from "@shared/schema";
 
 const PostgresSessionStore = connectPg(session);
@@ -179,6 +183,15 @@ export interface IStorage {
     avgResponseMinutesThisWeek: number | null;
     uncontactedOver24h: number;
   }[]>;
+
+  // Commissions
+  getAllCommissions(): Promise<Commission[]>;
+  getCommissionsByAgent(agentId: string): Promise<Commission[]>;
+  getCommission(id: string): Promise<Commission | undefined>;
+  createCommission(commission: InsertCommission): Promise<Commission>;
+  updateCommission(id: string, data: UpdateCommission): Promise<Commission | undefined>;
+  deleteCommission(id: string): Promise<boolean>;
+  getCommissionSummary(agentId?: string, teamMemberIds?: string[]): Promise<{ agentId: string; agentName: string; month: string; total: number; count: number }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -685,6 +698,111 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0;
   }
 
+  // Response Time & Team Activity
+  async getResponseTimeReport(): Promise<{
+    agentId: string;
+    agentName: string;
+    avgResponseMinutes: number | null;
+    fastestResponseMinutes: number | null;
+    slowestResponseMinutes: number | null;
+    uncontactedCount: number;
+  }[]> {
+    const allUsers = await db.select().from(users).where(eq(users.isActive, true));
+    const agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "sales_manager");
+    
+    // Period for stats (this month)
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    const allLeads = await db.select().from(leads);
+    
+    return agents.map(agent => {
+      const agentName = `${agent.firstName || ""} ${agent.lastName || ""}`.trim() || agent.username;
+      
+      const agentLeads = allLeads.filter(l => l.assignedTo === agent.id);
+      
+      const contactedThisMonth = agentLeads.filter(l => 
+        l.firstContactAt && new Date(l.firstContactAt) >= startOfMonth
+      );
+      
+      const responseTimes = contactedThisMonth
+        .map(l => l.responseTimeMinutes)
+        .filter((rt): rt is number => rt !== null);
+        
+      const uncontactedCount = agentLeads.filter(l => !l.firstContactAt).length;
+      
+      return {
+        agentId: agent.id,
+        agentName,
+        avgResponseMinutes: responseTimes.length > 0 
+          ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length) 
+          : null,
+        fastestResponseMinutes: responseTimes.length > 0 ? Math.min(...responseTimes) : null,
+        slowestResponseMinutes: responseTimes.length > 0 ? Math.max(...responseTimes) : null,
+        uncontactedCount,
+      };
+    });
+  }
+
+  async getTeamActivityToday(): Promise<{
+    agentId: string;
+    agentName: string;
+    leadsContactedToday: number;
+    leadsAddedToday: number;
+    avgResponseMinutesThisWeek: number | null;
+    uncontactedOver24h: number;
+  }[]> {
+    const allUsers = await db.select().from(users).where(eq(users.isActive, true));
+    const agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "sales_manager");
+    
+    const allLeads = await db.select().from(leads);
+    const allComms = await db.select().from(communications);
+    
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const over24hCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    
+    return agents.map(agent => {
+      const agentName = `${agent.firstName || ""} ${agent.lastName || ""}`.trim() || agent.username;
+      const agentLeads = allLeads.filter(l => l.assignedTo === agent.id);
+      
+      const agentCommsToday = allComms.filter(c => 
+        c.userId === agent.id && c.createdAt && new Date(c.createdAt) >= todayStart
+      );
+      const leadsContactedToday = new Set(agentCommsToday.map(c => c.leadId)).size;
+      
+      const leadsAddedToday = agentLeads.filter(l => 
+        l.createdAt && new Date(l.createdAt) >= todayStart
+      ).length;
+      
+      const weekLeads = agentLeads.filter(l => 
+        l.firstContactAt && l.createdAt && new Date(l.createdAt) >= weekStart
+      );
+      const responseTimes = weekLeads.map(l => {
+        const created = new Date(l.createdAt!).getTime();
+        const contacted = new Date(l.firstContactAt!).getTime();
+        return Math.max(0, Math.round((contacted - created) / 60000));
+      });
+      const avgResponseMinutesThisWeek = responseTimes.length > 0
+        ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length)
+        : null;
+        
+      const uncontactedOver24h = agentLeads.filter(l => 
+        !l.firstContactAt && l.createdAt && new Date(l.createdAt) <= over24hCutoff
+      ).length;
+      
+      return {
+        agentId: agent.id,
+        agentName,
+        leadsContactedToday,
+        leadsAddedToday,
+        avgResponseMinutesThisWeek,
+        uncontactedOver24h,
+      };
+    });
+  }
+
   // Documents
   async getDocumentsByLead(leadId: string): Promise<Document[]> {
     return db.select().from(documents).where(eq(documents.leadId, leadId)).orderBy(documents.createdAt);
@@ -709,112 +827,54 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0;
   }
 
-  // Response Time & Team Activity
-  async getResponseTimeReport(): Promise<{
-    agentId: string;
-    agentName: string;
-    avgResponseMinutes: number | null;
-    fastestResponseMinutes: number | null;
-    slowestResponseMinutes: number | null;
-    uncontactedCount: number;
-  }[]> {
-    const allUsers = await db.select().from(users).where(eq(users.isActive, true));
-    const agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "sales_manager");
-    const allLeads = await db.select().from(leads);
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-    return agents.map(agent => {
-      const agentName = `${agent.firstName || ""} ${agent.lastName || ""}`.trim() || agent.username;
-      const agentLeads = allLeads.filter(l => l.assignedTo === agent.id);
-      const contactedLeads = agentLeads.filter(l =>
-        l.firstContactAt &&
-        l.createdAt &&
-        new Date(l.createdAt) >= startOfMonth
-      );
-      const responseTimes = contactedLeads
-        .map(l => {
-          const created = new Date(l.createdAt!).getTime();
-          const contacted = new Date(l.firstContactAt!).getTime();
-          return Math.max(0, Math.round((contacted - created) / 60000));
-        })
-        .filter(t => t >= 0);
-
-      const avgResponseMinutes = responseTimes.length > 0
-        ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length)
-        : null;
-      const fastestResponseMinutes = responseTimes.length > 0 ? Math.min(...responseTimes) : null;
-      const slowestResponseMinutes = responseTimes.length > 0 ? Math.max(...responseTimes) : null;
-
-      const uncontactedCount = agentLeads.filter(l => !l.firstContactAt).length;
-
-      return {
-        agentId: agent.id,
-        agentName,
-        avgResponseMinutes,
-        fastestResponseMinutes,
-        slowestResponseMinutes,
-        uncontactedCount,
-      };
-    });
+  // Commissions
+  async getAllCommissions(): Promise<Commission[]> {
+    return db.select().from(commissions).orderBy(commissions.createdAt);
   }
 
-  async getTeamActivityToday(): Promise<{
-    agentId: string;
-    agentName: string;
-    leadsContactedToday: number;
-    leadsAddedToday: number;
-    avgResponseMinutesThisWeek: number | null;
-    uncontactedOver24h: number;
-  }[]> {
-    const allUsers = await db.select().from(users).where(eq(users.isActive, true));
-    const agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "sales_manager");
-    const allLeads = await db.select().from(leads);
-    const allComms = await db.select().from(communications);
+  async getCommissionsByAgent(agentId: string): Promise<Commission[]> {
+    return db.select().from(commissions).where(eq(commissions.agentId, agentId)).orderBy(commissions.createdAt);
+  }
 
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const over24hCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  async getCommission(id: string): Promise<Commission | undefined> {
+    const [commission] = await db.select().from(commissions).where(eq(commissions.id, id));
+    return commission;
+  }
 
-    return agents.map(agent => {
-      const agentName = `${agent.firstName || ""} ${agent.lastName || ""}`.trim() || agent.username;
-      const agentLeads = allLeads.filter(l => l.assignedTo === agent.id);
+  async createCommission(commission: InsertCommission): Promise<Commission> {
+    const [newCommission] = await db.insert(commissions).values(commission).returning();
+    return newCommission;
+  }
 
-      const agentCommsToday = allComms.filter(c =>
-        c.userId === agent.id && c.createdAt && new Date(c.createdAt) >= todayStart
-      );
-      const leadsContactedToday = new Set(agentCommsToday.map(c => c.leadId)).size;
+  async updateCommission(id: string, data: UpdateCommission): Promise<Commission | undefined> {
+    const [updated] = await db.update(commissions).set(data).where(eq(commissions.id, id)).returning();
+    return updated;
+  }
 
-      const leadsAddedToday = agentLeads.filter(l =>
-        l.createdAt && new Date(l.createdAt) >= todayStart
-      ).length;
+  async deleteCommission(id: string): Promise<boolean> {
+    const result = await db.delete(commissions).where(eq(commissions.id, id)).returning();
+    return result.length > 0;
+  }
 
-      const weekLeads = agentLeads.filter(l =>
-        l.firstContactAt && l.createdAt && new Date(l.createdAt) >= weekStart
-      );
-      const responseTimes = weekLeads.map(l => {
-        const created = new Date(l.createdAt!).getTime();
-        const contacted = new Date(l.firstContactAt!).getTime();
-        return Math.max(0, Math.round((contacted - created) / 60000));
-      });
-      const avgResponseMinutesThisWeek = responseTimes.length > 0
-        ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length)
-        : null;
+  async getCommissionSummary(agentId?: string, teamMemberIds?: string[]): Promise<{ agentId: string; agentName: string; month: string; total: number; count: number }[]> {
+    const all = agentId
+      ? await db.select().from(commissions).where(eq(commissions.agentId, agentId))
+      : await db.select().from(commissions);
+    
+    const filtered = teamMemberIds
+      ? all.filter(c => c.agentId && teamMemberIds.includes(c.agentId))
+      : all;
 
-      const uncontactedOver24h = agentLeads.filter(l =>
-        !l.firstContactAt && l.createdAt && new Date(l.createdAt) <= over24hCutoff
-      ).length;
-
-      return {
-        agentId: agent.id,
-        agentName,
-        leadsContactedToday,
-        leadsAddedToday,
-        avgResponseMinutesThisWeek,
-        uncontactedOver24h,
-      };
-    });
+    const grouped: Record<string, { agentId: string; agentName: string; month: string; total: number; count: number }> = {};
+    for (const c of filtered) {
+      const key = `${c.agentId}__${c.month}`;
+      if (!grouped[key]) {
+        grouped[key] = { agentId: c.agentId ?? "", agentName: c.agentName ?? "", month: c.month, total: 0, count: 0 };
+      }
+      grouped[key].total += c.commissionAmount;
+      grouped[key].count += 1;
+    }
+    return Object.values(grouped).sort((a, b) => b.month.localeCompare(a.month));
   }
 }
 

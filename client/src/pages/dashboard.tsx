@@ -22,14 +22,15 @@ import {
   Snowflake,
   BarChart2,
   Zap,
+  DollarSign,
 } from "lucide-react";
-import type { Lead, LeadState, Reminder, LeadHistory } from "@shared/schema";
+import type { Lead, LeadState, Reminder, LeadHistory, Commission } from "@shared/schema";
+import { useAuth } from "@/hooks/use-auth";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { useLanguage } from "@/lib/i18n";
 import { format, isToday, isBefore, startOfToday, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import { Link } from "wouter";
 import { computeLeadScore } from "@/lib/scoring";
-import { useAuth } from "@/hooks/use-auth";
 
 function formatResponseTime(minutes: number | null, minutesAbbr: string, hoursAbbr: string): string {
   if (minutes === null) return "—";
@@ -58,6 +59,10 @@ const stateIcons: Record<string, typeof Users> = {
 export default function Dashboard() {
   const { t, isRTL } = useLanguage();
   const { user } = useAuth();
+  const role = user?.role;
+  const isAgent = role === "sales_agent";
+  const isManager = role === "sales_manager";
+  const isAdmin = role === "super_admin" || role === "admin";
   
   const { data: states, isLoading: statesLoading } = useQuery<LeadState[]>({
     queryKey: ["/api/states"],
@@ -79,7 +84,7 @@ export default function Dashboard() {
     queryKey: ["/api/team-load"],
   });
 
-  const isManager = user?.role === "super_admin" || user?.role === "admin" || user?.role === "sales_manager";
+  const isManagerRole = user?.role === "super_admin" || user?.role === "admin" || user?.role === "sales_manager";
 
   const { data: teamActivity = [] } = useQuery<{
     agentId: string;
@@ -90,9 +95,13 @@ export default function Dashboard() {
     uncontactedOver24h: number;
   }[]>({
     queryKey: ["/api/dashboard/team-activity"],
-    enabled: isManager,
+    enabled: isManagerRole,
     refetchInterval: 60000,
     staleTime: 30000,
+  });
+
+  const { data: commissions = [] } = useQuery<Commission[]>({
+    queryKey: ["/api/commissions"],
   });
 
   const isLoading = statesLoading || leadsLoading;
@@ -101,6 +110,14 @@ export default function Dashboard() {
   const monthRange = { start: startOfMonth(new Date()), end: endOfMonth(new Date()) };
   
   const newLeadsToday = leads?.filter((l) => l.createdAt && isToday(new Date(l.createdAt))).length || 0;
+
+  const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+  const myCommissionsThisMonth = commissions
+    .filter((c) => c.agentId === user?.id && c.month === currentMonth)
+    .reduce((sum, c) => sum + (c.commissionAmount || 0), 0);
+  const teamCommissionsThisMonth = commissions
+    .filter((c) => c.month === currentMonth)
+    .reduce((sum, c) => sum + (c.commissionAmount || 0), 0);
   
   const upcomingReminders = reminders.filter((r) => !r.isCompleted && r.dueDate).slice(0, 5);
   const overdueReminders = reminders.filter((r) => !r.isCompleted && r.dueDate && isBefore(new Date(r.dueDate), today));
@@ -198,6 +215,39 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           </div>
+
+          {(isAgent || isManager || isAdmin) && (
+            <div className="grid gap-4 md:grid-cols-2">
+              {isAgent && (
+                <Card data-testid="card-my-commissions-this-month">
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">{t.myCommissionsThisMonth}</CardTitle>
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-green-600 dark:text-green-400" data-testid="text-my-commissions-amount">
+                      {myCommissionsThisMonth.toLocaleString()} {t.currency}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{currentMonth}</p>
+                  </CardContent>
+                </Card>
+              )}
+              {(isManager || isAdmin) && (
+                <Card data-testid="card-team-commissions-this-month">
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">{t.teamCommissionsThisMonth}</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-green-600 dark:text-green-400" data-testid="text-team-commissions-amount">
+                      {teamCommissionsThisMonth.toLocaleString()} {t.currency}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{currentMonth}</p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
             <Card className="col-span-4">
