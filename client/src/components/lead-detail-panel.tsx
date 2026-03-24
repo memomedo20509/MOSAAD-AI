@@ -34,11 +34,13 @@ import {
   ListTodo,
   Plus,
   Trash2,
+  Paperclip,
 } from "lucide-react";
 import type { Lead, LeadState, Task, LeadHistory } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { DocumentsTab } from "./documents-tab";
 
 interface LeadDetailPanelProps {
   lead: Lead | null;
@@ -161,7 +163,7 @@ export function LeadDetailPanel({
         </SheetHeader>
 
         <Tabs defaultValue="info" className="flex-1 overflow-hidden flex flex-col">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="info" data-testid="tab-lead-info">
               <FileText className="h-4 w-4 mr-1" />
               Info
@@ -177,6 +179,10 @@ export function LeadDetailPanel({
             <TabsTrigger value="actions" data-testid="tab-lead-actions">
               <Phone className="h-4 w-4 mr-1" />
               Actions
+            </TabsTrigger>
+            <TabsTrigger value="documents" data-testid="tab-lead-documents">
+              <Paperclip className="h-4 w-4 mr-1" />
+              Docs
             </TabsTrigger>
           </TabsList>
 
@@ -590,6 +596,10 @@ export function LeadDetailPanel({
                   </div>
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="documents" className="m-0">
+              <DocumentsTab entityType="lead" entityId={lead.id} />
             </TabsContent>
           </ScrollArea>
         </Tabs>

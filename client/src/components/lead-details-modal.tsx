@@ -48,12 +48,14 @@ import {
   Shuffle,
   Calculator,
   GitCompare,
+  Paperclip,
 } from "lucide-react";
 import { InstallmentCalculator } from "@/components/installment-calculator";
 import { UnitCompare } from "@/components/unit-compare";
 import { computeLeadScore, SCORE_COLORS } from "@/lib/scoring";
 import { format } from "date-fns";
 import type { Lead, LeadState, LeadHistory, Task, Reminder, LeadUnitInterest, Unit, Project, Communication } from "@shared/schema";
+import { DocumentsTab } from "./documents-tab";
 
 interface LeadDetailsModalProps {
   leadId: string | null;
@@ -241,7 +243,7 @@ export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalPr
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="overview" data-testid="tab-overview">
               <FileText className="h-4 w-4 mr-1" />
               {t.overview}
@@ -261,6 +263,10 @@ export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalPr
             <TabsTrigger value="units" data-testid="tab-units">
               <Home className="h-4 w-4 mr-1" />
               {t.interestedUnits}
+            </TabsTrigger>
+            <TabsTrigger value="documents" data-testid="tab-documents">
+              <Paperclip className="h-4 w-4 mr-1" />
+              {t.documents}
             </TabsTrigger>
           </TabsList>
 
@@ -878,6 +884,10 @@ export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalPr
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="documents" className="mt-4">
+            <DocumentsTab entityType="lead" entityId={leadId!} />
           </TabsContent>
         </Tabs>
       </DialogContent>

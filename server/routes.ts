@@ -1,5 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import path from "path";
+import fs from "fs";
+import multer from "multer";
 import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated, requireRole } from "./auth";
 import { updateScoringConfig } from "./scoring";
@@ -25,6 +28,32 @@ import {
   insertReminderSchema,
   updateReminderSchema,
 } from "@shared/schema";
+
+const UPLOADS_DIR = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
+const upload = multer({
+  dest: UPLOADS_DIR,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = [
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Invalid file type"));
+    }
+  },
+});
 
 export async function registerRoutes(
   httpServer: Server,
@@ -823,6 +852,181 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting reminder:", error);
       res.status(500).json({ error: "Failed to delete reminder" });
+    }
+  });
+
+  // ==================== DOCUMENTS ====================
+
+  // Authorization helper: checks if the requesting user can access a lead's documents.
+  // super_admin, admin, sales_manager can access any lead.
+  // sales_agent can only access leads assigned to them (by username or by userId stored in assignedTo).
+  async function canAccessLead(user: Express.User | undefined, leadId: string): Promise<boolean> {
+    if (!user) return false;
+    if (user.role === "super_admin" || user.role === "admin" || user.role === "sales_manager") return true;
+    const lead = await storage.getLead(leadId);
+    if (!lead) return false;
+    return lead.assignedTo === user.username || lead.assignedTo === user.id;
+  }
+
+  // Authorization helper: clients are accessible by super_admin, admin, sales_manager and the agent
+  // who owns the originating lead. Sales agents can access all clients for now (clients don't have assignedTo).
+  async function canAccessClient(user: Express.User | undefined, _clientId: string): Promise<boolean> {
+    if (!user) return false;
+    return true;
+  }
+
+  // Authorization helper: checks if user can access a document by looking up its parent lead/client.
+  async function canAccessDocument(user: Express.User | undefined, doc: { leadId: string | null; clientId: string | null }): Promise<boolean> {
+    if (!user) return false;
+    if (user.role === "super_admin" || user.role === "admin" || user.role === "sales_manager") return true;
+    if (doc.leadId) return canAccessLead(user, doc.leadId);
+    if (doc.clientId) return canAccessClient(user, doc.clientId);
+    return false;
+  }
+
+  app.get("/api/leads/:leadId/documents", isAuthenticated, async (req, res) => {
+    try {
+      const leadId = req.params.leadId as string;
+      const user = req.user;
+      if (!(await canAccessLead(user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const docs = await storage.getDocumentsByLead(leadId);
+      res.json(docs);
+    } catch (error) {
+      console.error("Error fetching documents:", error);
+      res.status(500).json({ error: "Failed to fetch documents" });
+    }
+  });
+
+  app.post("/api/leads/:leadId/documents", isAuthenticated, upload.single("file"), async (req, res) => {
+    try {
+      const leadId = req.params.leadId as string;
+      const user = req.user;
+      if (!(await canAccessLead(user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+      const label = req.body.label || null;
+      const uploaderName = user
+        ? [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username
+        : null;
+      const doc = await storage.createDocument({
+        leadId,
+        clientId: null,
+        uploadedBy: user?.id ?? null,
+        uploadedByName: uploaderName,
+        fileName: file.filename,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        fileSize: file.size,
+        label,
+      });
+      res.status(201).json(doc);
+    } catch (error) {
+      console.error("Error uploading document:", error);
+      res.status(400).json({ error: "Failed to upload document" });
+    }
+  });
+
+  app.get("/api/clients/:clientId/documents", isAuthenticated, async (req, res) => {
+    try {
+      const clientId = req.params.clientId as string;
+      const user = req.user;
+      if (!(await canAccessClient(user, clientId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const docs = await storage.getDocumentsByClient(clientId);
+      res.json(docs);
+    } catch (error) {
+      console.error("Error fetching documents:", error);
+      res.status(500).json({ error: "Failed to fetch documents" });
+    }
+  });
+
+  app.post("/api/clients/:clientId/documents", isAuthenticated, upload.single("file"), async (req, res) => {
+    try {
+      const clientId = req.params.clientId as string;
+      const user = req.user;
+      if (!(await canAccessClient(user, clientId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+      const label = req.body.label || null;
+      const uploaderName = user
+        ? [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username
+        : null;
+      const doc = await storage.createDocument({
+        leadId: null,
+        clientId,
+        uploadedBy: user?.id ?? null,
+        uploadedByName: uploaderName,
+        fileName: file.filename,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        fileSize: file.size,
+        label,
+      });
+      res.status(201).json(doc);
+    } catch (error) {
+      console.error("Error uploading document:", error);
+      res.status(400).json({ error: "Failed to upload document" });
+    }
+  });
+
+  app.get("/api/documents/:id/download", isAuthenticated, async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const user = req.user;
+      const doc = await storage.getDocument(id);
+      if (!doc) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      if (!(await canAccessDocument(user, doc))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const filePath = path.join(UPLOADS_DIR, doc.fileName);
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: "File not found on server" });
+      }
+      res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(doc.originalName)}"`);
+      res.setHeader("Content-Type", doc.mimeType);
+      fs.createReadStream(filePath).pipe(res);
+    } catch (error) {
+      console.error("Error downloading document:", error);
+      res.status(500).json({ error: "Failed to download document" });
+    }
+  });
+
+  app.delete("/api/documents/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const user = req.user;
+      const doc = await storage.getDocument(id);
+      if (!doc) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      if (!(await canAccessDocument(user, doc))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const filePath = path.join(UPLOADS_DIR, doc.fileName);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+      const deleted = await storage.deleteDocument(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      res.status(500).json({ error: "Failed to delete document" });
     }
   });
 

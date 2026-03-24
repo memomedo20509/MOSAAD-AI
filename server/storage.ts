@@ -17,6 +17,7 @@ import {
   leadUnitInterests,
   communications,
   reminders,
+  documents,
   type User,
   type InsertUser,
   type UpdateUser,
@@ -44,6 +45,8 @@ import {
   type InsertCommunication,
   type Reminder,
   type InsertReminder,
+  type Document,
+  type InsertDocument,
 } from "@shared/schema";
 
 const PostgresSessionStore = connectPg(session);
@@ -151,6 +154,13 @@ export interface IStorage {
   createReminder(reminder: InsertReminder): Promise<Reminder>;
   updateReminder(id: string, data: Partial<Reminder>): Promise<Reminder | undefined>;
   deleteReminder(id: string): Promise<boolean>;
+
+  // Documents
+  getDocumentsByLead(leadId: string): Promise<Document[]>;
+  getDocumentsByClient(clientId: string): Promise<Document[]>;
+  getDocument(id: string): Promise<Document | undefined>;
+  createDocument(doc: InsertDocument): Promise<Document>;
+  deleteDocument(id: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -640,6 +650,30 @@ export class DatabaseStorage implements IStorage {
 
   async deleteReminder(id: string): Promise<boolean> {
     const result = await db.delete(reminders).where(eq(reminders.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Documents
+  async getDocumentsByLead(leadId: string): Promise<Document[]> {
+    return db.select().from(documents).where(eq(documents.leadId, leadId)).orderBy(documents.createdAt);
+  }
+
+  async getDocumentsByClient(clientId: string): Promise<Document[]> {
+    return db.select().from(documents).where(eq(documents.clientId, clientId)).orderBy(documents.createdAt);
+  }
+
+  async getDocument(id: string): Promise<Document | undefined> {
+    const [doc] = await db.select().from(documents).where(eq(documents.id, id));
+    return doc;
+  }
+
+  async createDocument(doc: InsertDocument): Promise<Document> {
+    const [newDoc] = await db.insert(documents).values(doc).returning();
+    return newDoc;
+  }
+
+  async deleteDocument(id: string): Promise<boolean> {
+    const result = await db.delete(documents).where(eq(documents.id, id)).returning();
     return result.length > 0;
   }
 }

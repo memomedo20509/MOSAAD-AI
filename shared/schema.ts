@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { users } from "./models/auth";
 
 // Lead States
 export const leadStates = pgTable("lead_states", {
@@ -246,6 +247,25 @@ export const scoringConfig = pgTable("scoring_config", {
 });
 
 export type ScoringConfigRecord = typeof scoringConfig.$inferSelect;
+
+// Documents
+export const documents = pgTable("documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  leadId: varchar("lead_id").references(() => leads.id),
+  clientId: varchar("client_id").references(() => clients.id),
+  uploadedBy: varchar("uploaded_by").references(() => users.id),
+  uploadedByName: text("uploaded_by_name"),
+  fileName: text("file_name").notNull(),
+  originalName: text("original_name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  fileSize: integer("file_size").notNull(),
+  label: text("label"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertDocumentSchema = createInsertSchema(documents).omit({ id: true, createdAt: true });
+export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+export type Document = typeof documents.$inferSelect;
 
 // Export auth models (users, teams, sessions)
 export * from "./models/auth";

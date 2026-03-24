@@ -5,15 +5,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Search, Phone, Mail, Building2, MapPin, User } from "lucide-react";
+import { Search, Phone, Mail, Building2, MapPin, User, Paperclip } from "lucide-react";
 import type { Client } from "@shared/schema";
 import { useLanguage } from "@/lib/i18n";
+import { DocumentsTab } from "@/components/documents-tab";
 
 export default function ClientsPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -134,7 +136,7 @@ export default function ClientsPage() {
       )}
 
       <Sheet open={!!selectedClient} onOpenChange={(open) => !open && setSelectedClient(null)}>
-        <SheetContent className="w-full sm:max-w-md">
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
           <SheetHeader>
             <SheetTitle data-testid="text-client-detail-name">
               {selectedClient?.name || t.noName}
@@ -142,67 +144,84 @@ export default function ClientsPage() {
           </SheetHeader>
 
           {selectedClient && (
-            <div className="mt-6 space-y-6">
-              <div className="space-y-3">
-                <h4 className="text-sm font-medium text-muted-foreground">{t.contactInfo}</h4>
-                <div className="space-y-2">
-                  {selectedClient.phone && (
-                    <div className="flex items-center gap-3">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      <span>{selectedClient.phone}</span>
-                    </div>
-                  )}
-                  {selectedClient.email && (
-                    <div className="flex items-center gap-3">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      <span>{selectedClient.email}</span>
-                    </div>
-                  )}
-                  {selectedClient.address && (
-                    <div className="flex items-center gap-3">
-                      <MapPin className="h-4 w-4 text-muted-foreground" />
-                      <span>{selectedClient.address}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
+            <Tabs defaultValue="info" className="mt-6">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="info" data-testid="tab-client-info">
+                  <User className="h-4 w-4 mr-1" />
+                  {t.contactInfo}
+                </TabsTrigger>
+                <TabsTrigger value="documents" data-testid="tab-client-documents">
+                  <Paperclip className="h-4 w-4 mr-1" />
+                  {t.documents}
+                </TabsTrigger>
+              </TabsList>
 
-              <div className="space-y-3">
-                <h4 className="text-sm font-medium text-muted-foreground">{t.propertyPreferences}</h4>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">{t.projects}</p>
-                    <p className="font-medium">{selectedClient.project || "-"}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">{t.units}</p>
-                    <p className="font-medium">{selectedClient.unitsCount || 0}</p>
+              <TabsContent value="info" className="mt-4 space-y-6">
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-muted-foreground">{t.contactInfo}</h4>
+                  <div className="space-y-2">
+                    {selectedClient.phone && (
+                      <div className="flex items-center gap-3">
+                        <Phone className="h-4 w-4 text-muted-foreground" />
+                        <span>{selectedClient.phone}</span>
+                      </div>
+                    )}
+                    {selectedClient.email && (
+                      <div className="flex items-center gap-3">
+                        <Mail className="h-4 w-4 text-muted-foreground" />
+                        <span>{selectedClient.email}</span>
+                      </div>
+                    )}
+                    {selectedClient.address && (
+                      <div className="flex items-center gap-3">
+                        <MapPin className="h-4 w-4 text-muted-foreground" />
+                        <span>{selectedClient.address}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
 
-              <div className="space-y-3">
-                <h4 className="text-sm font-medium text-muted-foreground">{t.actions}</h4>
-                <div className="space-y-2">
-                  {selectedClient.phone && (
-                    <Button variant="outline" className="w-full justify-start" asChild>
-                      <a href={`tel:${selectedClient.phone}`}>
-                        <Phone className="h-4 w-4 mr-2" />
-                        Call {selectedClient.phone}
-                      </a>
-                    </Button>
-                  )}
-                  {selectedClient.email && (
-                    <Button variant="outline" className="w-full justify-start" asChild>
-                      <a href={`mailto:${selectedClient.email}`}>
-                        <Mail className="h-4 w-4 mr-2" />
-                        Email {selectedClient.email}
-                      </a>
-                    </Button>
-                  )}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-muted-foreground">{t.propertyPreferences}</h4>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">{t.projects}</p>
+                      <p className="font-medium">{selectedClient.project || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">{t.units}</p>
+                      <p className="font-medium">{selectedClient.unitsCount || 0}</p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-muted-foreground">{t.actions}</h4>
+                  <div className="space-y-2">
+                    {selectedClient.phone && (
+                      <Button variant="outline" className="w-full justify-start" asChild>
+                        <a href={`tel:${selectedClient.phone}`}>
+                          <Phone className="h-4 w-4 mr-2" />
+                          Call {selectedClient.phone}
+                        </a>
+                      </Button>
+                    )}
+                    {selectedClient.email && (
+                      <Button variant="outline" className="w-full justify-start" asChild>
+                        <a href={`mailto:${selectedClient.email}`}>
+                          <Mail className="h-4 w-4 mr-2" />
+                          Email {selectedClient.email}
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="documents" className="mt-4">
+                <DocumentsTab entityType="client" entityId={selectedClient.id} />
+              </TabsContent>
+            </Tabs>
           )}
         </SheetContent>
       </Sheet>
