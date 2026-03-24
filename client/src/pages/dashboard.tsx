@@ -21,6 +21,7 @@ import {
   Thermometer,
   Snowflake,
   BarChart2,
+  Zap,
 } from "lucide-react";
 import type { Lead, LeadState, Reminder, LeadHistory } from "@shared/schema";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
@@ -28,6 +29,15 @@ import { useLanguage } from "@/lib/i18n";
 import { format, isToday, isBefore, startOfToday, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import { Link } from "wouter";
 import { computeLeadScore } from "@/lib/scoring";
+import { useAuth } from "@/hooks/use-auth";
+
+function formatResponseTime(minutes: number | null, minutesAbbr: string, hoursAbbr: string): string {
+  if (minutes === null) return "—";
+  if (minutes < 60) return `${minutes} ${minutesAbbr}`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}${hoursAbbr} ${m}${minutesAbbr}` : `${h}${hoursAbbr}`;
+}
 
 interface DashboardStats {
   totalLeads: number;
@@ -47,6 +57,7 @@ const stateIcons: Record<string, typeof Users> = {
 
 export default function Dashboard() {
   const { t, isRTL } = useLanguage();
+  const { user } = useAuth();
   
   const { data: states, isLoading: statesLoading } = useQuery<LeadState[]>({
     queryKey: ["/api/states"],
@@ -66,6 +77,22 @@ export default function Dashboard() {
 
   const { data: teamLoad = [] } = useQuery<{ userId: string; userName: string; leadCount: number; role: string }[]>({
     queryKey: ["/api/team-load"],
+  });
+
+  const isManager = user?.role === "super_admin" || user?.role === "admin" || user?.role === "sales_manager";
+
+  const { data: teamActivity = [] } = useQuery<{
+    agentId: string;
+    agentName: string;
+    leadsContactedToday: number;
+    leadsAddedToday: number;
+    avgResponseMinutesThisWeek: number | null;
+    uncontactedOver24h: number;
+  }[]>({
+    queryKey: ["/api/dashboard/team-activity"],
+    enabled: isManager,
+    refetchInterval: 60000,
+    staleTime: 30000,
   });
 
   const isLoading = statesLoading || leadsLoading;
@@ -431,6 +458,89 @@ export default function Dashboard() {
               </div>
             </CardContent>
           </Card>
+
+          {isManager && (
+            <Card data-testid="card-team-activity-today">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-primary" />
+                  {t.teamActivityToday}
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">{t.teamActivitySubtitle}</p>
+              </CardHeader>
+              <CardContent>
+                {teamActivity.length === 0 ? (
+                  <div className="flex h-20 items-center justify-center text-muted-foreground">
+                    {t.noTeamActivity}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-start py-3 px-2 font-medium">{t.agent}</th>
+                          <th className="text-center py-3 px-2 font-medium">
+                            <span className="flex items-center justify-center gap-1">
+                              <Phone className="h-3.5 w-3.5 text-green-500" />
+                              {t.leadsContactedToday}
+                            </span>
+                          </th>
+                          <th className="text-center py-3 px-2 font-medium">
+                            <span className="flex items-center justify-center gap-1">
+                              <UserPlus className="h-3.5 w-3.5 text-blue-500" />
+                              {t.leadsAddedToday}
+                            </span>
+                          </th>
+                          <th className="text-center py-3 px-2 font-medium">
+                            <span className="flex items-center justify-center gap-1">
+                              <Zap className="h-3.5 w-3.5 text-amber-500" />
+                              {t.avgResponseThisWeek}
+                            </span>
+                          </th>
+                          <th className="text-center py-3 px-2 font-medium">
+                            <span className="flex items-center justify-center gap-1">
+                              <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+                              {t.uncontactedLeads}
+                            </span>
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {teamActivity.map((agent) => (
+                          <tr key={agent.agentId} className="border-b last:border-0" data-testid={`row-team-activity-${agent.agentId}`}>
+                            <td className="py-3 px-2 font-medium">{agent.agentName}</td>
+                            <td className="text-center py-3 px-2">
+                              <Badge variant={agent.leadsContactedToday > 0 ? "default" : "secondary"}>
+                                {agent.leadsContactedToday}
+                              </Badge>
+                            </td>
+                            <td className="text-center py-3 px-2">
+                              <Badge variant="outline">{agent.leadsAddedToday}</Badge>
+                            </td>
+                            <td className="text-center py-3 px-2">
+                              <Badge variant={agent.avgResponseMinutesThisWeek !== null && agent.avgResponseMinutesThisWeek <= 60 ? "default" : "secondary"}>
+                                {formatResponseTime(agent.avgResponseMinutesThisWeek, t.minutesAbbr, t.hoursAbbr)}
+                              </Badge>
+                            </td>
+                            <td className="text-center py-3 px-2">
+                              {agent.uncontactedOver24h > 0 ? (
+                                <Badge variant="destructive" className="gap-1">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  {agent.uncontactedOver24h}
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary">0</Badge>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
     </div>

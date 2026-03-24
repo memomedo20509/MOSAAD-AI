@@ -1,5 +1,5 @@
 import { db, pool } from "./db";
-import { eq, and, ne, isNotNull } from "drizzle-orm";
+import { eq, and, ne, isNotNull, isNull, lt, gte, lte } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { computeScore, getScoringConfig, type ScoringContext } from "./scoring";
@@ -161,6 +161,24 @@ export interface IStorage {
   getDocument(id: string): Promise<Document | undefined>;
   createDocument(doc: InsertDocument): Promise<Document>;
   deleteDocument(id: string): Promise<boolean>;
+
+  // Response Time & Team Activity
+  getResponseTimeReport(): Promise<{
+    agentId: string;
+    agentName: string;
+    avgResponseMinutes: number | null;
+    fastestResponseMinutes: number | null;
+    slowestResponseMinutes: number | null;
+    uncontactedCount: number;
+  }[]>;
+  getTeamActivityToday(): Promise<{
+    agentId: string;
+    agentName: string;
+    leadsContactedToday: number;
+    leadsAddedToday: number;
+    avgResponseMinutesThisWeek: number | null;
+    uncontactedOver24h: number;
+  }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -305,10 +323,13 @@ export class DatabaseStorage implements IStorage {
       lastAction: lead.lastAction ?? null,
       lastActionDate: lead.lastActionDate ?? null,
       tags: lead.tags ?? null,
+      firstContactAt: null,
+      responseTimeMinutes: null,
     };
     const config = await getScoringConfig();
     const score = computeScore(leadForScoring, { commCount: 0, completedTaskCount: 0 }, config);
-    const [newLead] = await db.insert(leads).values({ ...lead, score }).returning();
+    const { firstContactAt: _fca, responseTimeMinutes: _rtm, ...safeLeadData } = lead as any;
+    const [newLead] = await db.insert(leads).values({ ...safeLeadData, score }).returning();
     await this.createHistory({
       leadId: newLead.id,
       action: "Lead Created",
@@ -325,11 +346,12 @@ export class DatabaseStorage implements IStorage {
   async updateLead(id: string, data: Partial<Lead>): Promise<Lead | undefined> {
     const existing = await this.getLead(id);
     if (!existing) return undefined;
-    const merged: Lead = { ...existing, ...data };
+    const { firstContactAt: _fca, responseTimeMinutes: _rtm, ...safeUpdateData } = data as any;
+    const merged: Lead = { ...existing, ...safeUpdateData };
     const ctx = await this.buildScoringContext(id);
     const config = await getScoringConfig();
     const score = computeScore(merged, ctx, config);
-    const [updated] = await db.update(leads).set({ ...data, score, updatedAt: new Date() }).where(eq(leads.id, id)).returning();
+    const [updated] = await db.update(leads).set({ ...safeUpdateData, score, updatedAt: new Date() }).where(eq(leads.id, id)).returning();
     if (updated) {
       await this.createHistory({
         leadId: id,
@@ -574,6 +596,16 @@ export class DatabaseStorage implements IStorage {
 
   async createCommunication(comm: InsertCommunication): Promise<Communication> {
     const [newComm] = await db.insert(communications).values(comm).returning();
+    // Set firstContactAt and responseTimeMinutes on lead if this is the first communication
+    const lead = await this.getLead(comm.leadId);
+    if (lead && !lead.firstContactAt) {
+      const contactAt = newComm.createdAt ?? new Date();
+      let responseTimeMinutes: number | null = null;
+      if (lead.createdAt) {
+        responseTimeMinutes = Math.max(0, Math.round((contactAt.getTime() - new Date(lead.createdAt).getTime()) / 60000));
+      }
+      await db.update(leads).set({ firstContactAt: contactAt, responseTimeMinutes }).where(eq(leads.id, comm.leadId));
+    }
     return newComm;
   }
 
@@ -675,6 +707,114 @@ export class DatabaseStorage implements IStorage {
   async deleteDocument(id: string): Promise<boolean> {
     const result = await db.delete(documents).where(eq(documents.id, id)).returning();
     return result.length > 0;
+  }
+
+  // Response Time & Team Activity
+  async getResponseTimeReport(): Promise<{
+    agentId: string;
+    agentName: string;
+    avgResponseMinutes: number | null;
+    fastestResponseMinutes: number | null;
+    slowestResponseMinutes: number | null;
+    uncontactedCount: number;
+  }[]> {
+    const allUsers = await db.select().from(users).where(eq(users.isActive, true));
+    const agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "sales_manager");
+    const allLeads = await db.select().from(leads);
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    return agents.map(agent => {
+      const agentName = `${agent.firstName || ""} ${agent.lastName || ""}`.trim() || agent.username;
+      const agentLeads = allLeads.filter(l => l.assignedTo === agent.id);
+      const contactedLeads = agentLeads.filter(l =>
+        l.firstContactAt &&
+        l.createdAt &&
+        new Date(l.createdAt) >= startOfMonth
+      );
+      const responseTimes = contactedLeads
+        .map(l => {
+          const created = new Date(l.createdAt!).getTime();
+          const contacted = new Date(l.firstContactAt!).getTime();
+          return Math.max(0, Math.round((contacted - created) / 60000));
+        })
+        .filter(t => t >= 0);
+
+      const avgResponseMinutes = responseTimes.length > 0
+        ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length)
+        : null;
+      const fastestResponseMinutes = responseTimes.length > 0 ? Math.min(...responseTimes) : null;
+      const slowestResponseMinutes = responseTimes.length > 0 ? Math.max(...responseTimes) : null;
+
+      const uncontactedCount = agentLeads.filter(l => !l.firstContactAt).length;
+
+      return {
+        agentId: agent.id,
+        agentName,
+        avgResponseMinutes,
+        fastestResponseMinutes,
+        slowestResponseMinutes,
+        uncontactedCount,
+      };
+    });
+  }
+
+  async getTeamActivityToday(): Promise<{
+    agentId: string;
+    agentName: string;
+    leadsContactedToday: number;
+    leadsAddedToday: number;
+    avgResponseMinutesThisWeek: number | null;
+    uncontactedOver24h: number;
+  }[]> {
+    const allUsers = await db.select().from(users).where(eq(users.isActive, true));
+    const agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "sales_manager");
+    const allLeads = await db.select().from(leads);
+    const allComms = await db.select().from(communications);
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const over24hCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    return agents.map(agent => {
+      const agentName = `${agent.firstName || ""} ${agent.lastName || ""}`.trim() || agent.username;
+      const agentLeads = allLeads.filter(l => l.assignedTo === agent.id);
+
+      const agentCommsToday = allComms.filter(c =>
+        c.userId === agent.id && c.createdAt && new Date(c.createdAt) >= todayStart
+      );
+      const leadsContactedToday = new Set(agentCommsToday.map(c => c.leadId)).size;
+
+      const leadsAddedToday = agentLeads.filter(l =>
+        l.createdAt && new Date(l.createdAt) >= todayStart
+      ).length;
+
+      const weekLeads = agentLeads.filter(l =>
+        l.firstContactAt && l.createdAt && new Date(l.createdAt) >= weekStart
+      );
+      const responseTimes = weekLeads.map(l => {
+        const created = new Date(l.createdAt!).getTime();
+        const contacted = new Date(l.firstContactAt!).getTime();
+        return Math.max(0, Math.round((contacted - created) / 60000));
+      });
+      const avgResponseMinutesThisWeek = responseTimes.length > 0
+        ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length)
+        : null;
+
+      const uncontactedOver24h = agentLeads.filter(l =>
+        !l.firstContactAt && l.createdAt && new Date(l.createdAt) <= over24hCutoff
+      ).length;
+
+      return {
+        agentId: agent.id,
+        agentName,
+        leadsContactedToday,
+        leadsAddedToday,
+        avgResponseMinutesThisWeek,
+        uncontactedOver24h,
+      };
+    });
   }
 }
 

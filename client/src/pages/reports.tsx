@@ -8,8 +8,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Users, TrendingUp, Target, BarChart3, PieChart, Calendar } from "lucide-react";
+import { Loader2, Users, TrendingUp, Target, BarChart3, PieChart, Calendar, Clock, AlertTriangle, Zap } from "lucide-react";
 import { useLanguage } from "@/lib/i18n";
+import { useAuth } from "@/hooks/use-auth";
 import { useState, useMemo } from "react";
 import type { Lead, LeadState, User } from "@shared/schema";
 import {
@@ -31,9 +32,18 @@ import { format, subDays, startOfMonth, endOfMonth, isWithinInterval, startOfWee
 
 const COLORS = ["#6366f1", "#8b5cf6", "#ec4899", "#f43f5e", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#3b82f6"];
 
+function formatResponseTime(minutes: number | null, minutesAbbr: string, hoursAbbr: string): string {
+  if (minutes === null) return "—";
+  if (minutes < 60) return `${minutes} ${minutesAbbr}`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}${hoursAbbr} ${m}${minutesAbbr}` : `${h}${hoursAbbr}`;
+}
+
 export default function ReportsPage() {
   const { t, isRTL } = useLanguage();
   const [timeRange, setTimeRange] = useState<string>("month");
+  const { user } = useAuth();
 
   const { data: leads = [], isLoading: leadsLoading } = useQuery<Lead[]>({
     queryKey: ["/api/leads"],
@@ -45,6 +55,22 @@ export default function ReportsPage() {
 
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ["/api/users"],
+  });
+
+  const isManager = user?.role === "super_admin" || user?.role === "admin" || user?.role === "sales_manager";
+
+  const { data: responseTimeReport = [] } = useQuery<{
+    agentId: string;
+    agentName: string;
+    avgResponseMinutes: number | null;
+    fastestResponseMinutes: number | null;
+    slowestResponseMinutes: number | null;
+    uncontactedCount: number;
+  }[]>({
+    queryKey: ["/api/reports/response-time"],
+    enabled: isManager,
+    refetchInterval: 60000,
+    staleTime: 30000,
   });
 
   const getDateRange = () => {
@@ -365,6 +391,82 @@ export default function ReportsPage() {
               </tbody>
             </table>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card data-testid="table-response-time">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Clock className="h-5 w-5 text-primary" />
+            {t.responseTimeReport}
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">{t.responseTimeSubtitle}</p>
+        </CardHeader>
+        <CardContent>
+          {responseTimeReport.length === 0 ? (
+            <div className="flex h-20 items-center justify-center text-muted-foreground">
+              {t.noResponseData}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-start py-3 px-2 font-medium">{t.assignedTo}</th>
+                    <th className="text-center py-3 px-2 font-medium">
+                      <span className="flex items-center justify-center gap-1">
+                        <Clock className="h-3.5 w-3.5" />
+                        {t.avgResponseTime}
+                      </span>
+                    </th>
+                    <th className="text-center py-3 px-2 font-medium">
+                      <span className="flex items-center justify-center gap-1">
+                        <Zap className="h-3.5 w-3.5 text-green-500" />
+                        {t.fastestResponse}
+                      </span>
+                    </th>
+                    <th className="text-center py-3 px-2 font-medium">
+                      <span className="flex items-center justify-center gap-1">
+                        <Clock className="h-3.5 w-3.5 text-orange-500" />
+                        {t.slowestResponse}
+                      </span>
+                    </th>
+                    <th className="text-center py-3 px-2 font-medium">
+                      <span className="flex items-center justify-center gap-1">
+                        <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+                        {t.uncontactedLeads}
+                      </span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {responseTimeReport.map((row) => (
+                    <tr key={row.agentId} className="border-b last:border-0" data-testid={`row-response-time-${row.agentId}`}>
+                      <td className="py-3 px-2 font-medium">{row.agentName}</td>
+                      <td className="text-center py-3 px-2">
+                        <Badge variant={row.avgResponseMinutes === null ? "secondary" : row.avgResponseMinutes <= 60 ? "default" : "outline"}>
+                          {formatResponseTime(row.avgResponseMinutes, t.minutesAbbr, t.hoursAbbr)}
+                        </Badge>
+                      </td>
+                      <td className="text-center py-3 px-2 text-green-600">
+                        {formatResponseTime(row.fastestResponseMinutes, t.minutesAbbr, t.hoursAbbr)}
+                      </td>
+                      <td className="text-center py-3 px-2 text-orange-600">
+                        {formatResponseTime(row.slowestResponseMinutes, t.minutesAbbr, t.hoursAbbr)}
+                      </td>
+                      <td className="text-center py-3 px-2">
+                        {row.uncontactedCount > 0 ? (
+                          <Badge variant="destructive">{row.uncontactedCount}</Badge>
+                        ) : (
+                          <Badge variant="secondary">0</Badge>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

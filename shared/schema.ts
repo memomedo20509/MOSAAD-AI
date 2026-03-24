@@ -46,9 +46,11 @@ export const leads = pgTable("leads", {
   lastAction: text("last_action"),
   lastActionDate: timestamp("last_action_date"),
   score: varchar("score", { length: 10 }).default("warm"),
+  firstContactAt: timestamp("first_contact_at"),
+  responseTimeMinutes: integer("response_time_minutes"),
 });
 
-export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true, firstContactAt: true, responseTimeMinutes: true }).extend({
   phone: z.string().min(1, "Phone number is required"),
 });
 export const updateLeadSchema = insertLeadSchema.partial();

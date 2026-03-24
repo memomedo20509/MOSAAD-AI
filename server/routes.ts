@@ -750,6 +750,28 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== RESPONSE TIME REPORTS ====================
+
+  app.get("/api/reports/response-time", isAuthenticated, requireRole("super_admin", "admin", "sales_manager"), async (req, res) => {
+    try {
+      const report = await storage.getResponseTimeReport();
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching response time report:", error);
+      res.status(500).json({ error: "Failed to fetch response time report" });
+    }
+  });
+
+  app.get("/api/dashboard/team-activity", isAuthenticated, requireRole("super_admin", "admin", "sales_manager"), async (req, res) => {
+    try {
+      const activity = await storage.getTeamActivityToday();
+      res.json(activity);
+    } catch (error) {
+      console.error("Error fetching team activity:", error);
+      res.status(500).json({ error: "Failed to fetch team activity" });
+    }
+  });
+
   // ==================== COMMUNICATIONS ====================
 
   app.get("/api/leads/:leadId/communications", isAuthenticated, async (req, res) => {

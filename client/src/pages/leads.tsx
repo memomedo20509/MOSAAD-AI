@@ -37,6 +37,8 @@ import {
   ChevronDown,
   X,
   MessageCircle,
+  AlertTriangle,
+  Clock,
 } from "lucide-react";
 import { Link } from "wouter";
 import type { Lead, LeadState } from "@shared/schema";
@@ -46,7 +48,7 @@ import { FilterPanel } from "@/components/filter-panel";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/lib/i18n";
-import { format } from "date-fns";
+import { format, differenceInHours } from "date-fns";
 import { computeLeadScore, SCORE_COLORS } from "@/lib/scoring";
 import { Flame, Thermometer, Snowflake, Settings } from "lucide-react";
 import { ScoringSettingsDialog } from "@/components/scoring-settings-dialog";
@@ -160,6 +162,37 @@ export default function LeadsPage() {
         {state.name}
       </Badge>
     );
+  };
+
+  const getContactStatusBadge = (lead: Lead) => {
+    if (lead.firstContactAt) return null;
+    if (!lead.createdAt) return null;
+    const hoursSinceCreation = differenceInHours(new Date(), new Date(lead.createdAt));
+    if (hoursSinceCreation >= 24) {
+      return (
+        <Badge
+          variant="destructive"
+          className="text-xs gap-1 flex-shrink-0"
+          data-testid={`badge-overdue-${lead.id}`}
+        >
+          <AlertTriangle className="h-3 w-3" />
+          {t.overdueContact}
+        </Badge>
+      );
+    }
+    if (hoursSinceCreation >= 12) {
+      return (
+        <Badge
+          variant="outline"
+          className="text-xs gap-1 flex-shrink-0 border-amber-400 text-amber-600 bg-amber-50 dark:bg-amber-950/20"
+          data-testid={`badge-approaching-${lead.id}`}
+        >
+          <Clock className="h-3 w-3" />
+          {t.approachingOverdue}
+        </Badge>
+      );
+    }
+    return null;
   };
 
   const handleExport = () => {
@@ -370,6 +403,7 @@ export default function LeadsPage() {
                             </Badge>
                           );
                         })()}
+                        {getContactStatusBadge(lead)}
                       </div>
 
                       <div className="mt-2 space-y-1 text-sm text-muted-foreground">
@@ -437,6 +471,20 @@ export default function LeadsPage() {
                           )}
                         </div>
                       )}
+                      {lead.firstContactAt ? (
+                        <div className="mt-1 text-xs text-muted-foreground flex items-center gap-1" data-testid={`text-response-time-${lead.id}`}>
+                          <Clock className="h-3 w-3 text-green-500" />
+                          <span>{t.firstContactAt}: {format(new Date(lead.firstContactAt), "MMM d, HH:mm")}</span>
+                          {lead.responseTimeMinutes !== null && lead.responseTimeMinutes !== undefined && (
+                            <span className="font-medium text-green-600">
+                              ({lead.responseTimeMinutes < 60
+                                ? `${lead.responseTimeMinutes}${t.minutesAbbr}`
+                                : `${Math.floor(lead.responseTimeMinutes / 60)}${t.hoursAbbr}${lead.responseTimeMinutes % 60 > 0 ? ` ${lead.responseTimeMinutes % 60}${t.minutesAbbr}` : ""}`
+                              })
+                            </span>
+                          )}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
 
