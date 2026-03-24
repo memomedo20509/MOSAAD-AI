@@ -465,21 +465,23 @@ export default function LeadsPage() {
                       >
                         {t.leadDetails}
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          apiRequest("POST", `/api/leads/${lead.id}/auto-assign`)
-                            .then(() => {
-                              queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
-                              queryClient.invalidateQueries({ queryKey: ["/api/team-load"] });
-                              toast({ title: t.autoAssignSuccess });
-                            })
-                            .catch(() => toast({ title: t.autoAssignError, variant: "destructive" }));
-                        }}
-                        data-testid={`menu-auto-assign-${lead.id}`}
-                      >
-                        {t.autoAssign}
-                      </DropdownMenuItem>
+                      {(user?.role === "super_admin" || user?.role === "admin" || user?.role === "sales_manager") && (
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            apiRequest("POST", `/api/leads/${lead.id}/auto-assign`)
+                              .then(() => {
+                                queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+                                queryClient.invalidateQueries({ queryKey: ["/api/team-load"] });
+                                toast({ title: t.autoAssignSuccess });
+                              })
+                              .catch(() => toast({ title: t.autoAssignError, variant: "destructive" }));
+                          }}
+                          data-testid={`menu-auto-assign-${lead.id}`}
+                        >
+                          {t.autoAssign}
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem
                         onClick={(e) => {
                           e.stopPropagation();

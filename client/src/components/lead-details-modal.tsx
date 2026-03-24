@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/lib/i18n";
+import { useAuth } from "@/hooks/use-auth";
 import {
   Phone,
   Mail,
@@ -59,6 +60,8 @@ interface LeadDetailsModalProps {
 export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalProps) {
   const { t, isRTL } = useLanguage();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const canAutoAssign = user?.role === "super_admin" || user?.role === "admin" || user?.role === "sales_manager";
   const [activeTab, setActiveTab] = useState("overview");
   const [newReminderTitle, setNewReminderTitle] = useState("");
   const [newReminderDate, setNewReminderDate] = useState("");
@@ -212,17 +215,19 @@ export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalPr
                   </Badge>
                 );
               })()}
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 gap-1 text-xs"
-                onClick={() => autoAssignMutation.mutate()}
-                disabled={autoAssignMutation.isPending}
-                data-testid="button-auto-assign"
-              >
-                <Shuffle className="h-3.5 w-3.5" />
-                {autoAssignMutation.isPending ? t.autoAssigning : t.autoAssign}
-              </Button>
+              {canAutoAssign && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1 text-xs"
+                  onClick={() => autoAssignMutation.mutate()}
+                  disabled={autoAssignMutation.isPending}
+                  data-testid="button-auto-assign"
+                >
+                  <Shuffle className="h-3.5 w-3.5" />
+                  {autoAssignMutation.isPending ? t.autoAssigning : t.autoAssign}
+                </Button>
+              )}
             </div>
           </DialogTitle>
         </DialogHeader>
