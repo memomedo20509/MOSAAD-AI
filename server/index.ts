@@ -2,7 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { seedDefaultAdmin } from "./seed";
+import { seedDefaultAdmin, seedDefaultLeadStates } from "./seed";
 
 const app = express();
 const httpServer = createServer(app);
@@ -64,6 +64,7 @@ app.use((req, res, next) => {
   await registerRoutes(httpServer, app);
   
   await seedDefaultAdmin();
+  await seedDefaultLeadStates();
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

@@ -630,7 +630,7 @@ export class DatabaseStorage implements IStorage {
       agents = agents.filter(u => u.teamId === teamId);
     }
     const allLeads = await db.select().from(leads);
-    const doneStates = (await db.select().from(leadStates)).filter(s => ["Done Deal", "Canceled", "Not Interested"].includes(s.name)).map(s => s.id);
+    const doneStates = (await db.select().from(leadStates)).filter(s => ["Done Deal", "Canceled", "Not Interested", "تم الصفقة", "ملغي", "غير مهتم"].includes(s.name)).map(s => s.id);
     return agents.map(agent => {
       const userName = `${agent.firstName || ""} ${agent.lastName || ""}`.trim() || agent.username;
       const leadCount = allLeads.filter(l => l.assignedTo === agent.id && !doneStates.includes(l.stateId ?? "")).length;
@@ -650,7 +650,7 @@ export class DatabaseStorage implements IStorage {
     if (candidates.length === 0) return undefined;
     const allLeads = await db.select().from(leads);
     const doneStates = (await db.select().from(leadStates))
-      .filter(s => ["Done Deal", "Canceled", "Not Interested"].includes(s.name))
+      .filter(s => ["Done Deal", "Canceled", "Not Interested", "تم الصفقة", "ملغي", "غير مهتم"].includes(s.name))
       .map(s => s.id);
     const agentWithLeast = candidates.reduce((min, agent) => {
       const count = allLeads.filter(l => l.assignedTo === agent.id && !doneStates.includes(l.stateId ?? "")).length;

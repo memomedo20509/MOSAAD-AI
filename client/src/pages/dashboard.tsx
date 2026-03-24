@@ -54,6 +54,13 @@ const stateIcons: Record<string, typeof Users> = {
   "Canceled": XCircle,
   "Not Interested": XCircle,
   "Reserved": Clock,
+  "ليد جديد": UserPlus,
+  "تحت المتابعة": Phone,
+  "ميتنج": Calendar,
+  "عرض سعر": Target,
+  "محجوز": Clock,
+  "تم الصفقة": CheckCircle,
+  "ملغي": XCircle,
 };
 
 export default function Dashboard() {
@@ -208,7 +215,7 @@ export default function Dashboard() {
               <CardContent>
                 <div className="text-2xl font-bold" data-testid="text-conversion-rate">
                   {stats && stats.totalLeads > 0 
-                    ? Math.round((stats.leadsByState.find(s => s.stateName === "Done Deal")?.count || 0) / stats.totalLeads * 100)
+                    ? Math.round((stats.leadsByState.filter(s => s.stateName === "Done Deal" || s.stateName === "تم الصفقة").reduce((acc, s) => acc + s.count, 0)) / stats.totalLeads * 100)
                     : 0}%
                 </div>
                 <p className="text-xs text-muted-foreground">{t.doneDealsPercentage}</p>
