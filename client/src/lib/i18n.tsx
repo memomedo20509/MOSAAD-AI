@@ -457,6 +457,33 @@ const translations = {
     address: "العنوان",
     contactPerson: "الشخص المسؤول",
     type: "النوع",
+
+    // Installment Calculator
+    calculateInstallment: "حساب القسط",
+    installmentCalculator: "حاسبة الأقساط",
+    unitPrice: "سعر الوحدة",
+    downPaymentAmount: "الدفعة الأولى",
+    downPaymentPercent: "نسبة الدفعة الأولى (%)",
+    numberOfYears: "عدد السنوات",
+    annualInterestRate: "الفائدة السنوية (%)",
+    monthlyInstallment: "القسط الشهري",
+    totalPayment: "إجمالي المبلغ",
+    totalInterest: "إجمالي الفائدة",
+    loanAmount: "مبلغ القرض",
+    copyToShare: "نسخ للمشاركة",
+    copiedToClipboard: "تم النسخ!",
+    calculate: "احسب",
+    shareMessage: "تفاصيل الوحدة والأقساط",
+
+    // Unit Compare
+    compareUnits: "مقارنة الوحدات",
+    compare: "مقارنة",
+    selectUnitsToCompare: "اختر 2-4 وحدات للمقارنة",
+    unitComparison: "مقارنة الوحدات",
+    clearSelection: "إلغاء التحديد",
+    unitsSelected: "وحدات محددة",
+    attribute: "الخاصية",
+    selectForCompare: "اختر للمقارنة",
   },
   en: {
     // App
@@ -912,6 +939,33 @@ const translations = {
     address: "Address",
     contactPerson: "Contact Person",
     type: "Type",
+
+    // Installment Calculator
+    calculateInstallment: "Calculate Installment",
+    installmentCalculator: "Installment Calculator",
+    unitPrice: "Unit Price",
+    downPaymentAmount: "Down Payment",
+    downPaymentPercent: "Down Payment %",
+    numberOfYears: "Number of Years",
+    annualInterestRate: "Annual Interest Rate (%)",
+    monthlyInstallment: "Monthly Installment",
+    totalPayment: "Total Payment",
+    totalInterest: "Total Interest",
+    loanAmount: "Loan Amount",
+    copyToShare: "Copy to Share",
+    copiedToClipboard: "Copied!",
+    calculate: "Calculate",
+    shareMessage: "Unit & Installment Details",
+
+    // Unit Compare
+    compareUnits: "Compare Units",
+    compare: "Compare",
+    selectUnitsToCompare: "Select 2-4 units to compare",
+    unitComparison: "Unit Comparison",
+    clearSelection: "Clear Selection",
+    unitsSelected: "units selected",
+    attribute: "Attribute",
+    selectForCompare: "Select to compare",
   },
 };
 

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -44,9 +45,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Home, ArrowLeft, Loader2, LayoutGrid, List } from "lucide-react";
+import { Plus, Pencil, Trash2, Home, ArrowLeft, Loader2, LayoutGrid, List, Calculator, GitCompare, X } from "lucide-react";
 import type { Unit, Project, InsertUnit } from "@shared/schema";
 import { useLanguage } from "@/lib/i18n";
+import { InstallmentCalculator } from "@/components/installment-calculator";
+import { UnitCompare } from "@/components/unit-compare";
 
 const UNIT_TYPES = ["Apartment", "Studio", "Duplex", "Penthouse", "Villa", "Townhouse", "Office", "Shop", "Warehouse"];
 const UNIT_STATUSES = [
@@ -67,6 +70,9 @@ export default function UnitsPage() {
   const [formData, setFormData] = useState<Partial<InsertUnit>>({});
   const [viewMode, setViewMode] = useState<"grid" | "stacking">("stacking");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [selectedUnitIds, setSelectedUnitIds] = useState<Set<string>>(new Set());
+  const [calcUnit, setCalcUnit] = useState<Unit | null>(null);
+  const [isCompareOpen, setIsCompareOpen] = useState(false);
 
   const isAdmin = user?.role === "super_admin" || user?.role === "admin";
   const isSuperAdmin = user?.role === "super_admin";
@@ -151,10 +157,26 @@ export default function UnitsPage() {
     setEditingUnit(null);
   };
 
+  const toggleSelectUnit = (id: string) => {
+    setSelectedUnitIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else if (next.size < 4) {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedUnitIds(new Set());
+
   const filteredUnits = units.filter((unit) => {
     if (filterStatus !== "all" && unit.status !== filterStatus) return false;
     return true;
   });
+
+  const selectedUnits = filteredUnits.filter((u) => selectedUnitIds.has(u.id));
 
   const getStatusColor = (status: string | null) => {
     const statusInfo = UNIT_STATUSES.find((s) => s.value === status);
@@ -385,6 +407,7 @@ export default function UnitsPage() {
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-10">{t.selectForCompare}</TableHead>
             <TableHead>{t.unitNumber}</TableHead>
             <TableHead>{t.floor}</TableHead>
             <TableHead>{t.type}</TableHead>
@@ -392,12 +415,20 @@ export default function UnitsPage() {
             <TableHead>{t.area}</TableHead>
             <TableHead>{t.price}</TableHead>
             <TableHead>{t.status}</TableHead>
-            {isAdmin && <TableHead className="text-right">{t.actions}</TableHead>}
+            <TableHead className="text-right">{t.actions}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {filteredUnits.map((unit) => (
             <TableRow key={unit.id} data-testid={`row-unit-${unit.id}`}>
+              <TableCell>
+                <Checkbox
+                  checked={selectedUnitIds.has(unit.id)}
+                  onCheckedChange={() => toggleSelectUnit(unit.id)}
+                  disabled={!selectedUnitIds.has(unit.id) && selectedUnitIds.size >= 4}
+                  data-testid={`checkbox-unit-${unit.id}`}
+                />
+              </TableCell>
               <TableCell className="font-medium">{unit.unitNumber}</TableCell>
               <TableCell>{unit.floor || "-"}</TableCell>
               <TableCell>{unit.type || "-"}</TableCell>
@@ -409,9 +440,18 @@ export default function UnitsPage() {
                   {getStatusLabel(unit.status)}
                 </Badge>
               </TableCell>
-              {isAdmin && (
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-1">
+              <TableCell className="text-right">
+                <div className="flex justify-end gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title={t.calculateInstallment}
+                    onClick={() => setCalcUnit(unit)}
+                    data-testid={`button-calc-unit-${unit.id}`}
+                  >
+                    <Calculator className="h-4 w-4" />
+                  </Button>
+                  {isAdmin && (
                     <Dialog open={editingUnit?.id === unit.id} onOpenChange={(open) => { if (!open) resetForm(); }}>
                       <DialogTrigger asChild>
                         <Button variant="ghost" size="icon" onClick={() => openEditDialog(unit)} data-testid={`button-edit-unit-${unit.id}`}>
@@ -425,32 +465,32 @@ export default function UnitsPage() {
                         <UnitForm />
                       </DialogContent>
                     </Dialog>
-                    {isSuperAdmin && (
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" data-testid={`button-delete-unit-${unit.id}`}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>{t.deleteUnit}?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              {t.deleteUnitConfirm} "{unit.unitNumber}"
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => deleteMutation.mutate(unit.id)} data-testid="button-confirm-delete-unit">
-                              {t.delete}
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    )}
-                  </div>
-                </TableCell>
-              )}
+                  )}
+                  {isSuperAdmin && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" data-testid={`button-delete-unit-${unit.id}`}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>{t.deleteUnit}?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            {t.deleteUnitConfirm} "{unit.unitNumber}"
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => deleteMutation.mutate(unit.id)} data-testid="button-confirm-delete-unit">
+                            {t.delete}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+                </div>
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -508,7 +548,7 @@ export default function UnitsPage() {
         )}
       </div>
 
-      <div className="flex gap-4 mb-6">
+      <div className="flex gap-4 mb-4 flex-wrap items-center">
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="w-48" data-testid="filter-status">
             <SelectValue placeholder={t.status} />
@@ -523,6 +563,33 @@ export default function UnitsPage() {
           </SelectContent>
         </Select>
       </div>
+
+      {selectedUnitIds.size >= 2 && (
+        <div className="flex items-center gap-3 mb-4 p-3 bg-primary/5 border border-primary/20 rounded-lg" data-testid="compare-bar">
+          <span className="text-sm font-medium text-primary">
+            {selectedUnitIds.size} {t.unitsSelected}
+          </span>
+          <Button
+            size="sm"
+            onClick={() => setIsCompareOpen(true)}
+            className="gap-2"
+            data-testid="button-compare-units"
+          >
+            <GitCompare className="h-4 w-4" />
+            {t.compareUnits}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={clearSelection}
+            className="gap-2"
+            data-testid="button-clear-selection"
+          >
+            <X className="h-4 w-4" />
+            {t.clearSelection}
+          </Button>
+        </div>
+      )}
 
       {filteredUnits.length === 0 ? (
         <Card>
@@ -539,6 +606,24 @@ export default function UnitsPage() {
         </Card>
       ) : (
         viewMode === "stacking" ? <StackingPlanView /> : <TableView />
+      )}
+
+      {calcUnit && (
+        <InstallmentCalculator
+          unit={calcUnit}
+          projectName={project?.name}
+          isOpen={!!calcUnit}
+          onClose={() => setCalcUnit(null)}
+        />
+      )}
+
+      {isCompareOpen && selectedUnits.length >= 2 && (
+        <UnitCompare
+          units={selectedUnits}
+          projects={project ? [project] : []}
+          isOpen={isCompareOpen}
+          onClose={() => setIsCompareOpen(false)}
+        />
       )}
     </div>
   );

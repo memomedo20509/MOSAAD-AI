@@ -46,7 +46,11 @@ import {
   Thermometer,
   Snowflake,
   Shuffle,
+  Calculator,
+  GitCompare,
 } from "lucide-react";
+import { InstallmentCalculator } from "@/components/installment-calculator";
+import { UnitCompare } from "@/components/unit-compare";
 import { computeLeadScore, SCORE_COLORS } from "@/lib/scoring";
 import { format } from "date-fns";
 import type { Lead, LeadState, LeadHistory, Task, Reminder, LeadUnitInterest, Unit, Project, Communication } from "@shared/schema";
@@ -67,6 +71,9 @@ export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalPr
   const [newReminderDate, setNewReminderDate] = useState("");
   const [commType, setCommType] = useState("");
   const [commNote, setCommNote] = useState("");
+  const [calcUnitId, setCalcUnitId] = useState<string | null>(null);
+  const [compareUnitIds, setCompareUnitIds] = useState<Set<string>>(new Set());
+  const [isCompareOpen, setIsCompareOpen] = useState(false);
 
   const { data: lead } = useQuery<Lead>({
     queryKey: ["/api/leads", leadId],
@@ -189,6 +196,7 @@ export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalPr
   if (!lead) return null;
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -777,38 +785,92 @@ export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalPr
             <Card>
               <CardContent className="pt-4">
                 {interests.length > 0 ? (
-                  <div className="space-y-3">
-                    {interests.map((interest) => {
-                      const { unit, project } = getUnitDetails(interest.unitId);
-                      if (!unit) return null;
-                      return (
-                        <div
-                          key={interest.id}
-                          className="flex items-center justify-between p-3 rounded-md border"
+                  <>
+                    {compareUnitIds.size >= 2 && (
+                      <div className="flex items-center gap-3 mb-4 p-3 bg-primary/5 border border-primary/20 rounded-lg" data-testid="lead-compare-bar">
+                        <span className="text-sm font-medium text-primary">
+                          {compareUnitIds.size} {t.unitsSelected}
+                        </span>
+                        <Button
+                          size="sm"
+                          onClick={() => setIsCompareOpen(true)}
+                          className="gap-2"
+                          data-testid="button-lead-compare-units"
                         >
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10">
-                              <Home className="h-5 w-5 text-primary" />
+                          <GitCompare className="h-4 w-4" />
+                          {t.compareUnits}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setCompareUnitIds(new Set())}
+                          data-testid="button-lead-clear-compare"
+                        >
+                          {t.clearSelection}
+                        </Button>
+                      </div>
+                    )}
+                    <div className="space-y-3">
+                      {interests.map((interest) => {
+                        const { unit, project } = getUnitDetails(interest.unitId);
+                        if (!unit) return null;
+                        const isSelected = compareUnitIds.has(unit.id);
+                        return (
+                          <div
+                            key={interest.id}
+                            className={`flex items-center justify-between p-3 rounded-md border ${isSelected ? "border-primary/40 bg-primary/5" : ""}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {
+                                  setCompareUnitIds((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(unit.id)) next.delete(unit.id);
+                                    else if (next.size < 4) next.add(unit.id);
+                                    return next;
+                                  });
+                                }}
+                                disabled={!isSelected && compareUnitIds.size >= 4}
+                                className="mr-1 w-4 h-4 accent-primary cursor-pointer"
+                                data-testid={`checkbox-interest-${interest.id}`}
+                              />
+                              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10">
+                                <Home className="h-5 w-5 text-primary" />
+                              </div>
+                              <div>
+                                <p className="font-medium">{project?.name || "Unknown Project"}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {t.unit} {unit.unitNumber} - {unit.area}m² - {unit.bedrooms} {t.bedrooms}
+                                </p>
+                              </div>
                             </div>
-                            <div>
-                              <p className="font-medium">{project?.name || "Unknown Project"}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {t.unit} {unit.unitNumber} - {unit.area}m² - {unit.bedrooms} {t.bedrooms}
-                              </p>
+                            <div className="flex items-center gap-3">
+                              <div className="text-end">
+                                <p className="font-bold">
+                                  {unit.price?.toLocaleString()} {t.currency}
+                                </p>
+                                <Badge variant={interest.interestLevel === "high" ? "default" : "secondary"}>
+                                  {interest.interestLevel}
+                                </Badge>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1 shrink-0"
+                                onClick={() => setCalcUnitId(unit.id)}
+                                data-testid={`button-calc-interest-${interest.id}`}
+                              >
+                                <Calculator className="h-3.5 w-3.5" />
+                                {t.calculateInstallment}
+                              </Button>
                             </div>
                           </div>
-                          <div className="text-end">
-                            <p className="font-bold">
-                              {unit.price?.toLocaleString()} {t.currency}
-                            </p>
-                            <Badge variant={interest.interestLevel === "high" ? "default" : "secondary"}>
-                              {interest.interestLevel}
-                            </Badge>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  </>
                 ) : (
                   <div className="flex h-32 items-center justify-center text-muted-foreground">
                     {t.noDataToDisplay}
@@ -820,5 +882,30 @@ export function LeadDetailsModal({ leadId, isOpen, onClose }: LeadDetailsModalPr
         </Tabs>
       </DialogContent>
     </Dialog>
+
+    {calcUnitId && (() => {
+      const { unit, project } = getUnitDetails(calcUnitId);
+      return unit ? (
+        <InstallmentCalculator
+          unit={unit}
+          projectName={project?.name}
+          isOpen={!!calcUnitId}
+          onClose={() => setCalcUnitId(null)}
+        />
+      ) : null;
+    })()}
+
+    {isCompareOpen && compareUnitIds.size >= 2 && (() => {
+      const compareUnits = units.filter((u) => compareUnitIds.has(u.id));
+      return (
+        <UnitCompare
+          units={compareUnits}
+          projects={projects}
+          isOpen={isCompareOpen}
+          onClose={() => setIsCompareOpen(false)}
+        />
+      );
+    })()}
+    </>
   );
 }
