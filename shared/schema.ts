@@ -240,7 +240,8 @@ export const scoringConfig = pgTable("scoring_config", {
   coldMinDays: integer("cold_min_days").notNull().default(14),
   weightRecency: integer("weight_recency").notNull().default(40),
   weightEngagement: integer("weight_engagement").notNull().default(30),
-  weightTaskCompletion: integer("weight_task_completion").notNull().default(30),
+  weightTaskCompletion: integer("weight_task_completion").notNull().default(20),
+  weightCreation: integer("weight_creation").notNull().default(10),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

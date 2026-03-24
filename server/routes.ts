@@ -662,8 +662,8 @@ export async function registerRoutes(
 
   app.post("/api/scoring-config", isAuthenticated, requireRole("super_admin", "admin", "sales_manager"), async (req, res) => {
     try {
-      const { hotMaxDays, coldMinDays, weightRecency, weightEngagement, weightTaskCompletion } = req.body;
-      const config = await updateScoringConfig({ hotMaxDays, coldMinDays, weightRecency, weightEngagement, weightTaskCompletion });
+      const { hotMaxDays, coldMinDays, weightRecency, weightEngagement, weightTaskCompletion, weightCreation } = req.body;
+      const config = await updateScoringConfig({ hotMaxDays, coldMinDays, weightRecency, weightEngagement, weightTaskCompletion, weightCreation });
       storage.refreshAllLeadScores().catch(err => console.error("Background score refresh error:", err));
       res.json(config);
     } catch (error) {

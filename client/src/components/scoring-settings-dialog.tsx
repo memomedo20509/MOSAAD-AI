@@ -21,6 +21,7 @@ interface ScoringConfig {
   weightRecency: number;
   weightEngagement: number;
   weightTaskCompletion: number;
+  weightCreation: number;
 }
 
 interface Props {
@@ -35,7 +36,8 @@ export function ScoringSettingsDialog({ open, onClose }: Props) {
   const [coldDays, setColdDays] = useState(14);
   const [weightRecency, setWeightRecency] = useState(40);
   const [weightEngagement, setWeightEngagement] = useState(30);
-  const [weightTaskCompletion, setWeightTaskCompletion] = useState(30);
+  const [weightTaskCompletion, setWeightTaskCompletion] = useState(20);
+  const [weightCreation, setWeightCreation] = useState(10);
 
   const { data: config } = useQuery<ScoringConfig>({
     queryKey: ["/api/scoring-config"],
@@ -48,11 +50,12 @@ export function ScoringSettingsDialog({ open, onClose }: Props) {
       setColdDays(config.coldMinDays);
       setWeightRecency(config.weightRecency ?? 40);
       setWeightEngagement(config.weightEngagement ?? 30);
-      setWeightTaskCompletion(config.weightTaskCompletion ?? 30);
+      setWeightTaskCompletion(config.weightTaskCompletion ?? 20);
+      setWeightCreation(config.weightCreation ?? 10);
     }
   }, [config]);
 
-  const totalWeight = weightRecency + weightEngagement + weightTaskCompletion;
+  const totalWeight = weightRecency + weightEngagement + weightTaskCompletion + weightCreation;
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -62,6 +65,7 @@ export function ScoringSettingsDialog({ open, onClose }: Props) {
         weightRecency,
         weightEngagement,
         weightTaskCompletion,
+        weightCreation,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/scoring-config"] });
@@ -134,15 +138,16 @@ export function ScoringSettingsDialog({ open, onClose }: Props) {
 
           <div className="border rounded-lg p-3 space-y-3">
             <div className="flex justify-between items-center">
-              <span className="text-sm font-medium">{t.scoringWeights || "Scoring Weights"}</span>
+              <span className="text-sm font-medium">{t.scoringWeights}</span>
               <span className={`text-xs font-medium ${totalWeight === 100 ? "text-green-600" : "text-red-600"}`}>
-                {t.total || "Total"}: {totalWeight}% {totalWeight !== 100 && "(must = 100%)"}
+                {t.total}: {totalWeight}% {totalWeight !== 100 && "(must = 100%)"}
               </span>
             </div>
             {[
               { label: t.daysSinceContact, value: weightRecency, setter: setWeightRecency, testId: "input-weight-recency" },
-              { label: t.communications || "Communications", value: weightEngagement, setter: setWeightEngagement, testId: "input-weight-engagement" },
-              { label: t.tasks || "Tasks", value: weightTaskCompletion, setter: setWeightTaskCompletion, testId: "input-weight-tasks" },
+              { label: t.daysSinceCreation, value: weightCreation, setter: setWeightCreation, testId: "input-weight-creation" },
+              { label: t.communications, value: weightEngagement, setter: setWeightEngagement, testId: "input-weight-engagement" },
+              { label: t.scoringTasks, value: weightTaskCompletion, setter: setWeightTaskCompletion, testId: "input-weight-tasks" },
             ].map(({ label, value, setter, testId }) => (
               <div key={testId} className="flex items-center gap-3">
                 <Label className="text-xs text-muted-foreground flex-1">{label}</Label>

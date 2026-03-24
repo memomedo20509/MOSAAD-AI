@@ -11,6 +11,7 @@ export interface ScoringConfig {
   weightRecency: number;
   weightEngagement: number;
   weightTaskCompletion: number;
+  weightCreation: number;
 }
 
 let _cache: ScoringConfig | null = null;
@@ -25,10 +26,11 @@ export async function getScoringConfig(): Promise<ScoringConfig> {
       weightRecency: row.weightRecency,
       weightEngagement: row.weightEngagement,
       weightTaskCompletion: row.weightTaskCompletion,
+      weightCreation: row.weightCreation,
     };
     return { ..._cache };
   }
-  _cache = { hotMaxDays: 3, coldMinDays: 14, weightRecency: 40, weightEngagement: 30, weightTaskCompletion: 30 };
+  _cache = { hotMaxDays: 3, coldMinDays: 14, weightRecency: 40, weightEngagement: 30, weightTaskCompletion: 20, weightCreation: 10 };
   return { ..._cache };
 }
 
@@ -40,6 +42,7 @@ export async function updateScoringConfig(updates: Partial<ScoringConfig>): Prom
     weightRecency: updates.weightRecency ?? current.weightRecency,
     weightEngagement: updates.weightEngagement ?? current.weightEngagement,
     weightTaskCompletion: updates.weightTaskCompletion ?? current.weightTaskCompletion,
+    weightCreation: updates.weightCreation ?? current.weightCreation,
   };
   next.hotMaxDays = Math.max(1, next.hotMaxDays);
   next.coldMinDays = Math.max(next.hotMaxDays + 1, next.coldMinDays);
@@ -67,22 +70,30 @@ export function computeScore(lead: Lead, ctx: ScoringContext, config: ScoringCon
     : createdMs;
 
   const daysSinceContact = (now - lastContactMs) / (1000 * 60 * 60 * 24);
+  const daysSinceCreation = (now - createdMs) / (1000 * 60 * 60 * 24);
   const { commCount, completedTaskCount } = ctx;
 
-  const totalWeight = config.weightRecency + config.weightEngagement + config.weightTaskCompletion;
+  const totalWeight =
+    config.weightRecency + config.weightEngagement + config.weightTaskCompletion + config.weightCreation;
 
   const recencyScore = daysSinceContact <= config.hotMaxDays ? 100
     : daysSinceContact >= config.coldMinDays ? 0
     : Math.round(100 * (1 - (daysSinceContact - config.hotMaxDays) / (config.coldMinDays - config.hotMaxDays)));
 
+  const creationScore = daysSinceCreation <= config.hotMaxDays ? 100
+    : daysSinceCreation >= config.coldMinDays ? 0
+    : Math.round(100 * (1 - (daysSinceCreation - config.hotMaxDays) / (config.coldMinDays - config.hotMaxDays)));
+
   const engagementScore = Math.min(100, commCount * 25);
   const taskScore = Math.min(100, completedTaskCount * 34);
 
+  const denominator = totalWeight || 100;
   const weighted =
     (recencyScore * config.weightRecency +
+      creationScore * config.weightCreation +
       engagementScore * config.weightEngagement +
       taskScore * config.weightTaskCompletion) /
-    totalWeight;
+    denominator;
 
   if (weighted >= 60) return "hot";
   if (weighted >= 30) return "warm";

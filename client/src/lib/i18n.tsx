@@ -440,6 +440,11 @@ const translations = {
     teamLoadSubtitle: "توزيع العملاء على المندوبين",
     noAgentsAvailable: "لا يوجد مندوبين متاحين",
     leadsCount: "العملاء",
+    scoringWeights: "أوزان التقييم",
+    total: "المجموع",
+    communications: "التواصل",
+    scoringTasks: "المهام",
+    daysSinceCreation: "أيام منذ الإنشاء",
     
     // Common
     loading: "جاري التحميل...",
@@ -890,6 +895,11 @@ const translations = {
     teamLoadSubtitle: "Lead distribution across agents",
     noAgentsAvailable: "No agents available",
     leadsCount: "leads",
+    scoringWeights: "Scoring Weights",
+    total: "Total",
+    communications: "Communications",
+    scoringTasks: "Tasks",
+    daysSinceCreation: "Days Since Creation",
     
     // Common
     loading: "Loading...",
