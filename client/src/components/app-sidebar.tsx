@@ -20,7 +20,10 @@ import {
   Bell,
   DollarSign,
   Shield,
+  Sun,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Badge } from "@/components/ui/badge";
 import {
   Sidebar,
   SidebarContent,
@@ -56,11 +59,30 @@ export function AppSidebar() {
   const { t, isRTL } = useLanguage();
   const userRole = user?.role as UserRole | undefined;
 
+  const { data: myDayData } = useQuery<{
+    todayFollowUps: unknown[];
+    newLeads: unknown[];
+    overdueFollowUps: unknown[];
+  }>({
+    queryKey: ["/api/my-day"],
+    refetchInterval: 120_000,
+  });
+
+  const pendingActionsCount = (myDayData?.todayFollowUps.length ?? 0) +
+    (myDayData?.overdueFollowUps.length ?? 0) +
+    (myDayData?.newLeads.length ?? 0);
+
   const mainNavItems = [
     {
       title: t.dashboard,
       url: "/",
       icon: LayoutDashboard,
+    },
+    {
+      title: t.myDay,
+      url: "/my-day",
+      icon: Sun,
+      badge: pendingActionsCount > 0 ? pendingActionsCount : null,
     },
     {
       title: t.kanbanBoard,
@@ -184,7 +206,12 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild isActive={location === item.url}>
                     <Link href={item.url} data-testid={`link-nav-${item.url.replace(/\//g, "-").slice(1) || "home"}`}>
                       <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
+                      <span className="flex-1">{item.title}</span>
+                      {"badge" in item && item.badge ? (
+                        <Badge variant="destructive" className="h-4 min-w-4 p-0 text-xs flex items-center justify-center" data-testid="badge-myday-sidebar">
+                          {item.badge}
+                        </Badge>
+                      ) : null}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

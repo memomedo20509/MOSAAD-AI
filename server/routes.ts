@@ -31,6 +31,7 @@ import {
   updateReminderSchema,
   insertCommissionSchema,
   updateCommissionSchema,
+  insertCallLogSchema,
 } from "@shared/schema";
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
@@ -1180,6 +1181,161 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== MY DAY ====================
+
+  app.get("/api/my-day", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user!;
+      const data = await storage.getMyDayData(user.id, user.role ?? "sales_agent", user.teamId ?? null, user.username);
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching My Day data:", error);
+      res.status(500).json({ error: "Failed to fetch My Day data" });
+    }
+  });
+
+  app.get("/api/my-day/completion-rates", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user!;
+      const managerRoles = ["super_admin", "company_owner", "admin", "sales_admin", "sales_manager", "team_leader"];
+      if (!managerRoles.includes(user.role ?? "")) {
+        return res.status(403).json({ error: "Access denied: managers only" });
+      }
+      const teamId = (user.role === "sales_manager" || user.role === "team_leader") ? user.teamId ?? null : null;
+      const rates = await storage.getAgentCompletionRates(teamId);
+      res.json(rates);
+    } catch (error) {
+      console.error("Error fetching completion rates:", error);
+      res.status(500).json({ error: "Failed to fetch completion rates" });
+    }
+  });
+
+  // ==================== NOTIFICATIONS ====================
+
+  app.get("/api/notifications", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const allNotifications = await storage.getNotificationsByUser(userId);
+      const recent = allNotifications.slice(-50).reverse();
+      res.json(recent);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ error: "Failed to fetch notifications" });
+    }
+  });
+
+  app.get("/api/notifications/unread-count", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const count = await storage.getUnreadNotificationCount(userId);
+      res.json({ count });
+    } catch (error) {
+      console.error("Error fetching unread count:", error);
+      res.status(500).json({ error: "Failed to fetch unread count" });
+    }
+  });
+
+  app.patch("/api/notifications/:id/read", isAuthenticated, async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const userId = req.user!.id;
+      const notification = await storage.getNotificationById(id);
+      if (!notification) {
+        return res.status(404).json({ error: "Notification not found" });
+      }
+      if (notification.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const updated = await storage.markNotificationRead(id);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error marking notification read:", error);
+      res.status(500).json({ error: "Failed to mark notification read" });
+    }
+  });
+
+  app.patch("/api/notifications/mark-all-read", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      await storage.markAllNotificationsRead(userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking all notifications read:", error);
+      res.status(500).json({ error: "Failed to mark all notifications read" });
+    }
+  });
+
+  // ==================== CALL LOGS ====================
+
+  app.get("/api/leads/:leadId/call-logs", isAuthenticated, async (req, res) => {
+    try {
+      const leadId = req.params.leadId as string;
+      if (!(await canAccessLead(req.user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const logs = await storage.getCallLogsByLead(leadId);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching call logs:", error);
+      res.status(500).json({ error: "Failed to fetch call logs" });
+    }
+  });
+
+  app.post("/api/call-logs", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user!;
+      const data = insertCallLogSchema.parse({ ...req.body, userId: user.id });
+      if (!(await canAccessLead(req.user, data.leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      // Validate reminderId belongs to this user and lead (prevent IDOR)
+      if (data.reminderId) {
+        const reminder = await storage.getReminder(data.reminderId);
+        if (!reminder || reminder.userId !== user.id || reminder.leadId !== data.leadId) {
+          return res.status(403).json({ error: "Access denied to reminder" });
+        }
+      }
+
+      const callLog = await storage.createCallLog(data);
+
+      // If there's a reminderId, mark that reminder as completed with timestamp
+      if (data.reminderId) {
+        await storage.updateReminder(data.reminderId, { isCompleted: true, completedAt: new Date() });
+      }
+
+      // Set firstContactAt on the lead if this is the first call log
+      const existingLogs = await storage.getCallLogsByLead(data.leadId);
+      const lead = await storage.getLead(data.leadId);
+      const updatePayload: Record<string, unknown> = {
+        lastAction: data.outcome,
+        lastActionDate: new Date(),
+      };
+      if (!lead?.firstContactAt && existingLogs.length <= 1) {
+        updatePayload.firstContactAt = new Date();
+      }
+      await storage.updateLead(data.leadId, updatePayload as Parameters<typeof storage.updateLead>[1]);
+
+      // If next follow-up date provided, create a new reminder
+      if (data.nextFollowUpDate) {
+        await storage.createReminder({
+          leadId: data.leadId,
+          userId: user.id,
+          title: `متابعة: ${lead?.name ?? "عميل"}`,
+          description: data.notes ?? undefined,
+          dueDate: new Date(data.nextFollowUpDate),
+          isCompleted: false,
+          priority: lead?.score === "hot" ? "high" : lead?.score === "warm" ? "medium" : "low",
+        });
+      }
+
+      res.status(201).json(callLog);
+    } catch (error) {
+      console.error("Error creating call log:", error);
+      res.status(400).json({ error: "Failed to create call log" });
+    }
+  });
+
   // ==================== DOCUMENTS ====================
 
   // Authorization helper: checks if the requesting user can access a specific lead.
@@ -1606,6 +1762,34 @@ export async function registerRoutes(
       }
     }
   );
+
+  // ==================== BACKGROUND JOB: REMINDER NOTIFICATIONS ====================
+  // Runs every minute, checks for reminders due in the next 15 minutes
+  // and creates in-app notifications for the assigned user
+
+  setInterval(async () => {
+    try {
+      const upcoming = await storage.getRemindersUpcomingIn15Min();
+      for (const reminder of upcoming) {
+        if (!reminder.userId) continue;
+        // Skip if a notification was already sent for this reminder in the last 20 minutes (DB-persisted dedup)
+        const alreadyNotified = await storage.recentReminderNotificationExists(reminder.id);
+        if (alreadyNotified) continue;
+        const lead = reminder.leadId ? await storage.getLead(reminder.leadId) : null;
+        const clientName = lead?.name ?? "عميل";
+        await storage.createNotification({
+          userId: reminder.userId,
+          type: "reminder",
+          message: `تذكير: ${reminder.title} - ${clientName} خلال 15 دقيقة`,
+          leadId: reminder.leadId ?? null,
+          reminderId: reminder.id,
+          isRead: false,
+        });
+      }
+    } catch (err) {
+      console.error("Background reminder job error:", err);
+    }
+  }, 60_000);
 
   return httpServer;
 }

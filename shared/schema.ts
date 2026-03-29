@@ -228,6 +228,7 @@ export const reminders = pgTable("reminders", {
   description: text("description"),
   dueDate: timestamp("due_date").notNull(),
   isCompleted: boolean("is_completed").default(false),
+  completedAt: timestamp("completed_at"),
   priority: text("priority").default("medium"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -292,6 +293,46 @@ export const updateCommissionSchema = insertCommissionSchema.partial();
 export type InsertCommission = z.infer<typeof insertCommissionSchema>;
 export type UpdateCommission = z.infer<typeof updateCommissionSchema>;
 export type Commission = typeof commissions.$inferSelect;
+
+// Notifications (in-app, for reminders and alerts)
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  type: text("type").notNull().default("reminder"),
+  message: text("message").notNull(),
+  leadId: varchar("lead_id").references(() => leads.id),
+  reminderId: varchar("reminder_id"),
+  isRead: boolean("is_read").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
+export const updateNotificationSchema = insertNotificationSchema.partial();
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type UpdateNotification = z.infer<typeof updateNotificationSchema>;
+export type Notification = typeof notifications.$inferSelect;
+
+// Call Logs (outcome of calls logged from My Day)
+export const callLogs = pgTable("call_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  leadId: varchar("lead_id").references(() => leads.id).notNull(),
+  userId: varchar("user_id").notNull(),
+  reminderId: varchar("reminder_id"),
+  outcome: text("outcome").notNull(), // answered, no_answer, interested, not_interested, needs_time, requested_visit
+  notes: text("notes"),
+  durationSeconds: integer("duration_seconds"),
+  nextFollowUpDate: timestamp("next_follow_up_date"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const CALL_OUTCOMES = ["answered", "no_answer", "interested", "not_interested", "needs_time", "requested_visit"] as const;
+export type CallOutcome = typeof CALL_OUTCOMES[number];
+
+export const insertCallLogSchema = createInsertSchema(callLogs).omit({ id: true, createdAt: true }).extend({
+  outcome: z.enum(CALL_OUTCOMES),
+});
+export type InsertCallLog = z.infer<typeof insertCallLogSchema>;
+export type CallLog = typeof callLogs.$inferSelect;
 
 // Export auth models (users, teams, sessions, role_permissions)
 export * from "./models/auth";

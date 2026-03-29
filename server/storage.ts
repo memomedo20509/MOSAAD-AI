@@ -20,6 +20,8 @@ import {
   documents,
   commissions,
   rolePermissions,
+  notifications,
+  callLogs,
   type User,
   type InsertUser,
   type UpdateUser,
@@ -52,6 +54,10 @@ import {
   type Commission,
   type InsertCommission,
   type UpdateCommission,
+  type Notification,
+  type InsertNotification,
+  type CallLog,
+  type InsertCallLog,
   type RolePermissions,
   DEFAULT_ROLE_PERMISSIONS,
   type UserRole,
@@ -206,6 +212,35 @@ export interface IStorage {
   // Lead filtering by role
   getLeadsByRole(userId: string, role: string, teamId?: string | null, username?: string | null): Promise<Lead[]>;
   transferLead(leadId: string, toUserId: string, performedBy: string): Promise<Lead | undefined>;
+
+  // Notifications
+  getNotificationsByUser(userId: string): Promise<Notification[]>;
+  getUnreadNotificationCount(userId: string): Promise<number>;
+  getNotificationById(id: string): Promise<Notification | undefined>;
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  markNotificationRead(id: string): Promise<Notification | undefined>;
+  markAllNotificationsRead(userId: string): Promise<void>;
+  deleteNotification(id: string): Promise<boolean>;
+  getRemindersUpcomingIn15Min(): Promise<Reminder[]>;
+  recentReminderNotificationExists(reminderId: string): Promise<boolean>;
+
+  // Call Logs
+  getCallLogsByLead(leadId: string): Promise<CallLog[]>;
+  createCallLog(callLog: InsertCallLog): Promise<CallLog>;
+
+  // My Day
+  getMyDayData(userId: string, userRole: string, teamId?: string | null, username?: string | null): Promise<{
+    todayFollowUps: (Reminder & { lead: Lead | null })[];
+    newLeads: Lead[];
+    overdueFollowUps: (Reminder & { lead: Lead | null })[];
+    doneToday: (Reminder & { lead: Lead | null })[];
+  }>;
+  getAgentCompletionRates(teamId?: string | null): Promise<{
+    agentId: string;
+    agentName: string;
+    scheduled: number;
+    completed: number;
+  }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -956,6 +991,221 @@ export class DatabaseStorage implements IStorage {
       performedBy,
     });
     return updated;
+  }
+
+  // Notifications
+  async getNotificationsByUser(userId: string): Promise<Notification[]> {
+    return db.select().from(notifications)
+      .where(eq(notifications.userId, userId))
+      .orderBy(notifications.createdAt);
+  }
+
+  async getUnreadNotificationCount(userId: string): Promise<number> {
+    const rows = await db.select().from(notifications)
+      .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
+    return rows.length;
+  }
+
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const [newNotification] = await db.insert(notifications).values(notification).returning();
+    return newNotification;
+  }
+
+  async getNotificationById(id: string): Promise<Notification | undefined> {
+    const [notification] = await db.select().from(notifications).where(eq(notifications.id, id));
+    return notification;
+  }
+
+  async markNotificationRead(id: string): Promise<Notification | undefined> {
+    const [updated] = await db.update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.id, id))
+      .returning();
+    return updated;
+  }
+
+  async markAllNotificationsRead(userId: string): Promise<void> {
+    await db.update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.userId, userId));
+  }
+
+  async deleteNotification(id: string): Promise<boolean> {
+    const result = await db.delete(notifications).where(eq(notifications.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getRemindersUpcomingIn15Min(): Promise<Reminder[]> {
+    const now = new Date();
+    const in15 = new Date(now.getTime() + 15 * 60 * 1000);
+    return db.select().from(reminders)
+      .where(
+        and(
+          eq(reminders.isCompleted, false),
+          gte(reminders.dueDate, now),
+          lte(reminders.dueDate, in15)
+        )
+      );
+  }
+
+  async recentReminderNotificationExists(reminderId: string): Promise<boolean> {
+    // Check if a notification for this reminderId was created in the last 20 minutes
+    const cutoff = new Date(Date.now() - 20 * 60 * 1000);
+    const results = await db.select().from(notifications)
+      .where(
+        and(
+          eq(notifications.reminderId, reminderId),
+          eq(notifications.type, "reminder"),
+          gte(notifications.createdAt, cutoff)
+        )
+      );
+    return results.length > 0;
+  }
+
+  // Call Logs
+  async getCallLogsByLead(leadId: string): Promise<CallLog[]> {
+    return db.select().from(callLogs)
+      .where(eq(callLogs.leadId, leadId))
+      .orderBy(callLogs.createdAt);
+  }
+
+  async createCallLog(callLog: InsertCallLog): Promise<CallLog> {
+    const [newCallLog] = await db.insert(callLogs).values(callLog).returning();
+    return newCallLog;
+  }
+
+  // My Day
+  async getMyDayData(userId: string, userRole: string, teamId?: string | null, username?: string | null): Promise<{
+    todayFollowUps: (Reminder & { lead: Lead | null })[];
+    newLeads: Lead[];
+    overdueFollowUps: (Reminder & { lead: Lead | null })[];
+    doneToday: (Reminder & { lead: Lead | null })[];
+  }> {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+
+    // Get all reminders for this user
+    const allUserReminders = await db.select().from(reminders)
+      .where(eq(reminders.userId, userId));
+
+    // Get accessible leads
+    const accessibleLeads = await this.getLeadsByRole(userId, userRole, teamId, username);
+    const accessibleLeadIds = new Set(accessibleLeads.map(l => l.id));
+    const leadMap = new Map(accessibleLeads.map(l => [l.id, l]));
+
+    const scoreOrder = { hot: 0, warm: 1, cold: 2 };
+    const sortByScore = (a: Reminder & { lead: Lead | null }, b: Reminder & { lead: Lead | null }) => {
+      const aScore = a.lead?.score ?? "cold";
+      const bScore = b.lead?.score ?? "cold";
+      return (scoreOrder[aScore as keyof typeof scoreOrder] ?? 2) - (scoreOrder[bScore as keyof typeof scoreOrder] ?? 2);
+    };
+
+    // Today's incomplete follow-ups (due between now and end of today, not overdue)
+    const todayFollowUpsRaw = allUserReminders.filter(r => {
+      if (!r.dueDate) return false;
+      const due = new Date(r.dueDate);
+      return due >= now && due < todayEnd && !r.isCompleted && (r.leadId ? accessibleLeadIds.has(r.leadId) : true);
+    }).map(r => ({ ...r, lead: r.leadId ? (leadMap.get(r.leadId) ?? null) : null }));
+
+    // Overdue (any reminder due before now and not completed)
+    const overdueFollowUpsRaw = allUserReminders.filter(r => {
+      if (!r.dueDate) return false;
+      const due = new Date(r.dueDate);
+      return due < now && !r.isCompleted && (r.leadId ? accessibleLeadIds.has(r.leadId) : true);
+    }).map(r => ({ ...r, lead: r.leadId ? (leadMap.get(r.leadId) ?? null) : null }));
+
+    // Done today: reminders completed today (by completedAt), plus leads without reminder that had a call log today
+    const doneTodayFromReminders = allUserReminders.filter(r => {
+      if (!r.isCompleted) return false;
+      const completedDate = r.completedAt ? new Date(r.completedAt) : null;
+      if (!completedDate) return false;
+      return completedDate >= todayStart && completedDate < todayEnd && (r.leadId ? accessibleLeadIds.has(r.leadId) : true);
+    }).map(r => ({ ...r, lead: r.leadId ? (leadMap.get(r.leadId) ?? null) : null }));
+
+    // Also include call logs today that had no reminder (e.g., from New Leads)
+    const todayCallLogs = await db.select().from(callLogs)
+      .where(
+        and(
+          eq(callLogs.userId, userId),
+          gte(callLogs.createdAt, todayStart),
+          lte(callLogs.createdAt, todayEnd)
+        )
+      );
+    const reminderLeadIds = new Set(doneTodayFromReminders.map(r => r.leadId).filter(Boolean));
+    const doneTodayFromCallLogs = todayCallLogs
+      .filter(cl => cl.leadId && accessibleLeadIds.has(cl.leadId) && !reminderLeadIds.has(cl.leadId))
+      .map(cl => {
+        const lead = cl.leadId ? (leadMap.get(cl.leadId) ?? null) : null;
+        // Create a synthetic "done" entry using call log details
+        return {
+          id: `calllog-${cl.id}`,
+          leadId: cl.leadId,
+          userId: cl.userId,
+          title: `مكالمة: ${lead?.name ?? "عميل"}`,
+          description: cl.notes ?? null,
+          dueDate: cl.createdAt ?? todayStart,
+          isCompleted: true,
+          completedAt: cl.createdAt ?? todayStart,
+          priority: "medium" as const,
+          createdAt: cl.createdAt ?? todayStart,
+          lead,
+        };
+      });
+
+    const doneTodayRaw = [...doneTodayFromReminders, ...doneTodayFromCallLogs];
+
+    // New uncontacted leads (no first contact ever)
+    const newLeads = accessibleLeads.filter(l =>
+      !l.firstContactAt
+    ).sort((a, b) => {
+      const aScore = a.score ?? "cold";
+      const bScore = b.score ?? "cold";
+      return (scoreOrder[aScore as keyof typeof scoreOrder] ?? 2) - (scoreOrder[bScore as keyof typeof scoreOrder] ?? 2);
+    });
+
+    return {
+      todayFollowUps: todayFollowUpsRaw.sort(sortByScore),
+      newLeads,
+      overdueFollowUps: overdueFollowUpsRaw.sort(sortByScore),
+      doneToday: doneTodayRaw.sort(sortByScore),
+    };
+  }
+
+  async getAgentCompletionRates(teamId?: string | null): Promise<{
+    agentId: string;
+    agentName: string;
+    scheduled: number;
+    completed: number;
+  }[]> {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+
+    const allUsers = await db.select().from(users).where(eq(users.isActive, true));
+    let agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "team_leader");
+    if (teamId) {
+      agents = agents.filter(u => u.teamId === teamId);
+    }
+
+    const todayReminders = await db.select().from(reminders)
+      .where(
+        and(
+          gte(reminders.dueDate, todayStart),
+          lte(reminders.dueDate, todayEnd)
+        )
+      );
+
+    return agents.map(agent => {
+      const agentName = `${agent.firstName || ""} ${agent.lastName || ""}`.trim() || agent.username;
+      const agentReminders = todayReminders.filter(r => r.userId === agent.id);
+      return {
+        agentId: agent.id,
+        agentName,
+        scheduled: agentReminders.length,
+        completed: agentReminders.filter(r => r.isCompleted).length,
+      };
+    });
   }
 }
 

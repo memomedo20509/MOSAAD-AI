@@ -40,7 +40,8 @@ import {
   AlertTriangle,
   Clock,
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
+import { useEffect } from "react";
 import type { Lead, LeadState } from "@shared/schema";
 import { LeadDetailPanel } from "@/components/lead-detail-panel";
 import { LeadDetailsModal } from "@/components/lead-details-modal";
@@ -67,10 +68,22 @@ export default function LeadsPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
   const { user } = useAuth();
+  const search = useSearch();
 
   const { data: leads, isLoading: leadsLoading } = useQuery<Lead[]>({
     queryKey: ["/api/leads"],
   });
+
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    const leadId = params.get("leadId");
+    if (leadId && leads) {
+      const lead = leads.find((l) => l.id === leadId);
+      if (lead) {
+        setSelectedLead(lead);
+      }
+    }
+  }, [search, leads]);
 
   const { data: states, isLoading: statesLoading } = useQuery<LeadState[]>({
     queryKey: ["/api/states"],

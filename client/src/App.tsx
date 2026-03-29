@@ -34,6 +34,8 @@ import KanbanPage from "@/pages/kanban";
 import ReportsPage from "@/pages/reports";
 import CommissionsPage from "@/pages/commissions";
 import PermissionsPage from "@/pages/permissions";
+import MyDayPage from "@/pages/my-day";
+import { NotificationBell } from "@/components/notification-bell";
 
 function LogoutButton() {
   const { logoutMutation } = useAuth();
@@ -75,6 +77,7 @@ function Router() {
       <Route path="/inventory/projects/:projectId/units" component={UnitsPage} />
       <Route path="/commissions" component={CommissionsPage} />
       <Route path="/settings/permissions" component={PermissionsPage} />
+      <Route path="/my-day" component={MyDayPage} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -109,6 +112,7 @@ function AuthenticatedApp() {
                 </span>
               </div>
             )}
+            <NotificationBell />
             <LanguageToggle />
             <ThemeToggle />
             <LogoutButton />
