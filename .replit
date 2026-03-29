@@ -48,4 +48,3 @@ timeoutMs = 20000
 [userenv]
 
 [userenv.shared]
-DOKPLOY_DB_URL = "postgresql://crmowner:npg_79yoLBTMtpgd@72.61.182.58:55954/crmdatabase"
