@@ -59,6 +59,12 @@ const upload = multer({
   },
 });
 
+// Memory-storage multer for Excel/CSV imports (needs buffer access)
+const uploadMemory = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -1520,6 +1526,86 @@ export async function registerRoutes(
       res.status(400).json({ error: "Failed to update role permissions" });
     }
   });
+
+  // ─── Import Leads from Excel/CSV ───────────────────────────────────────────
+  app.post(
+    "/api/leads/import",
+    isAuthenticated,
+    requireRole("super_admin", "admin", "sales_manager"),
+    uploadMemory.single("file"),
+    async (req, res) => {
+      try {
+        const user = req.user as any;
+        if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+        const XLSX = await import("xlsx");
+        const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+        if (rows.length === 0) {
+          return res.status(400).json({ error: "File is empty or has no data rows" });
+        }
+
+        // Column name aliases (Arabic & English keys)
+        const COL = {
+          name:     ["الاسم", "Name", "name", "اسم"],
+          phone:    ["الهاتف", "Phone", "phone", "هاتف", "موبايل", "Mobile"],
+          phone2:   ["هاتف 2", "Phone 2", "phone2", "هاتف2", "mobile2"],
+          email:    ["البريد الإلكتروني", "Email", "email", "بريد"],
+          channel:  ["القناة", "Channel", "channel", "المصدر", "Source", "source"],
+          campaign: ["الحملة", "Campaign", "campaign"],
+          budget:   ["الميزانية", "Budget", "budget"],
+          notes:    ["الملاحظات", "Notes", "notes", "ملاحظات"],
+        };
+
+        const pick = (row: any, keys: string[]) => {
+          for (const k of keys) {
+            if (row[k] !== undefined && row[k] !== "") return String(row[k]).trim();
+          }
+          return undefined;
+        };
+
+        let imported = 0;
+        const errors: { row: number; reason: string }[] = [];
+
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          const name = pick(row, COL.name);
+          if (!name) {
+            errors.push({ row: i + 2, reason: "الاسم مطلوب" });
+            continue;
+          }
+          try {
+            await storage.createLead(
+              {
+                name,
+                phone:    pick(row, COL.phone)    ?? null,
+                phone2:   pick(row, COL.phone2)   ?? null,
+                email:    pick(row, COL.email)     ?? null,
+                channel:  pick(row, COL.channel)   ?? null,
+                campaign: pick(row, COL.campaign)  ?? null,
+                budget:   pick(row, COL.budget)    ?? null,
+                notes:    pick(row, COL.notes)     ?? null,
+                assignedTo: user?.teamId ? null : null,
+                stateId:  null,
+              } as any,
+              user?.teamId
+            );
+            imported++;
+          } catch (err: any) {
+            errors.push({ row: i + 2, reason: err.message ?? "خطأ غير معروف" });
+          }
+        }
+
+        res.json({ imported, errors, total: rows.length });
+      } catch (error: any) {
+        console.error("Import error:", error);
+        res.status(400).json({ error: error.message ?? "Failed to import leads" });
+      }
+    }
+  );
 
   return httpServer;
 }
