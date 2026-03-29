@@ -254,11 +254,24 @@ export function LeadDetailPanel({
     unreadManagerComments.forEach(c => markReadMutation.mutate(c.id));
   };
 
+  const CALL_OUTCOME_LABELS: Record<string, string> = {
+    answered: "رد على المكالمة",
+    no_answer: "لم يرد",
+    interested: "مهتم",
+    not_interested: "غير مهتم",
+    needs_time: "يحتاج وقت",
+    requested_visit: "طلب زيارة",
+  };
+
   const logCallMutation = useMutation({
     mutationFn: async () => {
+      const outcomeLabel = CALL_OUTCOME_LABELS[callOutcome] ?? callOutcome;
+      const noteWithOutcome = callNote
+        ? `[${outcomeLabel}] ${callNote}`
+        : `[${outcomeLabel}]`;
       const res = await apiRequest("POST", `/api/leads/${lead?.id}/communications`, {
         type: callOutcome === "no_answer" ? "no_answer" : "call",
-        note: callNote || undefined,
+        note: noteWithOutcome,
       });
       return res.json();
     },
@@ -322,15 +335,15 @@ export function LeadDetailPanel({
   const scoreInfo = computeLeadScore(lead);
   const callCommunications = communications.filter(c => c.type === "call" || c.type === "no_answer");
   const totalCalls = callCommunications.length;
-  // lastContactDate: from latest communication or lead.lastActionDate
-  const latestComm = communications.length > 0
-    ? communications.reduce((latest, c) => {
-        const t = new Date(c.createdAt!).getTime();
-        return t > new Date(latest.createdAt!).getTime() ? c : latest;
-      }, communications[0])
+  // lastContactDate: from latest lead_history entry (most authoritative source since all actions write there)
+  const latestHistory = history && history.length > 0
+    ? history.reduce((latest, h) => {
+        const t = new Date(h.createdAt!).getTime();
+        return t > new Date(latest.createdAt!).getTime() ? h : latest;
+      }, history[0])
     : null;
-  const lastContactRaw = latestComm?.createdAt
-    ? new Date(latestComm.createdAt)
+  const lastContactRaw = latestHistory?.createdAt
+    ? new Date(latestHistory.createdAt)
     : lead.lastActionDate
     ? new Date(lead.lastActionDate)
     : lead.createdAt
@@ -1223,20 +1236,18 @@ export function LeadDetailPanel({
                           );
                         })}
                       </div>
-                      {/* Progress indicator */}
+                      {/* Progress indicator — read-only visualization only */}
                       {states.length > 0 && (
-                        <div className="flex gap-1">
+                        <div className="flex gap-1" title="شريط تقدم الحالة">
                           {states.map((state, idx) => (
                             <div
                               key={state.id}
-                              className={`h-1 flex-1 rounded-full transition-all cursor-pointer`}
+                              className="h-1 flex-1 rounded-full transition-all"
                               style={{
                                 backgroundColor: idx <= currentStateIndex ? (currentState?.color || "#6366f1") : undefined,
                                 opacity: idx <= currentStateIndex ? 1 : 0.15,
                               }}
-                              onClick={() => onUpdate({ stateId: state.id })}
                               data-testid={`progress-state-${state.id}`}
-                              title={state.name}
                             />
                           ))}
                         </div>
