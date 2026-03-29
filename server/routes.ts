@@ -1154,7 +1154,7 @@ export async function registerRoutes(
 
   app.post("/api/reminders", isAuthenticated, async (req, res) => {
     try {
-      const body = { ...req.body, userId: (req.user as any).id };
+      const body = { ...req.body, userId: req.user?.id ?? "" };
       const data = insertReminderSchema.parse(body);
       // If a leadId is provided, ensure the user can access that lead
       if (data.leadId && !(await canAccessLead(req.user, data.leadId))) {
