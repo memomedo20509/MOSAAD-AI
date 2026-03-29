@@ -91,10 +91,14 @@ export default function LeadsPage() {
 
   const updateLeadMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<Lead> }) => {
-      return apiRequest("PATCH", `/api/leads/${id}`, data);
+      const res = await apiRequest("PATCH", `/api/leads/${id}`, data);
+      return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (updatedLead: Lead, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", variables.id, "history"] });
+      // Sync selectedLead so the panel reflects the new state immediately
+      setSelectedLead((prev) => (prev?.id === variables.id ? updatedLead : prev));
       toast({ title: t.leadUpdatedSuccess });
     },
     onError: () => {
