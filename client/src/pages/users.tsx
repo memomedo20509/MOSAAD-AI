@@ -87,9 +87,10 @@ export default function UsersPage() {
 
     const formData = new FormData(e.currentTarget);
     const password = formData.get("password") as string;
+    const rawTeamId = formData.get("teamId") as string;
     const updateData: Record<string, unknown> = {
       role: formData.get("role") as string,
-      teamId: (formData.get("teamId") as string) || null,
+      teamId: rawTeamId === "none" || !rawTeamId ? null : rawTeamId,
       isActive: formData.get("isActive") === "true",
       firstName: formData.get("firstName") as string || null,
       lastName: formData.get("lastName") as string || null,
@@ -107,6 +108,7 @@ export default function UsersPage() {
   const handleAddSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const rawTeamId = formData.get("teamId") as string;
     createUserMutation.mutate({
       username: formData.get("username") as string,
       password: formData.get("password") as string,
@@ -115,7 +117,7 @@ export default function UsersPage() {
       lastName: formData.get("lastName") as string || null,
       phone: formData.get("phone") as string || null,
       role: formData.get("role") as string || "sales_agent",
-      teamId: (formData.get("teamId") as string) || null,
+      teamId: rawTeamId === "none" || !rawTeamId ? null : rawTeamId,
       isActive: true,
     });
   };
@@ -197,12 +199,12 @@ export default function UsersPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>{t.team}</Label>
-                  <Select name="teamId" defaultValue="">
+                  <Select name="teamId" defaultValue="none">
                     <SelectTrigger data-testid="select-team-add">
                       <SelectValue placeholder={t.selectTeam} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">{t.noTeam}</SelectItem>
+                      <SelectItem value="none">{t.noTeam}</SelectItem>
                       {teams.map((team) => (
                         <SelectItem key={team.id} value={team.id}>
                           {team.name}
@@ -273,6 +275,11 @@ export default function UsersPage() {
                   <Badge className={getRoleColor(user.role)} data-testid={`badge-role-${user.id}`}>
                     {getRoleName(user.role)}
                   </Badge>
+                  {user.teamId && teams.find(t => t.id === user.teamId) && (
+                    <Badge variant="secondary" data-testid={`badge-team-${user.id}`}>
+                      {teams.find(t => t.id === user.teamId)?.name}
+                    </Badge>
+                  )}
                   {user.isActive ? (
                     <Badge variant="outline" className="text-green-600" data-testid={`badge-status-${user.id}`}>
                       <UserCheck className="h-3 w-3 mr-1" /> {t.active}
@@ -339,12 +346,12 @@ export default function UsersPage() {
                           </div>
                           <div className="space-y-2">
                             <Label>{t.team}</Label>
-                            <Select name="teamId" defaultValue={user.teamId || ""}>
+                            <Select name="teamId" defaultValue={user.teamId || "none"}>
                               <SelectTrigger data-testid="select-team">
                                 <SelectValue placeholder={t.selectTeam} />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">{t.noTeam}</SelectItem>
+                                <SelectItem value="none">{t.noTeam}</SelectItem>
                                 {teams.map((team) => (
                                   <SelectItem key={team.id} value={team.id}>
                                     {team.name}
