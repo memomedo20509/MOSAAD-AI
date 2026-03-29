@@ -1,8 +1,8 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext } from "react";
 
 export type Language = "ar" | "en";
 
-const translations = {
+export const translations = {
   ar: {
     // App
     appName: "HomeAdvisor CRM",
@@ -1389,39 +1389,7 @@ interface LanguageContextType {
   isRTL: boolean;
 }
 
-const LanguageContext = createContext<LanguageContextType | null>(null);
-
-export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<Language>(() => {
-    if (typeof window !== "undefined") {
-      return (localStorage.getItem("crm-language") as Language) || "ar";
-    }
-    return "ar";
-  });
-
-  const setLanguage = (lang: Language) => {
-    setLanguageState(lang);
-    localStorage.setItem("crm-language", lang);
-  };
-
-  useEffect(() => {
-    document.documentElement.lang = language;
-    document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
-  }, [language]);
-
-  const value: LanguageContextType = {
-    language,
-    setLanguage,
-    t: translations[language],
-    isRTL: language === "ar",
-  };
-
-  return (
-    <LanguageContext.Provider value={value}>
-      {children}
-    </LanguageContext.Provider>
-  );
-}
+export const LanguageContext = createContext<LanguageContextType | null>(null);
 
 export function useLanguage() {
   const context = useContext(LanguageContext);
