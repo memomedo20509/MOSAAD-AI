@@ -47,6 +47,15 @@ import {
   Edit2,
   X,
   Check,
+  Flame,
+  Thermometer,
+  Snowflake,
+  ChevronRight,
+  ChevronLeft,
+  ChevronDown,
+  CalendarClock,
+  PhoneCall,
+  ClipboardList,
 } from "lucide-react";
 import type { Lead, LeadState, Task, LeadHistory, LeadManagerComment } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -56,6 +65,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/i18n";
 import { DocumentsTab } from "./documents-tab";
 import { WhatsAppPanel } from "./whatsapp-panel";
+import { computeLeadScore, SCORE_COLORS } from "@/lib/scoring";
 
 interface LeadDetailPanelProps {
   lead: Lead | null;
@@ -87,6 +97,12 @@ export function LeadDetailPanel({
   const [managerNoteContent, setManagerNoteContent] = useState("");
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentContent, setEditingCommentContent] = useState("");
+  const [showLogCallForm, setShowLogCallForm] = useState(false);
+  const [callNote, setCallNote] = useState("");
+  const [callOutcome, setCallOutcome] = useState<string>("answered");
+  const [followUpDate, setFollowUpDate] = useState("");
+  const [followUpTime, setFollowUpTime] = useState("09:00");
+  const [showAllStates, setShowAllStates] = useState(false);
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
   const { t } = useLanguage();
@@ -233,6 +249,54 @@ export function LeadDetailPanel({
     unreadManagerComments.forEach(c => markReadMutation.mutate(c.id));
   };
 
+  const logCallMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/leads/${lead?.id}/communications`, {
+        type: callOutcome === "no_answer" ? "no_answer" : "call",
+        note: callNote || undefined,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "history"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      setShowLogCallForm(false);
+      setCallNote("");
+      setCallOutcome("answered");
+      toast({ title: "تم تسجيل المكالمة بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "فشل تسجيل المكالمة", variant: "destructive" });
+    },
+  });
+
+  const createFollowUpMutation = useMutation({
+    mutationFn: async () => {
+      if (!followUpDate) return;
+      const dueDate = new Date(`${followUpDate}T${followUpTime}:00`);
+      const res = await apiRequest("POST", "/api/reminders", {
+        leadId: lead?.id,
+        userId: currentUser?.id,
+        title: `متابعة ${lead?.name || ""}`,
+        dueDate: dueDate.toISOString(),
+        priority: "medium",
+        isCompleted: false,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/reminders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/my-day"] });
+      const formattedDate = followUpDate ? format(new Date(`${followUpDate}T${followUpTime}:00`), "dd/MM/yyyy") : "";
+      toast({ title: `تم جدولة المتابعة ليوم ${formattedDate}` });
+      setFollowUpDate("");
+      setFollowUpTime("09:00");
+    },
+    onError: () => {
+      toast({ title: "فشل جدولة المتابعة", variant: "destructive" });
+    },
+  });
+
   const handleSave = () => {
     onUpdate(formData);
     setEditMode(false);
@@ -247,6 +311,14 @@ export function LeadDetailPanel({
   if (!lead) return null;
 
   const currentState = states.find((s) => s.id === lead.stateId);
+  const currentStateIndex = states.findIndex((s) => s.id === lead.stateId);
+  const scoreInfo = computeLeadScore(lead);
+  const totalContacts = (history || []).length;
+  const lastContactDate = lead.lastActionDate
+    ? format(new Date(lead.lastActionDate), "dd/MM/yyyy")
+    : lead.createdAt
+    ? format(new Date(lead.createdAt), "dd/MM/yyyy")
+    : "—";
 
   return (
     <>
@@ -906,56 +978,253 @@ export function LeadDetailPanel({
             </TabsContent>
 
             <TabsContent value="actions" className="m-0 space-y-4">
+              {/* Lead Summary Bar */}
+              <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/40 px-4 py-3">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <Clock className="h-3.5 w-3.5" />
+                    <span>آخر تواصل:</span>
+                    <span className="font-medium text-foreground">{lastContactDate}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <ClipboardList className="h-3.5 w-3.5" />
+                    <span>التواصلات:</span>
+                    <span className="font-medium text-foreground">{totalContacts}</span>
+                  </div>
+                </div>
+                <Badge
+                  variant="outline"
+                  className={`shrink-0 ${SCORE_COLORS[scoreInfo.score]}`}
+                  data-testid="badge-lead-score-actions"
+                >
+                  {scoreInfo.score === "hot" ? (
+                    <><Flame className="h-3 w-3 mr-1" />هوت</>
+                  ) : scoreInfo.score === "warm" ? (
+                    <><Thermometer className="h-3 w-3 mr-1" />وورم</>
+                  ) : (
+                    <><Snowflake className="h-3 w-3 mr-1" />كولد</>
+                  )}
+                </Badge>
+              </div>
+
+              {/* Call Section */}
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Quick Actions</CardTitle>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-green-600" />
+                    اتصل الآن
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {lead.phone && (
-                    <Button variant="outline" className="w-full justify-start" asChild>
-                      <a href={`tel:${lead.phone}`}>
-                        <Phone className="h-4 w-4 mr-2" />
-                        Call {lead.phone}
-                      </a>
-                    </Button>
+                  {lead.phone ? (
+                    <div className="flex gap-2">
+                      <Button variant="outline" className="flex-1 justify-start h-12 text-base" asChild>
+                        <a href={`tel:${lead.phone}`} data-testid="button-call-phone">
+                          <PhoneCall className="h-5 w-5 mr-2 text-green-600" />
+                          {lead.phone}
+                        </a>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-12 px-4 whitespace-nowrap"
+                        onClick={() => setShowLogCallForm(!showLogCallForm)}
+                        data-testid="button-toggle-log-call"
+                      >
+                        <ClipboardList className="h-4 w-4 mr-1" />
+                        سجّل مكالمة
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-2">لا يوجد رقم هاتف</p>
                   )}
-                  {lead.email && (
-                    <Button variant="outline" className="w-full justify-start" asChild>
-                      <a href={`mailto:${lead.email}`}>
-                        <Mail className="h-4 w-4 mr-2" />
-                        Email {lead.email}
-                      </a>
-                    </Button>
+
+                  {showLogCallForm && (
+                    <div className="space-y-3 rounded-md border p-3 bg-muted/30">
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground font-medium">نتيجة المكالمة</label>
+                        <Select value={callOutcome} onValueChange={setCallOutcome}>
+                          <SelectTrigger data-testid="select-call-outcome">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="answered">رد على المكالمة</SelectItem>
+                            <SelectItem value="no_answer">لم يرد</SelectItem>
+                            <SelectItem value="interested">مهتم</SelectItem>
+                            <SelectItem value="not_interested">غير مهتم</SelectItem>
+                            <SelectItem value="needs_time">يحتاج وقت</SelectItem>
+                            <SelectItem value="requested_visit">طلب زيارة</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground font-medium">ملاحظات (اختياري)</label>
+                        <Textarea
+                          value={callNote}
+                          onChange={(e) => setCallNote(e.target.value)}
+                          placeholder="أضف ملاحظات عن المكالمة..."
+                          rows={2}
+                          className="text-sm resize-none"
+                          data-testid="textarea-call-note"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          className="flex-1"
+                          onClick={() => logCallMutation.mutate()}
+                          disabled={logCallMutation.isPending}
+                          data-testid="button-save-call-log"
+                        >
+                          {logCallMutation.isPending ? "جاري الحفظ..." : "حفظ المكالمة"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => setShowLogCallForm(false)}
+                          data-testid="button-cancel-log-call"
+                        >
+                          إلغاء
+                        </Button>
+                      </div>
+                    </div>
                   )}
                 </CardContent>
               </Card>
 
+              {/* WhatsApp Section */}
               <WhatsAppPanel lead={lead} agentName={currentUser ? `${currentUser.firstName ?? ""} ${currentUser.lastName ?? ""}`.trim() || currentUser.username : undefined} />
 
+              {/* Follow-up Scheduler */}
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Update Status</CardTitle>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <CalendarClock className="h-4 w-4 text-blue-600" />
+                    جدول متابعة
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="text-xs text-muted-foreground mb-1 block">التاريخ</label>
+                      <Input
+                        type="date"
+                        value={followUpDate}
+                        onChange={(e) => setFollowUpDate(e.target.value)}
+                        min={format(new Date(), "yyyy-MM-dd")}
+                        className="h-11"
+                        data-testid="input-followup-date"
+                      />
+                    </div>
+                    <div className="w-28">
+                      <label className="text-xs text-muted-foreground mb-1 block">الوقت</label>
+                      <Input
+                        type="time"
+                        value={followUpTime}
+                        onChange={(e) => setFollowUpTime(e.target.value)}
+                        className="h-11"
+                        data-testid="input-followup-time"
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    className="w-full h-11"
+                    onClick={() => createFollowUpMutation.mutate()}
+                    disabled={!followUpDate || createFollowUpMutation.isPending}
+                    data-testid="button-schedule-followup"
+                  >
+                    <CalendarClock className="h-4 w-4 mr-2" />
+                    {createFollowUpMutation.isPending ? "جاري الجدولة..." : "جدولة المتابعة"}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Status Stepper */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm">تغيير الحالة</CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs gap-1"
+                      onClick={() => setShowAllStates(!showAllStates)}
+                      data-testid="button-toggle-all-states"
+                    >
+                      {showAllStates ? "إخفاء" : "عرض كل الحالات"}
+                      <ChevronDown className={`h-3 w-3 transition-transform ${showAllStates ? "rotate-180" : ""}`} />
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 gap-2">
-                    {states.map((state) => (
-                      <Button
-                        key={state.id}
-                        variant={lead.stateId === state.id ? "default" : "outline"}
-                        size="sm"
-                        className="justify-start"
-                        onClick={() => onUpdate({ stateId: state.id })}
-                        style={
-                          lead.stateId === state.id
-                            ? { backgroundColor: state.color, borderColor: state.color }
-                            : {}
-                        }
-                        data-testid={`button-state-${state.name.toLowerCase().replace(/\s+/g, "-")}`}
-                      >
-                        {state.name}
-                      </Button>
-                    ))}
-                  </div>
+                  {showAllStates ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      {states.map((state) => (
+                        <Button
+                          key={state.id}
+                          variant={lead.stateId === state.id ? "default" : "outline"}
+                          size="sm"
+                          className="justify-start h-10"
+                          onClick={() => onUpdate({ stateId: state.id })}
+                          style={
+                            lead.stateId === state.id
+                              ? { backgroundColor: state.color, borderColor: state.color }
+                              : {}
+                          }
+                          data-testid={`button-state-${state.name.toLowerCase().replace(/\s+/g, "-")}`}
+                        >
+                          {state.name}
+                        </Button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {/* Horizontal stepper: show current + neighbors */}
+                      <div className="flex items-center gap-1 overflow-x-auto pb-1">
+                        {states.map((state, idx) => {
+                          const isCurrent = state.id === lead.stateId;
+                          const isNear = Math.abs(idx - currentStateIndex) <= 1;
+                          if (!isNear) return null;
+                          return (
+                            <div key={state.id} className="flex items-center gap-1 shrink-0">
+                              {idx > 0 && idx === currentStateIndex - 1 && (
+                                <ChevronLeft className="h-3 w-3 text-muted-foreground shrink-0" />
+                              )}
+                              <Button
+                                variant={isCurrent ? "default" : "outline"}
+                                size="sm"
+                                className={`h-9 px-3 text-xs whitespace-nowrap ${isCurrent ? "font-semibold shadow-sm" : "opacity-70"}`}
+                                onClick={() => !isCurrent && onUpdate({ stateId: state.id })}
+                                style={isCurrent ? { backgroundColor: state.color, borderColor: state.color } : {}}
+                                data-testid={`button-stepper-state-${state.id}`}
+                              >
+                                {isCurrent && <Check className="h-3 w-3 mr-1" />}
+                                {state.name}
+                              </Button>
+                              {idx < states.length - 1 && idx === currentStateIndex + 1 && (
+                                <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {/* Progress indicator */}
+                      {states.length > 0 && (
+                        <div className="flex gap-1">
+                          {states.map((state, idx) => (
+                            <div
+                              key={state.id}
+                              className={`h-1 flex-1 rounded-full transition-all cursor-pointer`}
+                              style={{
+                                backgroundColor: idx <= currentStateIndex ? (currentState?.color || "#6366f1") : undefined,
+                                opacity: idx <= currentStateIndex ? 1 : 0.15,
+                              }}
+                              onClick={() => onUpdate({ stateId: state.id })}
+                              data-testid={`progress-state-${state.id}`}
+                              title={state.name}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
