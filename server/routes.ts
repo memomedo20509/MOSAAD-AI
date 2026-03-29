@@ -1154,7 +1154,12 @@ export async function registerRoutes(
 
   app.post("/api/reminders", isAuthenticated, async (req, res) => {
     try {
-      const data = insertReminderSchema.parse(req.body);
+      const body = { ...req.body, userId: (req.user as any).id };
+      const data = insertReminderSchema.parse(body);
+      // If a leadId is provided, ensure the user can access that lead
+      if (data.leadId && !(await canAccessLead(req.user, data.leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const reminder = await storage.createReminder(data);
       res.status(201).json(reminder);
     } catch (error) {
