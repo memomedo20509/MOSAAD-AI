@@ -1345,7 +1345,6 @@ export class DatabaseStorage implements IStorage {
     const assignedLeadIds = new Set(assignedLeads.map(l => l.id));
     return unread.filter(c => assignedLeadIds.has(c.leadId));
   }
-  }
 }
 
 export const storage = new DatabaseStorage();
