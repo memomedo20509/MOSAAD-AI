@@ -36,6 +36,8 @@ import CommissionsPage from "@/pages/commissions";
 import PermissionsPage from "@/pages/permissions";
 import MyDayPage from "@/pages/my-day";
 import { NotificationBell } from "@/components/notification-bell";
+import WhatsAppSettingsPage from "@/pages/whatsapp-settings";
+import WhatsAppTemplatesPage from "@/pages/whatsapp-templates";
 
 function LogoutButton() {
   const { logoutMutation } = useAuth();
@@ -78,6 +80,8 @@ function Router() {
       <Route path="/commissions" component={CommissionsPage} />
       <Route path="/settings/permissions" component={PermissionsPage} />
       <Route path="/my-day" component={MyDayPage} />
+      <Route path="/settings/whatsapp" component={WhatsAppSettingsPage} />
+      <Route path="/settings/whatsapp/templates" component={WhatsAppTemplatesPage} />
       <Route component={NotFound} />
     </Switch>
   );

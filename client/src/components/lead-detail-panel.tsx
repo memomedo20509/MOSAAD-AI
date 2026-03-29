@@ -51,6 +51,7 @@ import { format } from "date-fns";
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/i18n";
 import { DocumentsTab } from "./documents-tab";
+import { WhatsAppPanel } from "./whatsapp-panel";
 
 interface LeadDetailPanelProps {
   lead: Lead | null;
@@ -621,6 +622,8 @@ export function LeadDetailPanel({
                   )}
                 </CardContent>
               </Card>
+
+              <WhatsAppPanel lead={lead} agentName={currentUser ? `${currentUser.firstName ?? ""} ${currentUser.lastName ?? ""}`.trim() || currentUser.username : undefined} />
 
               <Card>
                 <CardHeader className="pb-2">

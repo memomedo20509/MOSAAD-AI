@@ -116,6 +116,22 @@ Preferred communication style: Simple, everyday language.
 - **Vite**: Frontend dev server with HMR
 - **Replit Plugins**: Runtime error overlay, cartographer, and dev banner for Replit environment
 
+### WhatsApp Integration (Baileys)
+- **Library**: `@whiskeysockets/baileys` — WhatsApp Web protocol, no Meta API required
+- **Session Service**: `server/whatsapp.ts` — per-agent session management, QR generation, reconnection
+- **Session Persistence**: Sessions stored in `.whatsapp_sessions/<userId>/` directories
+- **QR Generation**: `qrcode` package generates base64 QR code data URLs
+- **Tables**:
+  - `whatsapp_templates` — admin-managed message templates with Arabic text and dynamic variables
+  - `whatsapp_messages_log` — records of WhatsApp messages sent per lead per agent
+- **Routes**: `/api/whatsapp/*` — status, connect, disconnect, send, templates CRUD
+- **Frontend**: 
+  - `client/src/pages/whatsapp-settings.tsx` — agent WhatsApp connection UI with QR display
+  - `client/src/pages/whatsapp-templates.tsx` — admin template management
+  - `client/src/components/whatsapp-panel.tsx` — WhatsApp action panel in lead detail Actions tab
+- **Ban Avoidance**: Random 2-5s delay before sending, session persistence avoids re-scan
+- **Privacy**: Manager can see WhatsApp activity count in lead history without seeing message content
+
 ### Planned/Available Integrations (based on build config)
 - **OpenAI / Google Generative AI**: AI capabilities
 - **Stripe**: Payment processing

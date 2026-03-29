@@ -334,5 +334,38 @@ export const insertCallLogSchema = createInsertSchema(callLogs).omit({ id: true,
 export type InsertCallLog = z.infer<typeof insertCallLogSchema>;
 export type CallLog = typeof callLogs.$inferSelect;
 
+// WhatsApp Templates
+export const whatsappTemplates = pgTable("whatsapp_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  body: text("body").notNull(),
+  isActive: boolean("is_active").default(true),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertWhatsappTemplateSchema = createInsertSchema(whatsappTemplates).omit({ id: true, createdAt: true, updatedAt: true });
+export const updateWhatsappTemplateSchema = insertWhatsappTemplateSchema.partial();
+export type InsertWhatsappTemplate = z.infer<typeof insertWhatsappTemplateSchema>;
+export type UpdateWhatsappTemplate = z.infer<typeof updateWhatsappTemplateSchema>;
+export type WhatsappTemplate = typeof whatsappTemplates.$inferSelect;
+
+// WhatsApp Messages Log
+export const whatsappMessagesLog = pgTable("whatsapp_messages_log", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  leadId: varchar("lead_id").references(() => leads.id),
+  agentId: varchar("agent_id").notNull(),
+  agentName: text("agent_name"),
+  templateId: varchar("template_id"),
+  templateName: text("template_name"),
+  phone: text("phone").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertWhatsappMessagesLogSchema = createInsertSchema(whatsappMessagesLog).omit({ id: true, createdAt: true });
+export type InsertWhatsappMessagesLog = z.infer<typeof insertWhatsappMessagesLogSchema>;
+export type WhatsappMessagesLog = typeof whatsappMessagesLog.$inferSelect;
+
 // Export auth models (users, teams, sessions, role_permissions)
 export * from "./models/auth";

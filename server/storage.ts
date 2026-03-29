@@ -1,5 +1,5 @@
 import { db, pool } from "./db";
-import { eq, and, ne, isNotNull, isNull, lt, gte, lte } from "drizzle-orm";
+import { eq, and, ne, isNotNull, isNull, lt, gte, lte, sql } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { computeScore, getScoringConfig, type ScoringContext } from "./scoring";
@@ -22,6 +22,8 @@ import {
   rolePermissions,
   notifications,
   callLogs,
+  whatsappTemplates,
+  whatsappMessagesLog,
   type User,
   type InsertUser,
   type UpdateUser,
@@ -61,6 +63,11 @@ import {
   type RolePermissions,
   DEFAULT_ROLE_PERMISSIONS,
   type UserRole,
+  type WhatsappTemplate,
+  type InsertWhatsappTemplate,
+  type UpdateWhatsappTemplate,
+  type WhatsappMessagesLog,
+  type InsertWhatsappMessagesLog,
 } from "@shared/schema";
 
 const PostgresSessionStore = connectPg(session);
@@ -241,6 +248,19 @@ export interface IStorage {
     scheduled: number;
     completed: number;
   }[]>;
+
+  // WhatsApp Templates
+  getAllWhatsappTemplates(activeOnly?: boolean): Promise<WhatsappTemplate[]>;
+  getWhatsappTemplate(id: string): Promise<WhatsappTemplate | undefined>;
+  createWhatsappTemplate(template: InsertWhatsappTemplate): Promise<WhatsappTemplate>;
+  updateWhatsappTemplate(id: string, data: UpdateWhatsappTemplate): Promise<WhatsappTemplate | undefined>;
+  deleteWhatsappTemplate(id: string): Promise<boolean>;
+
+  // WhatsApp Messages Log
+  logWhatsappMessage(log: InsertWhatsappMessagesLog): Promise<WhatsappMessagesLog>;
+  getWhatsappLogsByLead(leadId: string): Promise<WhatsappMessagesLog[]>;
+  countAgentMessagesInLastHour(agentId: string): Promise<number>;
+  countAgentMessagesInLastDay(agentId: string): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1206,6 +1226,72 @@ export class DatabaseStorage implements IStorage {
         completed: agentReminders.filter(r => r.isCompleted).length,
       };
     });
+  }
+
+  // WhatsApp Templates
+  async getAllWhatsappTemplates(activeOnly = false): Promise<WhatsappTemplate[]> {
+    if (activeOnly) {
+      return db.select().from(whatsappTemplates).where(eq(whatsappTemplates.isActive, true)).orderBy(whatsappTemplates.createdAt);
+    }
+    return db.select().from(whatsappTemplates).orderBy(whatsappTemplates.createdAt);
+  }
+
+  async getWhatsappTemplate(id: string): Promise<WhatsappTemplate | undefined> {
+    const [template] = await db.select().from(whatsappTemplates).where(eq(whatsappTemplates.id, id));
+    return template;
+  }
+
+  async createWhatsappTemplate(template: InsertWhatsappTemplate): Promise<WhatsappTemplate> {
+    const [newTemplate] = await db.insert(whatsappTemplates).values(template).returning();
+    return newTemplate;
+  }
+
+  async updateWhatsappTemplate(id: string, data: UpdateWhatsappTemplate): Promise<WhatsappTemplate | undefined> {
+    const [updated] = await db.update(whatsappTemplates).set({ ...data, updatedAt: new Date() }).where(eq(whatsappTemplates.id, id)).returning();
+    return updated;
+  }
+
+  async deleteWhatsappTemplate(id: string): Promise<boolean> {
+    const result = await db.delete(whatsappTemplates).where(eq(whatsappTemplates.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // WhatsApp Messages Log
+  async logWhatsappMessage(log: InsertWhatsappMessagesLog): Promise<WhatsappMessagesLog> {
+    const [entry] = await db.insert(whatsappMessagesLog).values(log).returning();
+    return entry;
+  }
+
+  async getWhatsappLogsByLead(leadId: string): Promise<WhatsappMessagesLog[]> {
+    return db.select().from(whatsappMessagesLog).where(eq(whatsappMessagesLog.leadId, leadId)).orderBy(whatsappMessagesLog.createdAt);
+  }
+
+  async countAgentMessagesInLastHour(agentId: string): Promise<number> {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(whatsappMessagesLog)
+      .where(
+        and(
+          eq(whatsappMessagesLog.agentId, agentId),
+          gte(whatsappMessagesLog.createdAt, oneHourAgo)
+        )
+      );
+    return Number(result[0]?.count ?? 0);
+  }
+
+  async countAgentMessagesInLastDay(agentId: string): Promise<number> {
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(whatsappMessagesLog)
+      .where(
+        and(
+          eq(whatsappMessagesLog.agentId, agentId),
+          gte(whatsappMessagesLog.createdAt, oneDayAgo)
+        )
+      );
+    return Number(result[0]?.count ?? 0);
   }
 }
 

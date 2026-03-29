@@ -7,6 +7,13 @@ import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated, requireRole, requirePermission } from "./auth";
 import { hashPassword } from "./auth";
 import { updateScoringConfig } from "./scoring";
+import {
+  startConnection,
+  disconnectSession,
+  getSessionStatus,
+  sendWhatsAppMessage,
+  restoreSessionsOnStartup,
+} from "./whatsapp";
 import { 
   insertLeadSchema, 
   insertLeadStateSchema, 
@@ -32,6 +39,8 @@ import {
   insertCommissionSchema,
   updateCommissionSchema,
   insertCallLogSchema,
+  insertWhatsappTemplateSchema,
+  updateWhatsappTemplateSchema,
 } from "@shared/schema";
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
@@ -1790,6 +1799,201 @@ export async function registerRoutes(
       console.error("Background reminder job error:", err);
     }
   }, 60_000);
+
+  // ============ WhatsApp Routes ============
+
+  // GET /api/whatsapp/status — get connection status for the current user
+  app.get("/api/whatsapp/status", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const { status, qrDataUrl } = getSessionStatus(userId);
+      res.json({ status, qrDataUrl });
+    } catch (error) {
+      console.error("WhatsApp status error:", error);
+      res.status(500).json({ error: "Failed to get status" });
+    }
+  });
+
+  // POST /api/whatsapp/connect — start connecting (generates QR)
+  app.post("/api/whatsapp/connect", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      await startConnection(userId);
+      const { status, qrDataUrl } = getSessionStatus(userId);
+      res.json({ status, qrDataUrl });
+    } catch (error) {
+      console.error("WhatsApp connect error:", error);
+      res.status(500).json({ error: "Failed to start connection" });
+    }
+  });
+
+  // POST /api/whatsapp/disconnect — disconnect the session
+  app.post("/api/whatsapp/disconnect", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      await disconnectSession(userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("WhatsApp disconnect error:", error);
+      res.status(500).json({ error: "Failed to disconnect" });
+    }
+  });
+
+  // POST /api/whatsapp/send — send a WhatsApp message to a lead
+  // leadId is required; phone is resolved from the lead to prevent arbitrary sending
+  app.post("/api/whatsapp/send", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const user = req.user!;
+      const { leadId, templateId, message } = req.body;
+
+      if (!leadId) {
+        return res.status(400).json({ error: "leadId is required" });
+      }
+      if (!message) {
+        return res.status(400).json({ error: "message is required" });
+      }
+
+      // Authorization: verify this user can access the lead
+      if (!(await canAccessLead(req.user, leadId))) {
+        return res.status(403).json({ error: "Access denied to this lead" });
+      }
+
+      // Resolve phone from the lead (prevents arbitrary number targeting)
+      const lead = await storage.getLead(leadId);
+      if (!lead) {
+        return res.status(404).json({ error: "Lead not found" });
+      }
+      const phone = lead.phone;
+      if (!phone) {
+        return res.status(400).json({ error: "Lead has no phone number" });
+      }
+
+      // Rate limiting: max 20 messages per agent per hour
+      const HOURLY_LIMIT = 20;
+      const sentInLastHour = await storage.countAgentMessagesInLastHour(userId);
+      if (sentInLastHour >= HOURLY_LIMIT) {
+        return res.status(429).json({
+          error: `Hourly limit reached (${HOURLY_LIMIT} messages/hour). Please wait before sending more.`,
+        });
+      }
+
+      // Rate limiting: max 100 messages per agent per day (rolling 24h)
+      const DAILY_LIMIT = 100;
+      const sentInLastDay = await storage.countAgentMessagesInLastDay(userId);
+      if (sentInLastDay >= DAILY_LIMIT) {
+        return res.status(429).json({
+          error: `Daily limit reached (${DAILY_LIMIT} messages/day). Please try again tomorrow.`,
+        });
+      }
+
+      const result = await sendWhatsAppMessage(userId, phone, message);
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
+      }
+
+      // Log the message
+      let templateName: string | undefined;
+      if (templateId) {
+        const tmpl = await storage.getWhatsappTemplate(templateId);
+        templateName = tmpl?.name;
+      }
+
+      const agentName = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.username;
+
+      const logEntry = await storage.logWhatsappMessage({
+        leadId,
+        agentId: userId,
+        agentName,
+        templateId: templateId || null,
+        templateName: templateName || null,
+        phone,
+      });
+
+      // Add to lead history (without message body for privacy)
+      await storage.createHistory({
+        leadId,
+        action: "WhatsApp Message Sent",
+        description: templateName ? `تم إرسال "${templateName}"` : "تم إرسال رسالة واتساب",
+        performedBy: agentName,
+      });
+
+      res.json({ success: true, log: logEntry });
+    } catch (error) {
+      console.error("WhatsApp send error:", error);
+      res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
+  // GET /api/whatsapp/templates — list templates (admins see all; agents see active-only)
+  app.get("/api/whatsapp/templates", isAuthenticated, async (req, res) => {
+    try {
+      const isAdmin = req.user?.canManageUsers === true;
+      const templates = await storage.getAllWhatsappTemplates(!isAdmin);
+      res.json(templates);
+    } catch (error) {
+      console.error("Error fetching WhatsApp templates:", error);
+      res.status(500).json({ error: "Failed to fetch templates" });
+    }
+  });
+
+  // POST /api/whatsapp/templates — create a template (admin only)
+  app.post("/api/whatsapp/templates", isAuthenticated, requirePermission("canManageUsers"), async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const data = insertWhatsappTemplateSchema.parse({ ...req.body, createdBy: userId });
+      const template = await storage.createWhatsappTemplate(data);
+      res.status(201).json(template);
+    } catch (error) {
+      console.error("Error creating WhatsApp template:", error);
+      res.status(400).json({ error: "Failed to create template" });
+    }
+  });
+
+  // PATCH /api/whatsapp/templates/:id — update a template (admin only)
+  app.patch("/api/whatsapp/templates/:id", isAuthenticated, requirePermission("canManageUsers"), async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const data = updateWhatsappTemplateSchema.parse(req.body);
+      const template = await storage.updateWhatsappTemplate(id, data);
+      if (!template) return res.status(404).json({ error: "Template not found" });
+      res.json(template);
+    } catch (error) {
+      console.error("Error updating WhatsApp template:", error);
+      res.status(400).json({ error: "Failed to update template" });
+    }
+  });
+
+  // DELETE /api/whatsapp/templates/:id — delete a template (admin only)
+  app.delete("/api/whatsapp/templates/:id", isAuthenticated, requirePermission("canManageUsers"), async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const deleted = await storage.deleteWhatsappTemplate(id);
+      if (!deleted) return res.status(404).json({ error: "Template not found" });
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting WhatsApp template:", error);
+      res.status(500).json({ error: "Failed to delete template" });
+    }
+  });
+
+  // GET /api/leads/:leadId/whatsapp-log — get whatsapp messages for a lead
+  app.get("/api/leads/:leadId/whatsapp-log", isAuthenticated, async (req, res) => {
+    try {
+      const leadId = req.params.leadId as string;
+      if (!(await canAccessLead(req.user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const logs = await storage.getWhatsappLogsByLead(leadId);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching WhatsApp log:", error);
+      res.status(500).json({ error: "Failed to fetch log" });
+    }
+  });
+
+  // Restore WhatsApp sessions on startup
+  restoreSessionsOnStartup().catch(console.error);
 
   return httpServer;
 }

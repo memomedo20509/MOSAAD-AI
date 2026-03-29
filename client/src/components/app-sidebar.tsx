@@ -21,6 +21,7 @@ import {
   DollarSign,
   Shield,
   Sun,
+  MessageSquare,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -162,6 +163,18 @@ export function AppSidebar() {
       url: "/settings/filters",
       icon: Filter,
       adminOnly: false,
+    },
+    {
+      title: "واتساب",
+      url: "/settings/whatsapp",
+      icon: MessageSquare,
+      adminOnly: false,
+    },
+    {
+      title: "قوالب واتساب",
+      url: "/settings/whatsapp/templates",
+      icon: MessageSquare,
+      adminOnly: true,
     },
     {
       title: t.users,
