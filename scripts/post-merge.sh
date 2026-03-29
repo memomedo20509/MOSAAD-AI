@@ -48,6 +48,18 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS response_time_minutes INTEGER;
 -- scoring_config: weight_creation column (Task #2)
 ALTER TABLE scoring_config ADD COLUMN IF NOT EXISTS weight_creation INTEGER DEFAULT 10;
 
+-- lead_manager_comments table (Task #15)
+CREATE TABLE IF NOT EXISTS lead_manager_comments (
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  lead_id VARCHAR REFERENCES leads(id) ON DELETE CASCADE NOT NULL,
+  manager_id VARCHAR REFERENCES users(id) NOT NULL,
+  manager_name TEXT,
+  content TEXT NOT NULL,
+  is_read_by_agent BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
 SELECT 'Schema migration complete' as status;
 ENDSQL
   echo "SQL migrations applied successfully."

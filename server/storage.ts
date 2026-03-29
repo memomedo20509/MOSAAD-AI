@@ -428,9 +428,9 @@ export class DatabaseStorage implements IStorage {
     const [newLead] = await db.insert(leads).values({ ...safeLeadData, score }).returning();
     await this.createHistory({
       leadId: newLead.id,
-      action: "Lead Created",
-      description: `Lead was created`,
-      performedBy: "System",
+      action: "تم إنشاء الليد",
+      description: `تم إضافة الليد للنظام`,
+      performedBy: "النظام",
     });
     if (!newLead.assignedTo) {
       const assigned = await this.autoAssignLead(newLead.id, creatingUserTeamId ?? null);
@@ -451,9 +451,9 @@ export class DatabaseStorage implements IStorage {
     if (updated) {
       await this.createHistory({
         leadId: id,
-        action: "Lead Updated",
-        description: `Lead information was updated`,
-        performedBy: "System",
+        action: "تم تحديث بيانات الليد",
+        description: `تم تعديل معلومات الليد`,
+        performedBy: "النظام",
       });
     }
     return updated;
@@ -551,9 +551,9 @@ export class DatabaseStorage implements IStorage {
     if (task.leadId) {
       await this.createHistory({
         leadId: task.leadId,
-        action: "Task Created",
-        description: `Task "${task.title}" was created`,
-        performedBy: "System",
+        action: "تم إضافة تاسك",
+        description: `التاسك: "${task.title}"`,
+        performedBy: "النظام",
       });
     }
     return newTask;
@@ -1052,7 +1052,7 @@ export class DatabaseStorage implements IStorage {
       .returning();
     await this.createHistory({
       leadId,
-      action: "Lead Transferred",
+      action: "تم تحويل الليد",
       description: `تم تحويل الليد إلى ${toUserName}`,
       performedBy,
     });

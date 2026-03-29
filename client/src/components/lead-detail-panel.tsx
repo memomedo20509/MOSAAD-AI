@@ -90,7 +90,7 @@ export function LeadDetailPanel({
 }: LeadDetailPanelProps) {
   const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState<Partial<Lead>>({});
-  const [newTask, setNewTask] = useState({ title: "", type: "", description: "" });
+  const [newTask, setNewTask] = useState({ title: "", type: "", description: "", dueDate: "" });
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [transferToUserId, setTransferToUserId] = useState("");
   const [showManagerNoteInput, setShowManagerNoteInput] = useState(false);
@@ -161,11 +161,11 @@ export function LeadDetailPanel({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "tasks"] });
-      setNewTask({ title: "", type: "", description: "" });
-      toast({ title: "Task created successfully" });
+      setNewTask({ title: "", type: "", description: "", dueDate: "" });
+      toast({ title: "تم إضافة التاسك بنجاح" });
     },
     onError: () => {
-      toast({ title: "Failed to create task", variant: "destructive" });
+      toast({ title: "فشل إضافة التاسك", variant: "destructive" });
     },
   });
 
@@ -431,15 +431,15 @@ export function LeadDetailPanel({
             </TabsTrigger>
             <TabsTrigger value="tasks" data-testid="tab-lead-tasks">
               <ListTodo className="h-4 w-4 mr-1" />
-              Tasks
+              التاسكس
             </TabsTrigger>
             <TabsTrigger value="history" data-testid="tab-lead-history">
               <History className="h-4 w-4 mr-1" />
-              History
+              الهيستوري
             </TabsTrigger>
             <TabsTrigger value="actions" data-testid="tab-lead-actions">
               <Phone className="h-4 w-4 mr-1" />
-              Actions
+              الأكشنز
             </TabsTrigger>
             <TabsTrigger value="documents" data-testid="tab-lead-documents">
               <Paperclip className="h-4 w-4 mr-1" />
@@ -634,32 +634,46 @@ export function LeadDetailPanel({
             <TabsContent value="tasks" className="m-0 space-y-4">
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Add New Task</CardTitle>
+                  <CardTitle className="text-sm font-semibold">إضافة تاسك جديد</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <Input
-                    placeholder="Task title"
+                    placeholder="عنوان التاسك (مثال: إرسال عرض السعر)"
                     value={newTask.title}
                     onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
                     data-testid="input-new-task-title"
                   />
-                  <Select
-                    value={newTask.type}
-                    onValueChange={(v) => setNewTask({ ...newTask, type: v })}
-                  >
-                    <SelectTrigger data-testid="select-new-task-type">
-                      <SelectValue placeholder="Task type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="call">Call</SelectItem>
-                      <SelectItem value="meeting">Meeting</SelectItem>
-                      <SelectItem value="follow-up">Follow Up</SelectItem>
-                      <SelectItem value="email">Email</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Select
+                      value={newTask.type}
+                      onValueChange={(v) => setNewTask({ ...newTask, type: v })}
+                    >
+                      <SelectTrigger data-testid="select-new-task-type">
+                        <SelectValue placeholder="نوع التاسك" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="اتصال">📞 اتصال</SelectItem>
+                        <SelectItem value="ميتنج">🤝 ميتنج</SelectItem>
+                        <SelectItem value="معاينة موقع">🏗️ معاينة موقع</SelectItem>
+                        <SelectItem value="إرسال عرض سعر">📄 إرسال عرض سعر</SelectItem>
+                        <SelectItem value="تحضير عقد">📝 تحضير عقد</SelectItem>
+                        <SelectItem value="متابعة">🔔 متابعة</SelectItem>
+                        <SelectItem value="واتساب">💬 واتساب</SelectItem>
+                        <SelectItem value="أخرى">📌 أخرى</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <div>
+                      <Input
+                        type="date"
+                        value={newTask.dueDate}
+                        onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
+                        data-testid="input-new-task-due-date"
+                        title="تاريخ التنفيذ"
+                      />
+                    </div>
+                  </div>
                   <Textarea
-                    placeholder="Description"
+                    placeholder="ملاحظات (اختياري)"
                     value={newTask.description}
                     onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
                     rows={2}
@@ -672,7 +686,7 @@ export function LeadDetailPanel({
                     data-testid="button-add-task"
                   >
                     <Plus className="h-4 w-4 mr-2" />
-                    Add Task
+                    {createTaskMutation.isPending ? "جاري الإضافة..." : "أضف التاسك"}
                   </Button>
                 </CardContent>
               </Card>
@@ -691,10 +705,10 @@ export function LeadDetailPanel({
               ) : tasks && tasks.length > 0 ? (
                 <div className="space-y-3">
                   {tasks.map((task) => (
-                    <Card key={task.id} className={task.completed ? "opacity-60" : ""}>
+                    <Card key={task.id} className={task.completed ? "opacity-50" : ""} data-testid={`card-task-${task.id}`}>
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-start gap-3">
+                          <div className="flex items-start gap-3 flex-1 min-w-0">
                             <button
                               onClick={() =>
                                 toggleTaskMutation.mutate({
@@ -702,25 +716,37 @@ export function LeadDetailPanel({
                                   completed: !task.completed,
                                 })
                               }
-                              className="mt-0.5"
+                              className="mt-0.5 shrink-0"
+                              data-testid={`button-toggle-task-${task.id}`}
                             >
                               {task.completed ? (
-                                <CheckCircle className="h-5 w-5 text-primary" />
+                                <CheckCircle className="h-5 w-5 text-green-500" />
                               ) : (
                                 <Clock className="h-5 w-5 text-muted-foreground" />
                               )}
                             </button>
-                            <div>
-                              <p
-                                className={`font-medium ${task.completed ? "line-through" : ""}`}
-                              >
+                            <div className="flex-1 min-w-0">
+                              <p className={`font-medium text-sm ${task.completed ? "line-through text-muted-foreground" : ""}`}>
                                 {task.title}
                               </p>
-                              {task.type && (
-                                <Badge variant="outline" className="mt-1 text-xs">
-                                  {task.type}
-                                </Badge>
-                              )}
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                {task.type && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {task.type}
+                                  </Badge>
+                                )}
+                                {(task as any).dueDate && (
+                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <Calendar className="h-3 w-3" />
+                                    {format(new Date((task as any).dueDate), "dd/MM/yyyy")}
+                                  </span>
+                                )}
+                                {task.completed && (
+                                  <Badge variant="outline" className="text-xs text-green-600 border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800">
+                                    منجز ✓
+                                  </Badge>
+                                )}
+                              </div>
                               {task.description && (
                                 <p className="text-sm text-muted-foreground mt-1">
                                   {task.description}
@@ -731,8 +757,9 @@ export function LeadDetailPanel({
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8"
+                            className="h-8 w-8 shrink-0"
                             onClick={() => deleteTaskMutation.mutate(task.id)}
+                            data-testid={`button-delete-task-${task.id}`}
                           >
                             <Trash2 className="h-4 w-4 text-muted-foreground" />
                           </Button>
@@ -745,7 +772,8 @@ export function LeadDetailPanel({
                 <Card>
                   <CardContent className="flex flex-col items-center justify-center py-8">
                     <ListTodo className="h-10 w-10 text-muted-foreground/50 mb-3" />
-                    <p className="text-muted-foreground text-sm">No tasks yet</p>
+                    <p className="text-muted-foreground text-sm">مفيش تاسكس لسه</p>
+                    <p className="text-xs text-muted-foreground mt-1">أضف تاسك عشان تتابع مع الكلاينت</p>
                   </CardContent>
                 </Card>
               )}
@@ -993,7 +1021,7 @@ export function LeadDetailPanel({
                                   )}
                                   {historyItem.performedBy && (
                                     <p className="text-xs text-muted-foreground mt-2">
-                                      by {historyItem.performedBy}
+                                      بواسطة {historyItem.performedBy}
                                     </p>
                                   )}
                                 </CardContent>
