@@ -697,16 +697,35 @@ export class DatabaseStorage implements IStorage {
 
   async createCommunication(comm: InsertCommunication): Promise<Communication> {
     const [newComm] = await db.insert(communications).values(comm).returning();
-    // Set firstContactAt and responseTimeMinutes on lead if this is the first communication
     const lead = await this.getLead(comm.leadId);
+    const now = newComm.createdAt ?? new Date();
+    // Set firstContactAt and responseTimeMinutes on lead if this is the first communication
     if (lead && !lead.firstContactAt) {
-      const contactAt = newComm.createdAt ?? new Date();
       let responseTimeMinutes: number | null = null;
       if (lead.createdAt) {
-        responseTimeMinutes = Math.max(0, Math.round((contactAt.getTime() - new Date(lead.createdAt).getTime()) / 60000));
+        responseTimeMinutes = Math.max(0, Math.round((now.getTime() - new Date(lead.createdAt).getTime()) / 60000));
       }
-      await db.update(leads).set({ firstContactAt: contactAt, responseTimeMinutes }).where(eq(leads.id, comm.leadId));
+      await db.update(leads).set({ firstContactAt: now, responseTimeMinutes, lastActionDate: now }).where(eq(leads.id, comm.leadId));
+    } else if (lead) {
+      // Always update lastActionDate when a new communication is logged
+      await db.update(leads).set({ lastActionDate: now }).where(eq(leads.id, comm.leadId));
     }
+    // Write to lead_history so it shows up in the History tab
+    const typeLabels: Record<string, string> = {
+      call: "مكالمة هاتفية",
+      no_answer: "لم يرد على المكالمة",
+      whatsapp: "رسالة واتساب",
+      email: "بريد إلكتروني",
+      meeting: "اجتماع",
+      note: "ملاحظة",
+    };
+    const actionLabel = typeLabels[comm.type] ?? comm.type;
+    await this.createHistory({
+      leadId: comm.leadId,
+      action: actionLabel,
+      description: comm.note ?? `${actionLabel} من ${comm.userName ?? "المستخدم"}`,
+      performedBy: comm.userName ?? undefined,
+    });
     return newComm;
   }
 
@@ -773,6 +792,21 @@ export class DatabaseStorage implements IStorage {
 
   async createReminder(reminder: InsertReminder): Promise<Reminder> {
     const [newReminder] = await db.insert(reminders).values(reminder).returning();
+    // If linked to a lead, write to lead_history so it shows in the History tab
+    if (reminder.leadId) {
+      const user = reminder.userId
+        ? (await db.select().from(users).where(eq(users.id, reminder.userId)).limit(1))[0]
+        : null;
+      const performedBy = user
+        ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.username
+        : undefined;
+      await this.createHistory({
+        leadId: reminder.leadId,
+        action: "جدولة متابعة",
+        description: `${reminder.title} — ${new Date(reminder.dueDate).toLocaleDateString("ar-EG")}`,
+        performedBy,
+      });
+    }
     return newReminder;
   }
 

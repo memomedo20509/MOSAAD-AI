@@ -57,7 +57,7 @@ import {
   PhoneCall,
   ClipboardList,
 } from "lucide-react";
-import type { Lead, LeadState, Task, LeadHistory, LeadManagerComment } from "@shared/schema";
+import type { Lead, LeadState, Task, LeadHistory, LeadManagerComment, Communication } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -140,6 +140,11 @@ export function LeadDetailPanel({
 
   const { data: history, isLoading: historyLoading } = useQuery<LeadHistory[]>({
     queryKey: ["/api/leads", lead?.id, "history"],
+    enabled: !!lead,
+  });
+
+  const { data: communications = [] } = useQuery<Communication[]>({
+    queryKey: ["/api/leads", lead?.id, "communications"],
     enabled: !!lead,
   });
 
@@ -259,6 +264,7 @@ export function LeadDetailPanel({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "history"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "communications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
       setShowLogCallForm(false);
       setCallNote("");
@@ -287,6 +293,7 @@ export function LeadDetailPanel({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/reminders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/my-day"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "history"] });
       const formattedDate = followUpDate ? format(new Date(`${followUpDate}T${followUpTime}:00`), "dd/MM/yyyy") : "";
       toast({ title: `تم جدولة المتابعة ليوم ${formattedDate}` });
       setFollowUpDate("");
@@ -313,12 +320,23 @@ export function LeadDetailPanel({
   const currentState = states.find((s) => s.id === lead.stateId);
   const currentStateIndex = states.findIndex((s) => s.id === lead.stateId);
   const scoreInfo = computeLeadScore(lead);
-  const totalContacts = (history || []).length;
-  const lastContactDate = lead.lastActionDate
-    ? format(new Date(lead.lastActionDate), "dd/MM/yyyy")
+  const callCommunications = communications.filter(c => c.type === "call" || c.type === "no_answer");
+  const totalCalls = callCommunications.length;
+  // lastContactDate: from latest communication or lead.lastActionDate
+  const latestComm = communications.length > 0
+    ? communications.reduce((latest, c) => {
+        const t = new Date(c.createdAt!).getTime();
+        return t > new Date(latest.createdAt!).getTime() ? c : latest;
+      }, communications[0])
+    : null;
+  const lastContactRaw = latestComm?.createdAt
+    ? new Date(latestComm.createdAt)
+    : lead.lastActionDate
+    ? new Date(lead.lastActionDate)
     : lead.createdAt
-    ? format(new Date(lead.createdAt), "dd/MM/yyyy")
-    : "—";
+    ? new Date(lead.createdAt)
+    : null;
+  const lastContactDate = lastContactRaw ? format(lastContactRaw, "dd/MM/yyyy") : "—";
 
   return (
     <>
@@ -988,8 +1006,8 @@ export function LeadDetailPanel({
                   </div>
                   <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                     <ClipboardList className="h-3.5 w-3.5" />
-                    <span>التواصلات:</span>
-                    <span className="font-medium text-foreground">{totalContacts}</span>
+                    <span>المكالمات:</span>
+                    <span className="font-medium text-foreground">{totalCalls}</span>
                   </div>
                 </div>
                 <Badge
