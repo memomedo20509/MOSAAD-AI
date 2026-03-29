@@ -1,0 +1,26 @@
+#13 - تطوير تبويب الأكشنز في الليد
+What & Why
+The current Actions tab in the lead detail panel is minimal — it only shows Call, Email, and Update Status. It needs to become the central command center for a sales agent working on a lead: log what happened, send a WhatsApp message, schedule what's next, and see the full picture at a glance.
+
+Done looks like
+The Actions tab is reorganized into clear sections:
+"اتصل الآن" — clickable phone number that opens the dialer, plus a "Log this call" shortcut that pre-fills today's date
+"واتساب" — shows connection status; if connected shows template picker and send button; if not connected shows a link to connect from settings
+"جدول متابعة" — a quick date+time picker to schedule the next follow-up (saves directly to My Day list)
+"تغيير الحالة" — the existing status buttons, but redesigned as a clean horizontal step indicator showing current stage
+All actions taken from this tab (call logged, WhatsApp sent, status changed, follow-up scheduled) appear instantly in the History tab
+The tab shows a small summary at the top: last contact date, number of total contacts, and current lead score badge
+On mobile, the actions are large tap-friendly buttons
+Out of scope
+Email sending from within the CRM
+Integrating with phone carriers for auto-dialing
+Tasks
+Frontend — Redesign Actions tab layout: Restructure the Actions tab in lead-detail-panel.tsx into the four sections described above. Add the lead summary bar at the top (last contact, contact count, score badge). Ensure all sections are responsive for mobile.
+Frontend — WhatsApp section integration: Wire the WhatsApp section in the Actions tab to the agent's WhatsApp connection state (from the QR integration task). Show connected/disconnected state and the template send panel when connected.
+Frontend — Quick follow-up scheduler: Add the inline date+time picker in the Actions tab that creates a follow-up reminder with a single click, and confirms with a toast showing "تم جدولة المتابعة ليوم [date]".
+Frontend — Status step indicator: Replace the grid of status buttons with a horizontal stepper that shows the lead's current stage highlighted and allows clicking adjacent stages to advance/revert. Keep the full stage list accessible via a "See all stages" option.
+Relevant files
+client/src/components/lead-detail-panel.tsx
+client/src/pages/kanban.tsx
+server/routes.ts
+shared/schema.ts
