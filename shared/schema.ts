@@ -367,5 +367,23 @@ export const insertWhatsappMessagesLogSchema = createInsertSchema(whatsappMessag
 export type InsertWhatsappMessagesLog = z.infer<typeof insertWhatsappMessagesLogSchema>;
 export type WhatsappMessagesLog = typeof whatsappMessagesLog.$inferSelect;
 
+// Lead Manager Comments (coaching notes from managers/admins to agents)
+export const leadManagerComments = pgTable("lead_manager_comments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  leadId: varchar("lead_id").references(() => leads.id).notNull(),
+  managerId: varchar("manager_id").references(() => users.id).notNull(),
+  managerName: text("manager_name"),
+  content: text("content").notNull(),
+  isReadByAgent: boolean("is_read_by_agent").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertLeadManagerCommentSchema = createInsertSchema(leadManagerComments).omit({ id: true, createdAt: true, updatedAt: true });
+export const updateLeadManagerCommentSchema = insertLeadManagerCommentSchema.partial();
+export type InsertLeadManagerComment = z.infer<typeof insertLeadManagerCommentSchema>;
+export type UpdateLeadManagerComment = z.infer<typeof updateLeadManagerCommentSchema>;
+export type LeadManagerComment = typeof leadManagerComments.$inferSelect;
+
 // Export auth models (users, teams, sessions, role_permissions)
 export * from "./models/auth";

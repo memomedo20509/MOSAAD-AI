@@ -43,8 +43,12 @@ import {
   Trash2,
   Paperclip,
   ArrowRightLeft,
+  MessageSquare,
+  Edit2,
+  X,
+  Check,
 } from "lucide-react";
-import type { Lead, LeadState, Task, LeadHistory } from "@shared/schema";
+import type { Lead, LeadState, Task, LeadHistory, LeadManagerComment } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -62,6 +66,12 @@ interface LeadDetailPanelProps {
 
 type UserSummary = { id: string; username: string; fullName: string; role: string };
 
+const MANAGER_ROLES = ["super_admin", "admin", "sales_admin", "sales_manager", "team_leader", "company_owner"];
+
+function isManagerRole(role: string | undefined | null): boolean {
+  return !!role && MANAGER_ROLES.includes(role);
+}
+
 export function LeadDetailPanel({
   lead,
   states,
@@ -73,11 +83,17 @@ export function LeadDetailPanel({
   const [newTask, setNewTask] = useState({ title: "", type: "", description: "" });
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [transferToUserId, setTransferToUserId] = useState("");
+  const [showManagerNoteInput, setShowManagerNoteInput] = useState(false);
+  const [managerNoteContent, setManagerNoteContent] = useState("");
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentContent, setEditingCommentContent] = useState("");
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
   const { t } = useLanguage();
 
   const canTransfer = currentUser?.role === "super_admin" || currentUser?.role === "sales_admin" || currentUser?.role === "admin";
+  const isManager = isManagerRole(currentUser?.role);
+  const isAssignedAgent = currentUser && lead && lead.assignedTo === currentUser.id;
 
   const { data: salesAgents } = useQuery<UserSummary[]>({
     queryKey: ["/api/users"],
@@ -110,6 +126,13 @@ export function LeadDetailPanel({
     queryKey: ["/api/leads", lead?.id, "history"],
     enabled: !!lead,
   });
+
+  const { data: managerComments, isLoading: commentsLoading } = useQuery<LeadManagerComment[]>({
+    queryKey: ["/api/leads", lead?.id, "manager-comments"],
+    enabled: !!lead,
+  });
+
+  const unreadManagerComments = managerComments?.filter(c => !c.isReadByAgent) ?? [];
 
   const createTaskMutation = useMutation({
     mutationFn: async (task: Partial<Task>) => {
@@ -146,6 +169,69 @@ export function LeadDetailPanel({
       queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "tasks"] });
     },
   });
+
+  const createManagerCommentMutation = useMutation({
+    mutationFn: async (content: string) => {
+      const res = await apiRequest("POST", `/api/leads/${lead?.id}/manager-comments`, { content });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "manager-comments"] });
+      setManagerNoteContent("");
+      setShowManagerNoteInput(false);
+      toast({ title: "تم إضافة الملاحظة بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "فشل إضافة الملاحظة", variant: "destructive" });
+    },
+  });
+
+  const editManagerCommentMutation = useMutation({
+    mutationFn: async ({ id, content }: { id: string; content: string }) => {
+      const res = await apiRequest("PATCH", `/api/manager-comments/${id}`, { content });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "manager-comments"] });
+      setEditingCommentId(null);
+      setEditingCommentContent("");
+      toast({ title: "تم تعديل الملاحظة بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "فشل تعديل الملاحظة", variant: "destructive" });
+    },
+  });
+
+  const deleteManagerCommentMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("DELETE", `/api/manager-comments/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "manager-comments"] });
+      toast({ title: "تم حذف الملاحظة" });
+    },
+    onError: () => {
+      toast({ title: "فشل حذف الملاحظة", variant: "destructive" });
+    },
+  });
+
+  const markReadMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/manager-comments/${id}/mark-read`, {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "manager-comments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/manager-comments/unread-count"] });
+    },
+    onError: () => {
+      toast({ title: "فشل تحديد القراءة", variant: "destructive" });
+    },
+  });
+
+  const handleMarkAllRead = () => {
+    unreadManagerComments.forEach(c => markReadMutation.mutate(c.id));
+  };
 
   const handleSave = () => {
     onUpdate(formData);
@@ -185,7 +271,7 @@ export function LeadDetailPanel({
                 </Badge>
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap justify-end">
               {canTransfer && !editMode && (
                 <Button
                   size="sm"
@@ -214,6 +300,25 @@ export function LeadDetailPanel({
             </div>
           </div>
         </SheetHeader>
+
+        {/* Agent banner: unread manager comments */}
+        {isAssignedAgent && unreadManagerComments.length > 0 && (
+          <div className="flex items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 px-3 py-2 mt-2 text-sm" data-testid="banner-unread-manager-comment">
+            <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
+              <MessageSquare className="h-4 w-4 flex-shrink-0" />
+              <span>المانجر ترك ملاحظة على هذا الليد</span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-amber-400 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 h-7 text-xs"
+              onClick={handleMarkAllRead}
+              data-testid="button-mark-comment-read"
+            >
+              تم الاطلاع
+            </Button>
+          </div>
+        )}
 
         <Tabs defaultValue="info" className="flex-1 overflow-hidden flex flex-col">
           <TabsList className="grid w-full grid-cols-5">
@@ -544,6 +649,79 @@ export function LeadDetailPanel({
             </TabsContent>
 
             <TabsContent value="history" className="m-0 space-y-4">
+              {/* Manager Note button - only for managers */}
+              {isManager && (
+                <div>
+                  {showManagerNoteInput ? (
+                    <Card className="border-amber-300 dark:border-amber-700">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm text-amber-700 dark:text-amber-300 flex items-center gap-2">
+                          <MessageSquare className="h-4 w-4" />
+                          ملاحظة المانجر
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <Textarea
+                          placeholder="اكتب ملاحظتك التدريبية هنا..."
+                          value={managerNoteContent}
+                          onChange={(e) => setManagerNoteContent(e.target.value)}
+                          rows={3}
+                          data-testid="textarea-manager-note"
+                          className="border-amber-200 focus:border-amber-400 dark:border-amber-800"
+                        />
+                        <div className="flex gap-2 justify-end">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setShowManagerNoteInput(false);
+                              setManagerNoteContent("");
+                            }}
+                            data-testid="button-cancel-manager-note"
+                          >
+                            إلغاء
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="bg-amber-500 hover:bg-amber-600 text-white"
+                            onClick={() => managerNoteContent.trim() && createManagerCommentMutation.mutate(managerNoteContent.trim())}
+                            disabled={!managerNoteContent.trim() || createManagerCommentMutation.isPending}
+                            data-testid="button-submit-manager-note"
+                          >
+                            إرسال الملاحظة
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-amber-400 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 w-full"
+                      onClick={() => setShowManagerNoteInput(true)}
+                      data-testid="button-add-manager-note"
+                    >
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      إضافة ملاحظة المانجر
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {/* Manager Comments in timeline */}
+              {commentsLoading ? (
+                <div className="space-y-3">
+                  {[1].map((i) => (
+                    <Card key={i}>
+                      <CardContent className="p-4">
+                        <Skeleton className="h-5 w-32 mb-2" />
+                        <Skeleton className="h-4 w-48" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : null}
+
               {historyLoading ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
@@ -555,46 +733,175 @@ export function LeadDetailPanel({
                     </Card>
                   ))}
                 </div>
-              ) : history && history.length > 0 ? (
-                <div className="relative">
-                  <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-border" />
-                  <div className="space-y-4">
-                    {history.map((item) => (
-                      <div key={item.id} className="relative pl-10">
-                        <div className="absolute left-2.5 top-2 h-3 w-3 rounded-full bg-primary" />
-                        <Card>
-                          <CardContent className="p-4">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="font-medium">{item.action}</p>
-                              <span className="text-xs text-muted-foreground">
-                                {item.createdAt
-                                  ? format(new Date(item.createdAt), "MMM d, yyyy h:mm a")
-                                  : ""}
-                              </span>
-                            </div>
-                            {item.description && (
-                              <p className="text-sm text-muted-foreground mt-1">
-                                {item.description}
-                              </p>
-                            )}
-                            {item.performedBy && (
-                              <p className="text-xs text-muted-foreground mt-2">
-                                by {item.performedBy}
-                              </p>
-                            )}
-                          </CardContent>
-                        </Card>
-                      </div>
-                    ))}
-                  </div>
-                </div>
               ) : (
-                <Card>
-                  <CardContent className="flex flex-col items-center justify-center py-8">
-                    <History className="h-10 w-10 text-muted-foreground/50 mb-3" />
-                    <p className="text-muted-foreground text-sm">No history yet</p>
-                  </CardContent>
-                </Card>
+                (() => {
+                  const historyItems = (history ?? []).map(item => ({
+                    type: "history" as const,
+                    id: item.id,
+                    createdAt: item.createdAt,
+                    data: item,
+                  }));
+                  const commentItems = (managerComments ?? []).map(c => ({
+                    type: "manager_comment" as const,
+                    id: c.id,
+                    createdAt: c.createdAt,
+                    data: c,
+                  }));
+                  const allItems = [...historyItems, ...commentItems].sort((a, b) => {
+                    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                    return aTime - bTime;
+                  });
+
+                  if (allItems.length === 0) {
+                    return (
+                      <Card>
+                        <CardContent className="flex flex-col items-center justify-center py-8">
+                          <History className="h-10 w-10 text-muted-foreground/50 mb-3" />
+                          <p className="text-muted-foreground text-sm">No history yet</p>
+                        </CardContent>
+                      </Card>
+                    );
+                  }
+
+                  return (
+                    <div className="relative">
+                      <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-border" />
+                      <div className="space-y-4">
+                        {allItems.map((item) => {
+                          if (item.type === "manager_comment") {
+                            const comment = item.data as LeadManagerComment;
+                            const isMyComment = currentUser?.id === comment.managerId;
+                            const isBeingEdited = editingCommentId === comment.id;
+                            return (
+                              <div key={`mc-${comment.id}`} className="relative pl-10" data-testid={`manager-comment-${comment.id}`}>
+                                <div className="absolute left-2.5 top-2 h-3 w-3 rounded-full bg-amber-500" />
+                                <Card className="border-l-4 border-l-amber-400 dark:border-l-amber-600 bg-amber-50/50 dark:bg-amber-950/20">
+                                  <CardContent className="p-4">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="flex items-center gap-2">
+                                        <MessageSquare className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                                        <span className="font-semibold text-sm text-amber-700 dark:text-amber-300">ملاحظة المانجر</span>
+                                        {!comment.isReadByAgent && isAssignedAgent && (
+                                          <Badge className="bg-amber-500 text-white text-xs px-1.5 py-0">جديد</Badge>
+                                        )}
+                                        {comment.isReadByAgent && isManager && (
+                                          <Badge variant="outline" className="text-xs px-1.5 py-0 border-green-400 text-green-600">
+                                            <Check className="h-3 w-3 mr-1" />
+                                            تمت القراءة
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-xs text-muted-foreground">
+                                          {comment.createdAt ? format(new Date(comment.createdAt), "MMM d, yyyy h:mm a") : ""}
+                                        </span>
+                                        {isMyComment && !isBeingEdited && (
+                                          <>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-7 w-7 text-muted-foreground hover:text-amber-600"
+                                              onClick={() => {
+                                                setEditingCommentId(comment.id);
+                                                setEditingCommentContent(comment.content);
+                                              }}
+                                              data-testid={`button-edit-manager-comment-${comment.id}`}
+                                            >
+                                              <Edit2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                              onClick={() => deleteManagerCommentMutation.mutate(comment.id)}
+                                              data-testid={`button-delete-manager-comment-${comment.id}`}
+                                            >
+                                              <Trash2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                          </>
+                                        )}
+                                        {isBeingEdited && (
+                                          <>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-7 w-7 text-green-600"
+                                              onClick={() => editManagerCommentMutation.mutate({ id: comment.id, content: editingCommentContent })}
+                                              disabled={!editingCommentContent.trim() || editManagerCommentMutation.isPending}
+                                              data-testid={`button-save-manager-comment-${comment.id}`}
+                                            >
+                                              <Check className="h-3.5 w-3.5" />
+                                            </Button>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-7 w-7 text-muted-foreground"
+                                              onClick={() => {
+                                                setEditingCommentId(null);
+                                                setEditingCommentContent("");
+                                              }}
+                                              data-testid={`button-cancel-edit-manager-comment-${comment.id}`}
+                                            >
+                                              <X className="h-3.5 w-3.5" />
+                                            </Button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {isBeingEdited ? (
+                                      <Textarea
+                                        value={editingCommentContent}
+                                        onChange={(e) => setEditingCommentContent(e.target.value)}
+                                        rows={3}
+                                        className="mt-2 border-amber-200 focus:border-amber-400"
+                                        data-testid={`textarea-edit-manager-comment-${comment.id}`}
+                                      />
+                                    ) : (
+                                      <p className="text-sm mt-2 whitespace-pre-wrap">{comment.content}</p>
+                                    )}
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                      {comment.managerName}
+                                    </p>
+                                  </CardContent>
+                                </Card>
+                              </div>
+                            );
+                          }
+
+                          const historyItem = item.data as LeadHistory;
+                          return (
+                            <div key={`h-${historyItem.id}`} className="relative pl-10">
+                              <div className="absolute left-2.5 top-2 h-3 w-3 rounded-full bg-primary" />
+                              <Card>
+                                <CardContent className="p-4">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="font-medium">{historyItem.action}</p>
+                                    <span className="text-xs text-muted-foreground">
+                                      {historyItem.createdAt
+                                        ? format(new Date(historyItem.createdAt), "MMM d, yyyy h:mm a")
+                                        : ""}
+                                    </span>
+                                  </div>
+                                  {historyItem.description && (
+                                    <p className="text-sm text-muted-foreground mt-1">
+                                      {historyItem.description}
+                                    </p>
+                                  )}
+                                  {historyItem.performedBy && (
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                      by {historyItem.performedBy}
+                                    </p>
+                                  )}
+                                </CardContent>
+                              </Card>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()
               )}
             </TabsContent>
 

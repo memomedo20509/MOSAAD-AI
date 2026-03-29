@@ -24,6 +24,7 @@ import {
   callLogs,
   whatsappTemplates,
   whatsappMessagesLog,
+  leadManagerComments,
   type User,
   type InsertUser,
   type UpdateUser,
@@ -68,6 +69,8 @@ import {
   type UpdateWhatsappTemplate,
   type WhatsappMessagesLog,
   type InsertWhatsappMessagesLog,
+  type LeadManagerComment,
+  type InsertLeadManagerComment,
 } from "@shared/schema";
 
 const PostgresSessionStore = connectPg(session);
@@ -261,6 +264,15 @@ export interface IStorage {
   getWhatsappLogsByLead(leadId: string): Promise<WhatsappMessagesLog[]>;
   countAgentMessagesInLastHour(agentId: string): Promise<number>;
   countAgentMessagesInLastDay(agentId: string): Promise<number>;
+
+  // Lead Manager Comments
+  getManagerCommentsByLead(leadId: string): Promise<LeadManagerComment[]>;
+  getManagerComment(id: string): Promise<LeadManagerComment | undefined>;
+  createManagerComment(comment: InsertLeadManagerComment): Promise<LeadManagerComment>;
+  updateManagerComment(id: string, data: Partial<LeadManagerComment>): Promise<LeadManagerComment | undefined>;
+  deleteManagerComment(id: string): Promise<boolean>;
+  markManagerCommentRead(id: string): Promise<LeadManagerComment | undefined>;
+  getUnreadManagerCommentsByAssignee(assignedToUserId: string): Promise<LeadManagerComment[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1292,6 +1304,47 @@ export class DatabaseStorage implements IStorage {
         )
       );
     return Number(result[0]?.count ?? 0);
+  }
+
+  // Lead Manager Comments
+  async getManagerCommentsByLead(leadId: string): Promise<LeadManagerComment[]> {
+    return db.select().from(leadManagerComments).where(eq(leadManagerComments.leadId, leadId)).orderBy(leadManagerComments.createdAt);
+  }
+
+  async getManagerComment(id: string): Promise<LeadManagerComment | undefined> {
+    const [comment] = await db.select().from(leadManagerComments).where(eq(leadManagerComments.id, id));
+    return comment;
+  }
+
+  async createManagerComment(comment: InsertLeadManagerComment): Promise<LeadManagerComment> {
+    const [newComment] = await db.insert(leadManagerComments).values(comment).returning();
+    return newComment;
+  }
+
+  async updateManagerComment(id: string, data: Partial<LeadManagerComment>): Promise<LeadManagerComment | undefined> {
+    const [updated] = await db.update(leadManagerComments).set({ ...data, updatedAt: new Date() }).where(eq(leadManagerComments.id, id)).returning();
+    return updated;
+  }
+
+  async deleteManagerComment(id: string): Promise<boolean> {
+    const result = await db.delete(leadManagerComments).where(eq(leadManagerComments.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async markManagerCommentRead(id: string): Promise<LeadManagerComment | undefined> {
+    const [updated] = await db.update(leadManagerComments).set({ isReadByAgent: true, updatedAt: new Date() }).where(eq(leadManagerComments.id, id)).returning();
+    return updated;
+  }
+
+  async getUnreadManagerCommentsByAssignee(assignedToUserId: string): Promise<LeadManagerComment[]> {
+    // Get all unread comments, then filter by leads assigned to the user
+    const unread = await db.select().from(leadManagerComments).where(eq(leadManagerComments.isReadByAgent, false));
+    if (unread.length === 0) return [];
+    const leadIds = [...new Set(unread.map(c => c.leadId))];
+    const assignedLeads = await db.select().from(leads).where(eq(leads.assignedTo, assignedToUserId));
+    const assignedLeadIds = new Set(assignedLeads.map(l => l.id));
+    return unread.filter(c => assignedLeadIds.has(c.leadId));
+  }
   }
 }
 

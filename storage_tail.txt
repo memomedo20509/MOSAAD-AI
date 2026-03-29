@@ -1,0 +1,115 @@
+        scheduled: agentReminders.length,
+        completed: agentReminders.filter(r => r.isCompleted).length,
+      };
+    });
+  }
+
+<<<<<<< HEAD
+  // WhatsApp Templates
+  async getAllWhatsappTemplates(activeOnly = false): Promise<WhatsappTemplate[]> {
+    if (activeOnly) {
+      return db.select().from(whatsappTemplates).where(eq(whatsappTemplates.isActive, true)).orderBy(whatsappTemplates.createdAt);
+    }
+    return db.select().from(whatsappTemplates).orderBy(whatsappTemplates.createdAt);
+  }
+
+  async getWhatsappTemplate(id: string): Promise<WhatsappTemplate | undefined> {
+    const [template] = await db.select().from(whatsappTemplates).where(eq(whatsappTemplates.id, id));
+    return template;
+  }
+
+  async createWhatsappTemplate(template: InsertWhatsappTemplate): Promise<WhatsappTemplate> {
+    const [newTemplate] = await db.insert(whatsappTemplates).values(template).returning();
+    return newTemplate;
+  }
+
+  async updateWhatsappTemplate(id: string, data: UpdateWhatsappTemplate): Promise<WhatsappTemplate | undefined> {
+    const [updated] = await db.update(whatsappTemplates).set({ ...data, updatedAt: new Date() }).where(eq(whatsappTemplates.id, id)).returning();
+    return updated;
+  }
+
+  async deleteWhatsappTemplate(id: string): Promise<boolean> {
+    const result = await db.delete(whatsappTemplates).where(eq(whatsappTemplates.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // WhatsApp Messages Log
+  async logWhatsappMessage(log: InsertWhatsappMessagesLog): Promise<WhatsappMessagesLog> {
+    const [entry] = await db.insert(whatsappMessagesLog).values(log).returning();
+    return entry;
+  }
+
+  async getWhatsappLogsByLead(leadId: string): Promise<WhatsappMessagesLog[]> {
+    return db.select().from(whatsappMessagesLog).where(eq(whatsappMessagesLog.leadId, leadId)).orderBy(whatsappMessagesLog.createdAt);
+  }
+
+  async countAgentMessagesInLastHour(agentId: string): Promise<number> {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(whatsappMessagesLog)
+      .where(
+        and(
+          eq(whatsappMessagesLog.agentId, agentId),
+          gte(whatsappMessagesLog.createdAt, oneHourAgo)
+        )
+      );
+    return Number(result[0]?.count ?? 0);
+  }
+
+  async countAgentMessagesInLastDay(agentId: string): Promise<number> {
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(whatsappMessagesLog)
+      .where(
+        and(
+          eq(whatsappMessagesLog.agentId, agentId),
+          gte(whatsappMessagesLog.createdAt, oneDayAgo)
+        )
+      );
+    return Number(result[0]?.count ?? 0);
+=======
+  // Lead Manager Comments
+  async getManagerCommentsByLead(leadId: string): Promise<LeadManagerComment[]> {
+    return db.select().from(leadManagerComments).where(eq(leadManagerComments.leadId, leadId)).orderBy(leadManagerComments.createdAt);
+  }
+
+  async getManagerComment(id: string): Promise<LeadManagerComment | undefined> {
+    const [comment] = await db.select().from(leadManagerComments).where(eq(leadManagerComments.id, id));
+    return comment;
+  }
+
+  async createManagerComment(comment: InsertLeadManagerComment): Promise<LeadManagerComment> {
+    const [newComment] = await db.insert(leadManagerComments).values(comment).returning();
+    return newComment;
+  }
+
+  async updateManagerComment(id: string, data: Partial<LeadManagerComment>): Promise<LeadManagerComment | undefined> {
+    const [updated] = await db.update(leadManagerComments).set({ ...data, updatedAt: new Date() }).where(eq(leadManagerComments.id, id)).returning();
+    return updated;
+  }
+
+  async deleteManagerComment(id: string): Promise<boolean> {
+    const result = await db.delete(leadManagerComments).where(eq(leadManagerComments.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async markManagerCommentRead(id: string): Promise<LeadManagerComment | undefined> {
+    const [updated] = await db.update(leadManagerComments).set({ isReadByAgent: true, updatedAt: new Date() }).where(eq(leadManagerComments.id, id)).returning();
+    return updated;
+  }
+
+  async getUnreadManagerCommentsByAssignee(assignedToUserId: string): Promise<LeadManagerComment[]> {
+    // Get all unread comments, then filter by leads assigned to the user
+    const unread = await db.select().from(leadManagerComments).where(eq(leadManagerComments.isReadByAgent, false));
+    if (unread.length === 0) return [];
+    const leadIds = [...new Set(unread.map(c => c.leadId))];
+    const assignedLeads = await db.select().from(leads).where(eq(leads.assignedTo, assignedToUserId));
+    const assignedLeadIds = new Set(assignedLeads.map(l => l.id));
+    return unread.filter(c => assignedLeadIds.has(c.leadId));
+>>>>>>> ec3b9cc (feat: Manager coaching notes/comments on leads (Task #12))
+  }
+}
+
+export const storage = new DatabaseStorage();

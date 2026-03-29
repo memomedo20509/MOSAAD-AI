@@ -1,4 +1,5 @@
 import { useLocation, Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Users,
@@ -23,7 +24,6 @@ import {
   Sun,
   MessageSquare,
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import {
   Sidebar,
@@ -72,6 +72,13 @@ export function AppSidebar() {
   const pendingActionsCount = (myDayData?.todayFollowUps.length ?? 0) +
     (myDayData?.overdueFollowUps.length ?? 0) +
     (myDayData?.newLeads.length ?? 0);
+
+  const { data: unreadData } = useQuery<{ count: number }>({
+    queryKey: ["/api/manager-comments/unread-count"],
+    refetchInterval: 30000,
+    enabled: userRole === "sales_agent",
+  });
+  const unreadCount = unreadData?.count ?? 0;
 
   const mainNavItems = [
     {
@@ -379,15 +386,25 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter className="p-4">
         {user && (
-          <div className="mb-2 flex flex-col gap-0.5" data-testid="sidebar-user-profile">
-            <span className="text-sm font-medium truncate" data-testid="text-sidebar-username">
-              {user.firstName && user.lastName
-                ? `${user.firstName} ${user.lastName}`
-                : user.username}
-            </span>
-            <span className="text-xs text-muted-foreground" data-testid="text-sidebar-role">
-              {userRole ? ROLE_ARABIC_NAMES[userRole] ?? user.role : user.role}
-            </span>
+          <div className="mb-2 flex items-start justify-between gap-2" data-testid="sidebar-user-profile">
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="text-sm font-medium truncate" data-testid="text-sidebar-username">
+                {user.firstName && user.lastName
+                  ? `${user.firstName} ${user.lastName}`
+                  : user.username}
+              </span>
+              <span className="text-xs text-muted-foreground" data-testid="text-sidebar-role">
+                {userRole ? ROLE_ARABIC_NAMES[userRole] ?? user.role : user.role}
+              </span>
+            </div>
+            {unreadCount > 0 && (
+              <div className="relative flex-shrink-0" title="ملاحظات المانجر غير مقروءة" data-testid="badge-unread-manager-comments">
+                <Bell className="h-5 w-5 text-amber-500" />
+                <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              </div>
+            )}
           </div>
         )}
         <div className="text-xs text-muted-foreground">

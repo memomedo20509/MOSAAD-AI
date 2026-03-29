@@ -41,6 +41,8 @@ import {
   insertCallLogSchema,
   insertWhatsappTemplateSchema,
   updateWhatsappTemplateSchema,
+  insertLeadManagerCommentSchema,
+  updateLeadManagerCommentSchema,
 } from "@shared/schema";
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
@@ -1665,6 +1667,129 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting commission:", error);
       res.status(500).json({ error: "Failed to delete commission" });
+    }
+  });
+
+  // ==================== MANAGER COMMENTS ====================
+
+  const isManager = (role: string | undefined) =>
+    role === "super_admin" || role === "admin" || role === "sales_admin" || role === "sales_manager" || role === "team_leader" || role === "company_owner";
+
+  // Get unread manager comment count for the current user (agent) - MUST be before /:id routes
+  app.get("/api/manager-comments/unread-count", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user;
+      const unread = await storage.getUnreadManagerCommentsByAssignee(user!.id);
+      res.json({ count: unread.length, comments: unread });
+    } catch (error) {
+      console.error("Error fetching unread comments:", error);
+      res.status(500).json({ error: "Failed to fetch unread comments" });
+    }
+  });
+
+  // Get manager comments for a lead
+  app.get("/api/leads/:leadId/manager-comments", isAuthenticated, async (req, res) => {
+    try {
+      const { leadId } = req.params;
+      if (!(await canAccessLead(req.user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const comments = await storage.getManagerCommentsByLead(leadId);
+      res.json(comments);
+    } catch (error) {
+      console.error("Error fetching manager comments:", error);
+      res.status(500).json({ error: "Failed to fetch manager comments" });
+    }
+  });
+
+  // Create a manager comment
+  app.post("/api/leads/:leadId/manager-comments", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user;
+      if (!isManager(user?.role)) {
+        return res.status(403).json({ error: "Only managers can post coaching notes" });
+      }
+      const { leadId } = req.params;
+      if (!(await canAccessLead(req.user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const managerName = user
+        ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.username
+        : "Manager";
+      const data = insertLeadManagerCommentSchema.parse({
+        ...req.body,
+        leadId,
+        managerId: user!.id,
+        managerName,
+      });
+      const comment = await storage.createManagerComment(data);
+      res.status(201).json(comment);
+    } catch (error) {
+      console.error("Error creating manager comment:", error);
+      res.status(400).json({ error: "Failed to create manager comment" });
+    }
+  });
+
+  // Edit a manager comment (only the author)
+  app.patch("/api/manager-comments/:id", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user;
+      if (!isManager(user?.role)) {
+        return res.status(403).json({ error: "Only managers can edit coaching notes" });
+      }
+      const { id } = req.params;
+      const existing = await storage.getManagerComment(id);
+      if (!existing) return res.status(404).json({ error: "Comment not found" });
+      if (existing.managerId !== user!.id) {
+        return res.status(403).json({ error: "Can only edit your own comments" });
+      }
+      const data = updateLeadManagerCommentSchema.parse(req.body);
+      const updated = await storage.updateManagerComment(id, data);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating manager comment:", error);
+      res.status(400).json({ error: "Failed to update manager comment" });
+    }
+  });
+
+  // Delete a manager comment (only the author)
+  app.delete("/api/manager-comments/:id", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user;
+      if (!isManager(user?.role)) {
+        return res.status(403).json({ error: "Only managers can delete coaching notes" });
+      }
+      const { id } = req.params;
+      const existing = await storage.getManagerComment(id);
+      if (!existing) return res.status(404).json({ error: "Comment not found" });
+      if (existing.managerId !== user!.id) {
+        return res.status(403).json({ error: "Can only delete your own comments" });
+      }
+      await storage.deleteManagerComment(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting manager comment:", error);
+      res.status(500).json({ error: "Failed to delete manager comment" });
+    }
+  });
+
+  // Mark a manager comment as read (only the assigned agent)
+  app.post("/api/manager-comments/:id/mark-read", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user;
+      const { id } = req.params;
+      const existing = await storage.getManagerComment(id);
+      if (!existing) return res.status(404).json({ error: "Comment not found" });
+      const lead = await storage.getLead(existing.leadId);
+      if (!lead) return res.status(404).json({ error: "Lead not found" });
+      if (lead.assignedTo !== user!.id) {
+        return res.status(403).json({ error: "Only the assigned agent can mark comments as read" });
+      }
+      const updated = await storage.markManagerCommentRead(id);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error marking comment as read:", error);
+      res.status(500).json({ error: "Failed to mark comment as read" });
     }
   });
 
