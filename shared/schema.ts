@@ -443,6 +443,10 @@ export const chatbotSettings = pgTable("chatbot_settings", {
   workingHoursStart: integer("working_hours_start").default(9),
   workingHoursEnd: integer("working_hours_end").default(18),
   welcomeMessage: text("welcome_message").default("أهلاً! 👋 أنا المساعد الذكي لشركتنا العقارية. يسعدني مساعدتك. ممكن تعرفني باسمك الكريم؟"),
+  botName: varchar("bot_name").default("المساعد الذكي"),
+  companyName: varchar("company_name").default("شركتنا العقارية"),
+  botPersonality: text("bot_personality").default("أنت مساعد مبيعات عقارية ذكي ولطيف وودود. تتكلم بالعربية المصرية بشكل طبيعي. مهمتك مساعدة العملاء واستخراج بياناتهم بطريقة محترمة وغير ملحّة."),
+  respondAlways: boolean("respond_always").default(false),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Wifi, WifiOff, RefreshCw, SmartphoneNfc, CheckCircle2, AlertCircle, XCircle, Trash2, Bot, Clock, MessageSquare, Save } from "lucide-react";
+import { ArrowLeft, Wifi, WifiOff, RefreshCw, SmartphoneNfc, CheckCircle2, AlertCircle, XCircle, Trash2, Bot, Clock, MessageSquare, Save, Building2, User, Sparkles, AlarmClock } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -27,6 +27,10 @@ interface ChatbotSettings {
   workingHoursStart: number;
   workingHoursEnd: number;
   welcomeMessage: string;
+  botName?: string;
+  companyName?: string;
+  botPersonality?: string;
+  respondAlways?: boolean;
 }
 
 export default function WhatsAppSettingsPage() {
@@ -38,6 +42,10 @@ export default function WhatsAppSettingsPage() {
     workingHoursStart: 9,
     workingHoursEnd: 18,
     welcomeMessage: "أهلاً! 👋 أنا المساعد الذكي لشركتنا العقارية. يسعدني مساعدتك. ممكن تعرفني باسمك الكريم؟",
+    botName: "المساعد الذكي",
+    companyName: "شركتنا العقارية",
+    botPersonality: "أنت مساعد مبيعات عقارية ذكي ولطيف وودود. تتكلم بالعربية المصرية بشكل طبيعي. مهمتك مساعدة العملاء واستخراج بياناتهم بطريقة محترمة وغير ملحّة.",
+    respondAlways: false,
   });
 
   const { data, isLoading, refetch } = useQuery<WaStatusResponse>({
@@ -56,6 +64,10 @@ export default function WhatsAppSettingsPage() {
         workingHoursStart: botSettings.workingHoursStart ?? 9,
         workingHoursEnd: botSettings.workingHoursEnd ?? 18,
         welcomeMessage: botSettings.welcomeMessage ?? "أهلاً! 👋 أنا المساعد الذكي لشركتنا العقارية. يسعدني مساعدتك. ممكن تعرفني باسمك الكريم؟",
+        botName: botSettings.botName ?? "المساعد الذكي",
+        companyName: botSettings.companyName ?? "شركتنا العقارية",
+        botPersonality: botSettings.botPersonality ?? "أنت مساعد مبيعات عقارية ذكي ولطيف وودود. تتكلم بالعربية المصرية بشكل طبيعي. مهمتك مساعدة العملاء واستخراج بياناتهم بطريقة محترمة وغير ملحّة.",
+        respondAlways: botSettings.respondAlways ?? false,
       });
     }
   }, [botSettings]);
@@ -448,6 +460,70 @@ export default function WhatsAppSettingsPage() {
                 </div>
               </div>
 
+              {/* Respond Always toggle */}
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <Label className="text-sm font-medium" htmlFor="respond-always">الرد في كل الأوقات</Label>
+                  <p className="text-xs text-muted-foreground">عند التفعيل، البوت يرد على العملاء في أي وقت (مش بس بعد الدوام)</p>
+                </div>
+                <Switch
+                  id="respond-always"
+                  checked={botForm.respondAlways ?? false}
+                  onCheckedChange={(v) => setBotForm(f => ({ ...f, respondAlways: v }))}
+                  data-testid="switch-respond-always"
+                />
+              </div>
+
+              {/* Bot Identity */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <span>هوية البوت</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">اسم البوت</Label>
+                    <Input
+                      value={botForm.botName ?? ""}
+                      onChange={(e) => setBotForm(f => ({ ...f, botName: e.target.value }))}
+                      placeholder="المساعد الذكي"
+                      className="text-sm"
+                      dir="rtl"
+                      data-testid="input-bot-name"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">اسم الشركة</Label>
+                    <Input
+                      value={botForm.companyName ?? ""}
+                      onChange={(e) => setBotForm(f => ({ ...f, companyName: e.target.value }))}
+                      placeholder="شركتنا العقارية"
+                      className="text-sm"
+                      dir="rtl"
+                      data-testid="input-company-name"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Bot Personality */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Sparkles className="h-4 w-4 text-purple-500" />
+                  <span>شخصية البوت وأسلوبه</span>
+                </div>
+                <Textarea
+                  value={botForm.botPersonality ?? ""}
+                  onChange={(e) => setBotForm(f => ({ ...f, botPersonality: e.target.value }))}
+                  rows={4}
+                  placeholder="مثال: أنت مستشار عقاري محترف وودود، تتكلم بالمصري، وتساعد العملاء باحترام دون ضغط..."
+                  className="resize-none text-sm"
+                  dir="rtl"
+                  data-testid="textarea-bot-personality"
+                />
+                <p className="text-xs text-muted-foreground">وصف شخصية البوت وأسلوبه في الرد — الذكاء الاصطناعي سيلتزم بهذا الوصف</p>
+              </div>
+
               {/* Welcome Message */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm font-medium">
@@ -470,7 +546,8 @@ export default function WhatsAppSettingsPage() {
               <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-900/10 p-3 space-y-1.5">
                 <p className="text-xs font-medium text-blue-700 dark:text-blue-400">كيف يعمل البوت؟</p>
                 <ul className="text-xs text-blue-600 dark:text-blue-500 space-y-1 list-disc list-inside">
-                  <li>يرد تلقائياً على الرسائل الواردة بعد ساعات الدوام</li>
+                  <li>يرد تلقائياً على الرسائل الواردة (بعد الدوام أو دايماً حسب الإعداد)</li>
+                  <li>يتكلم بالعربية المصرية وبالأسلوب اللي حددته</li>
                   <li>يجمع بيانات العميل: الاسم، الميزانية، نوع الوحدة، عدد الغرف</li>
                   <li>يجيب على أسئلة المشاريع من قاعدة البيانات</li>
                   <li>بعد جمع البيانات، يحيل العميل للمندوب المعيّن</li>

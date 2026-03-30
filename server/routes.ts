@@ -2970,13 +2970,14 @@ export async function registerRoutes(
           const leadBotActive = lead.botActive !== false; // default true
 
           if (botEnabled && leadBotActive && lead.botStage !== "handed_off") {
-            // Bot only responds outside working hours (after-hours auto-reply)
+            // Bot responds always if respondAlways=true, otherwise only outside working hours
+            const respondAlways = (botSettings as any)?.respondAlways === true;
             const outsideHours = isOutsideWorkingHours(
               botSettings?.workingHoursStart ?? 9,
               botSettings?.workingHoursEnd ?? 18
             );
 
-            if (outsideHours) {
+            if (respondAlways || outsideHours) {
               const { generateBotReply } = await import("./ai");
               const currentStage: BotStage = (lead.botStage as BotStage) ?? "greeting";
 
@@ -2992,7 +2993,10 @@ export async function registerRoutes(
                 priorMessages,
                 activeProjects,
                 botSettings?.welcomeMessage ?? undefined,
-                isFirstBotInteraction
+                isFirstBotInteraction,
+                (botSettings as any)?.botName ?? undefined,
+                (botSettings as any)?.companyName ?? undefined,
+                (botSettings as any)?.botPersonality ?? undefined
               );
 
               // Build typed lead updates
@@ -3051,7 +3055,10 @@ export async function registerRoutes(
                 });
               } else {
                 // Send bot reply
-                await sendWhatsAppMessage(userId, phone, botResult.reply);
+                const botSendResult = await sendWhatsAppMessage(userId, phone, botResult.reply);
+                if (!botSendResult.success) {
+                  console.warn(`[Chatbot] sendWhatsAppMessage failed for ${phone}:`, botSendResult.error);
+                }
                 await storage.logWhatsappMessage({
                   leadId: lead.id,
                   agentId: null,

@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MessageSquare, PhoneCall, ExternalLink, Clock, Inbox } from "lucide-react";
+import { MessageSquare, PhoneCall, ExternalLink, Clock, Inbox, Send, Sparkles, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -52,22 +53,24 @@ export default function WhatsAppInboxPage() {
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
   const [search, setSearch] = useState("");
+  const [replyText, setReplyText] = useState("");
+  const [suggestedReplies, setSuggestedReplies] = useState<string[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: waStatus } = useQuery<{ status: string }>({
     queryKey: ["/api/whatsapp/status"],
-    refetchInterval: 15000,
+    refetchInterval: 10000,
   });
 
   const { data: conversations = [], isLoading } = useQuery<Conversation[]>({
     queryKey: ["/api/whatsapp/inbox"],
-    refetchInterval: 15000,
-    enabled: waStatus?.status === "connected",
+    refetchInterval: 10000,
   });
 
   const { data: messages = [], isLoading: messagesLoading } = useQuery<WhatsappMessagesLog[]>({
     queryKey: ["/api/leads", selectedLeadId, "whatsapp-log"],
     enabled: !!selectedLeadId,
-    refetchInterval: 15000,
+    refetchInterval: 8000,
   });
 
   const markReadMutation = useMutation({
@@ -79,39 +82,100 @@ export default function WhatsAppInboxPage() {
     },
   });
 
+  const sendMutation = useMutation({
+    mutationFn: async ({ leadId, message }: { leadId: string; message: string }) => {
+      const res = await apiRequest("POST", "/api/whatsapp/send", { leadId, message });
+      return res.json();
+    },
+    onSuccess: () => {
+      setReplyText("");
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", selectedLeadId, "whatsapp-log"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/inbox"] });
+    },
+    onError: async (err: any) => {
+      let msg = "فشل إرسال الرسالة";
+      try {
+        const body = typeof err?.message === "string" ? JSON.parse(err.message) : null;
+        if (body?.error) msg = body.error;
+      } catch {}
+      toast({ title: "فشل الإرسال", description: msg, variant: "destructive" });
+    },
+  });
+
+  const suggestMutation = useMutation({
+    mutationFn: async (leadId: string) => {
+      const res = await apiRequest("POST", `/api/leads/${leadId}/ai/suggest-replies`);
+      return res.json() as Promise<{ replies: string[] }>;
+    },
+    onSuccess: (data) => {
+      setSuggestedReplies(data.replies ?? []);
+    },
+    onError: () => {
+      toast({ title: "فشل الاقتراح", description: "تعذّر توليد ردود من الذكاء الاصطناعي", variant: "destructive" });
+    },
+  });
+
   useEffect(() => {
     if (!selectedLeadId) return;
     const conv = conversations.find((c) => c.leadId === selectedLeadId);
     if (conv && conv.unreadCount > 0) {
       markReadMutation.mutate(selectedLeadId);
     }
+    setSuggestedReplies([]);
+    setReplyText("");
   }, [selectedLeadId]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const filteredConversations = conversations.filter((c) => {
     if (filter === "unread" && c.unreadCount === 0) return false;
     if (filter === "today" && !isToday(c.lastMessageAt)) return false;
     if (search) {
       const q = search.toLowerCase();
-      if (
-        !(c.leadName?.toLowerCase().includes(q) || c.phone.includes(q))
-      )
-        return false;
+      if (!(c.leadName?.toLowerCase().includes(q) || c.phone.includes(q))) return false;
     }
     return true;
   });
 
   const selectedConv = conversations.find((c) => c.leadId === selectedLeadId);
-
   const isConnected = waStatus?.status === "connected";
+  const isConnecting = waStatus?.status === "connecting";
+  const canSend = isConnected || isConnecting;
+
+  const handleSend = () => {
+    if (!replyText.trim() || !selectedLeadId) return;
+    sendMutation.mutate({ leadId: selectedLeadId, message: replyText.trim() });
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
 
   return (
     <div className="flex flex-col h-full" dir="rtl">
       <div className="mb-4 flex items-center gap-2">
         <MessageSquare className="h-6 w-6 text-green-600" />
         <h1 className="text-2xl font-bold">صندوق بريد واتساب</h1>
+        {!isConnected && (
+          <Badge
+            variant="outline"
+            className={
+              isConnecting
+                ? "border-yellow-200 bg-yellow-50 text-yellow-700"
+                : "border-gray-200 bg-gray-50 text-gray-500"
+            }
+          >
+            {isConnecting ? "جاري الاتصال..." : "غير متصل"}
+          </Badge>
+        )}
       </div>
 
-      {!isConnected ? (
+      {!isConnected && !isConnecting ? (
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center space-y-3 max-w-sm">
             <MessageSquare className="h-16 w-16 text-muted-foreground mx-auto" />
@@ -349,11 +413,80 @@ export default function WhatsAppInboxPage() {
                       );
                     })
                   )}
+                  <div ref={messagesEndRef} />
                 </div>
 
-                {/* Footer note */}
-                <div className="px-4 py-2 border-t text-center text-xs text-muted-foreground bg-muted/20">
-                  الإرسال متاح من صفحة الليد
+                {/* AI Suggested Replies */}
+                {suggestedReplies.length > 0 && (
+                  <div className="px-3 py-2 border-t bg-muted/20 flex flex-wrap gap-2">
+                    <span className="text-xs text-muted-foreground w-full flex items-center gap-1">
+                      <Sparkles className="h-3 w-3 text-purple-500" />
+                      اقتراحات الذكاء الاصطناعي:
+                    </span>
+                    {suggestedReplies.map((r, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setReplyText(r)}
+                        data-testid={`button-suggest-${i}`}
+                        className="text-xs bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-800 rounded-full px-3 py-1 transition-colors text-right"
+                      >
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Reply Input */}
+                <div className="p-3 border-t bg-background">
+                  {!canSend ? (
+                    <div className="text-center text-xs text-muted-foreground py-2">
+                      واتساب غير متصل — لا يمكن الإرسال
+                    </div>
+                  ) : (
+                    <div className="flex gap-2 items-end">
+                      <div className="flex-1 space-y-1">
+                        <Textarea
+                          value={replyText}
+                          onChange={(e) => setReplyText(e.target.value)}
+                          onKeyDown={handleKeyDown}
+                          placeholder={`نص الرسالة إلى ${selectedConv?.leadName || selectedConv?.phone}...`}
+                          rows={2}
+                          className="resize-none text-sm"
+                          data-testid="textarea-inbox-reply"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => selectedLeadId && suggestMutation.mutate(selectedLeadId)}
+                          disabled={suggestMutation.isPending}
+                          title="اقتراح رد بالذكاء الاصطناعي"
+                          data-testid="button-ai-suggest"
+                          className="h-8 w-8"
+                        >
+                          {suggestMutation.isPending ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Sparkles className="h-3.5 w-3.5 text-purple-500" />
+                          )}
+                        </Button>
+                        <Button
+                          size="icon"
+                          onClick={handleSend}
+                          disabled={!replyText.trim() || sendMutation.isPending}
+                          data-testid="button-send-reply"
+                          className="h-8 w-8 bg-green-600 hover:bg-green-700"
+                        >
+                          {sendMutation.isPending ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Send className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </>
             )}

@@ -228,7 +228,10 @@ export async function generateBotReply(
   recentMessages: WhatsappMessagesLog[],
   projects: Project[],
   welcomeMessage?: string,
-  isFirstInteraction?: boolean
+  isFirstInteraction?: boolean,
+  botName?: string,
+  companyName?: string,
+  botPersonality?: string
 ): Promise<BotReplyResult> {
   const projectsInfo = projects.length > 0
     ? projects.map(p => `- ${p.name}: ${p.type ?? ""} في ${p.location ?? ""}, السعر من ${p.minPrice?.toLocaleString() ?? "?"} إلى ${p.maxPrice?.toLocaleString() ?? "?"} جنيه, ${p.description ?? ""}`).join("\n")
@@ -246,7 +249,13 @@ export async function generateBotReply(
     ? `للتحية الأولى استخدم هذه الرسالة تحديداً: "${welcomeMessage}"`
     : "ابدأ بتحية ودية واسأل عن الاسم";
 
-  const systemPrompt = `أنت بوت مبيعات عقارية ذكي يرد على العملاء عبر واتساب بالعربية المصرية الودية.
+  const resolvedBotName = botName ?? "المساعد الذكي";
+  const resolvedCompany = companyName ?? "شركتنا العقارية";
+  const resolvedPersonality = botPersonality ?? "أنت مساعد مبيعات عقارية ذكي ولطيف وودود. تتكلم بالعربية المصرية بشكل طبيعي. مهمتك مساعدة العملاء واستخراج بياناتهم بطريقة محترمة وغير ملحّة.";
+
+  const systemPrompt = `اسمك "${resolvedBotName}" وتعمل في شركة "${resolvedCompany}".
+${resolvedPersonality}
+
 مهمتك جمع بيانات العميل (الاسم، الميزانية، نوع الوحدة، عدد الغرف) قبل تحويله للمندوب.
 
 المشاريع المتاحة في الشركة:
