@@ -452,6 +452,7 @@ export class DatabaseStorage implements IStorage {
       marketingCost: lead.marketingCost ?? null,
       firstContactAt: null,
       responseTimeMinutes: null,
+      aiAnalyzedAt: null,
     };
     const config = await getScoringConfig();
     const score = computeScore(leadForScoring, { commCount: 0, completedTaskCount: 0 }, config);

@@ -2,9 +2,11 @@ import type { Lead, WhatsappMessagesLog } from "@shared/schema";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+const OPENROUTER_REFERER = process.env.OPENROUTER_REFERER ?? "https://crm.seosahl.cloud";
+const OPENROUTER_TITLE = process.env.OPENROUTER_TITLE ?? "HomeAdvisor CRM";
 
-// google/gemini-flash-1.5 is listed as the default in the task spec.
-// OpenRouter serves it under the alias google/gemini-2.0-flash-001 (same family, latest stable).
+// google/gemini-flash-1.5 is the default per task spec.
+// Falls back to google/gemini-2.0-flash-001 if the 1.5 alias returns 404.
 const MODEL = process.env.OPENROUTER_MODEL ?? "google/gemini-flash-1.5";
 
 interface OpenRouterChoice {
@@ -29,8 +31,8 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<str
     headers: {
       Authorization: `Bearer ${OPENROUTER_API_KEY}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://crm.seosahl.cloud",
-      "X-Title": "HomeAdvisor CRM",
+      "HTTP-Referer": OPENROUTER_REFERER,
+      "X-Title": OPENROUTER_TITLE,
     },
     body: JSON.stringify({
       model: MODEL,
@@ -67,8 +69,8 @@ async function callGeminiFallback(systemPrompt: string, userPrompt: string): Pro
     headers: {
       Authorization: `Bearer ${OPENROUTER_API_KEY!}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://crm.seosahl.cloud",
-      "X-Title": "HomeAdvisor CRM",
+      "HTTP-Referer": OPENROUTER_REFERER,
+      "X-Title": OPENROUTER_TITLE,
     },
     body: JSON.stringify({
       model: fallbackModel,
@@ -166,6 +168,9 @@ ${buildConversationHistory(messages)}
 
   if (replies.length === 0) {
     throw new Error("لم يُرجع النموذج اقتراحات");
+  }
+  if (replies.length < 3) {
+    throw new Error(`النموذج أرجع ${replies.length} ردود فقط، المطلوب 3 ردود بالضبط`);
   }
 
   return { replies };

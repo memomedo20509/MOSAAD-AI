@@ -50,12 +50,15 @@ export const leads = pgTable("leads", {
   firstContactAt: timestamp("first_contact_at"),
   responseTimeMinutes: integer("response_time_minutes"),
   score: varchar("score", { length: 10 }).default("warm"),
+  aiAnalyzedAt: timestamp("ai_analyzed_at"),
 });
 
-export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true, firstContactAt: true, responseTimeMinutes: true }).extend({
+export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true, firstContactAt: true, responseTimeMinutes: true, aiAnalyzedAt: true }).extend({
   phone: z.string().min(1, "Phone number is required"),
 });
-export const updateLeadSchema = insertLeadSchema.partial();
+export const updateLeadSchema = insertLeadSchema.partial().extend({
+  aiAnalyzedAt: z.coerce.date().optional().nullable(),
+});
 export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type UpdateLead = z.infer<typeof updateLeadSchema>;
 export type Lead = typeof leads.$inferSelect;

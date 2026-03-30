@@ -499,6 +499,7 @@ export function LeadDetailPanel({
     if (aiAnalysis.unitType) updates.unitType = aiAnalysis.unitType;
     if (aiAnalysis.bedrooms) updates.bedrooms = aiAnalysis.bedrooms;
     if (aiAnalysis.interestLevel) updates.score = aiAnalysis.interestLevel;
+    updates.aiAnalyzedAt = new Date();
     onUpdate(updates);
     setAiAnalysisApplied(true);
     toast({ title: "تم تطبيق تحليل الذكاء الاصطناعي على بيانات الليد" });
@@ -1157,7 +1158,7 @@ export function LeadDetailPanel({
                         <Sparkles className="h-4 w-4" />
                         مساعد الذكاء الاصطناعي
                       </CardTitle>
-                      {aiAnalysisApplied && (
+                      {(aiAnalysisApplied || !!lead?.aiAnalyzedAt) && (
                         <Badge className="text-xs bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300" data-testid="badge-ai-analyzed">
                           <CheckCheck className="h-3 w-3 mr-1" />
                           تم التحليل بالـ AI
