@@ -69,7 +69,11 @@ export async function getOrCreateSession(userId: string): Promise<WaSession> {
   return session;
 }
 
-export async function startConnection(userId: string): Promise<WaSession> {
+const reconnectAttempts = new Map<string, number>();
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_DELAY_MS = 3000;
+
+export async function startConnection(userId: string, freshSession = false): Promise<WaSession> {
   const session = await getOrCreateSession(userId);
 
   if (session.status === "connected" || session.status === "connecting" || session.status === "qr") {
@@ -82,52 +86,60 @@ export async function startConnection(userId: string): Promise<WaSession> {
 
   const sessionDir = getSessionDir(userId);
 
-  // Safety timeout — fires if no QR received within 45s regardless of where the failure occurs
   const safetyTimeout = setTimeout(() => {
     if (session.status === "connecting") {
-      console.error(`[WhatsApp] Safety timeout for user ${userId} — no QR received after 45s`);
+      console.error(`[WhatsApp] Safety timeout for user ${userId} — no QR received after 60s`);
       session.status = "disconnected";
       session.errorMessage = "تعذّر الاتصال بخوادم واتساب — يرجى المحاولة مجدداً أو التحقق من إعدادات الشبكة";
       session.emitter.emit("status", { status: "disconnected", errorMessage: session.errorMessage });
       if (session.socket) { try { session.socket.end(undefined); } catch {} session.socket = null; }
     }
-  }, 45000);
+  }, 60000);
 
   try {
-    // Always start fresh — delete any previously corrupted auth state
-    try {
-      if (fs.existsSync(sessionDir)) {
-        fs.rmSync(sessionDir, { recursive: true, force: true });
-      }
-    } catch {}
-    fs.mkdirSync(sessionDir, { recursive: true });
+    if (freshSession) {
+      try {
+        if (fs.existsSync(sessionDir)) {
+          fs.rmSync(sessionDir, { recursive: true, force: true });
+        }
+      } catch {}
+    }
+    if (!fs.existsSync(sessionDir)) {
+      fs.mkdirSync(sessionDir, { recursive: true });
+    }
 
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
 
-    let version: [number, number, number] = [2, 3000, 1015901307];
+    let version: [number, number, number] | undefined;
     try {
       const latest = await fetchLatestBaileysVersion();
       version = latest.version;
       console.log(`[WhatsApp] Using version ${version.join(".")} for user ${userId}`);
     } catch (err) {
-      console.error("[WhatsApp] fetchLatestBaileysVersion failed, using fallback version:", (err as Error).message);
+      console.error("[WhatsApp] fetchLatestBaileysVersion failed, will use library default:", (err as Error).message);
     }
 
     const logger = pino({ level: "silent" });
 
-    const sock = makeWASocket({
-      version,
+    const socketOpts: Parameters<typeof makeWASocket>[0] = {
       auth: {
         creds: state.creds,
         keys: makeCacheableSignalKeyStore(state.keys, logger),
       },
       printQRInTerminal: false,
       logger,
-      browser: ["HomeAdvisor CRM", "Chrome", "1.0"],
-      connectTimeoutMs: 30000,
-      defaultQueryTimeoutMs: 30000,
-      keepAliveIntervalMs: 30000,
-    });
+      browser: ["HomeAdvisor CRM", "Chrome", "22.0"],
+      connectTimeoutMs: 45000,
+      defaultQueryTimeoutMs: 45000,
+      keepAliveIntervalMs: 25000,
+      retryRequestDelayMs: 500,
+      qrTimeout: 40000,
+    };
+    if (version) {
+      socketOpts.version = version;
+    }
+
+    const sock = makeWASocket(socketOpts);
 
     session.socket = sock;
     sock.ev.on("creds.update", saveCreds);
@@ -139,21 +151,17 @@ export async function startConnection(userId: string): Promise<WaSession> {
 
       for (const msg of messages) {
         try {
-          // Skip messages sent by this account
           if (msg.key.fromMe) continue;
 
           const remoteJid = msg.key.remoteJid;
           if (!remoteJid) continue;
 
-          // Skip group messages and status broadcasts
           if (remoteJid === "status@broadcast") continue;
           if (remoteJid.endsWith("@g.us")) continue;
 
-          // Extract phone from JID (e.g. "201234567890@s.whatsapp.net" → "201234567890")
           const rawPhone = remoteJid.split("@")[0];
           if (!rawPhone) continue;
 
-          // Extract message text (text message or extended text)
           const text =
             msg.message?.conversation ||
             msg.message?.extendedTextMessage?.text ||
@@ -187,6 +195,7 @@ export async function startConnection(userId: string): Promise<WaSession> {
           session.qrDataUrl = dataUrl;
           session.status = "qr";
           session.errorMessage = null;
+          reconnectAttempts.set(userId, 0);
           session.emitter.emit("status", { status: "qr", qrDataUrl: dataUrl });
         } catch (err) {
           console.error("[WhatsApp] QR generation error:", err);
@@ -198,6 +207,8 @@ export async function startConnection(userId: string): Promise<WaSession> {
         session.status = "connected";
         session.qrDataUrl = null;
         session.errorMessage = null;
+        reconnectAttempts.set(userId, 0);
+        console.log(`[WhatsApp] Connected successfully for user ${userId}`);
         session.emitter.emit("status", { status: "connected" });
       }
 
@@ -207,9 +218,31 @@ export async function startConnection(userId: string): Promise<WaSession> {
         const shouldReconnect = code !== DisconnectReason.loggedOut;
         session.socket = null;
 
+        console.log(`[WhatsApp] Connection closed for user ${userId}, code=${code}, shouldReconnect=${shouldReconnect}`);
+
         if (shouldReconnect) {
-          session.status = "disconnected";
-          session.emitter.emit("status", { status: "disconnected" });
+          const attempts = reconnectAttempts.get(userId) ?? 0;
+          if (attempts < MAX_RECONNECT_ATTEMPTS) {
+            reconnectAttempts.set(userId, attempts + 1);
+            const delay = RECONNECT_DELAY_MS * (attempts + 1);
+            console.log(`[WhatsApp] Reconnecting user ${userId} in ${delay}ms (attempt ${attempts + 1}/${MAX_RECONNECT_ATTEMPTS})`);
+            session.status = "connecting";
+            session.emitter.emit("status", { status: "connecting" });
+            setTimeout(async () => {
+              try {
+                session.status = "disconnected";
+                await startConnection(userId, false);
+              } catch (err) {
+                console.error(`[WhatsApp] Reconnect failed for user ${userId}:`, err instanceof Error ? err.message : err);
+              }
+            }, delay);
+          } else {
+            console.error(`[WhatsApp] Max reconnect attempts reached for user ${userId}`);
+            session.status = "disconnected";
+            session.errorMessage = "فشل الاتصال بعد عدة محاولات — يرجى الضغط على 'مسح وإعادة الاتصال'";
+            reconnectAttempts.set(userId, 0);
+            session.emitter.emit("status", { status: "disconnected", errorMessage: session.errorMessage });
+          }
         } else {
           await disconnectSession(userId);
         }
@@ -217,7 +250,6 @@ export async function startConnection(userId: string): Promise<WaSession> {
     });
 
   } catch (initError) {
-    // Socket initialization failed — reset state immediately and clean corrupt auth data
     clearTimeout(safetyTimeout);
     const errMsg = initError instanceof Error ? initError.message : String(initError);
     console.error(`[WhatsApp] Socket init error for user ${userId}:`, errMsg);
@@ -227,7 +259,6 @@ export async function startConnection(userId: string): Promise<WaSession> {
     session.errorMessage = `فشل في تهيئة الاتصال: ${errMsg}`;
     session.emitter.emit("status", { status: "disconnected", errorMessage: session.errorMessage });
 
-    // Remove potentially corrupted auth state so next attempt starts fresh
     try {
       if (fs.existsSync(sessionDir)) {
         fs.rmSync(sessionDir, { recursive: true, force: true });
@@ -290,13 +321,13 @@ export async function sendWhatsAppMessage(
 
   // Validate that the recipient has a WhatsApp account before sending
   try {
-    const [result] = await session.socket.onWhatsApp(jid);
+    const results = await session.socket.onWhatsApp(jid);
+    const result = results?.[0];
     if (!result?.exists) {
       return { success: false, error: "This phone number is not registered on WhatsApp" };
     }
-  } catch (err: any) {
-    // If onWhatsApp check fails (e.g., network issue), proceed cautiously
-    console.warn("WhatsApp existence check failed, proceeding anyway:", err?.message);
+  } catch (err) {
+    console.warn("WhatsApp existence check failed, proceeding anyway:", err instanceof Error ? err.message : err);
   }
 
   const delay = 2000 + Math.random() * 3000;
@@ -305,9 +336,9 @@ export async function sendWhatsAppMessage(
   try {
     await session.socket.sendMessage(jid, { text: message });
     return { success: true };
-  } catch (err: any) {
+  } catch (err) {
     console.error("WhatsApp send error:", err);
-    return { success: false, error: err?.message || "Send failed" };
+    return { success: false, error: err instanceof Error ? err.message : "Send failed" };
   }
 }
 

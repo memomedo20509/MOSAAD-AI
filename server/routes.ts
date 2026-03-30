@@ -1954,7 +1954,7 @@ export async function registerRoutes(
     try {
       const userId = req.user!.id;
       registerWAIncomingHandler(userId);
-      await startConnection(userId);
+      await startConnection(userId, true);
       const { status, qrDataUrl, errorMessage } = getSessionStatus(userId);
       res.json({ status, qrDataUrl, errorMessage });
     } catch (error) {
@@ -2031,7 +2031,7 @@ export async function registerRoutes(
     try {
       const userId = req.user!.id;
       await disconnectSession(userId);
-      await startConnection(userId);
+      await startConnection(userId, true);
       const { status, qrDataUrl, errorMessage } = getSessionStatus(userId);
       res.json({ status, qrDataUrl, errorMessage });
     } catch (error) {
