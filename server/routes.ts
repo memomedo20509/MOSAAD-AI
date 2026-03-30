@@ -2971,7 +2971,7 @@ export async function registerRoutes(
 
           if (botEnabled && leadBotActive && lead.botStage !== "handed_off") {
             // Bot responds always if respondAlways=true, otherwise only outside working hours
-            const respondAlways = (botSettings as any)?.respondAlways === true;
+            const respondAlways = botSettings?.respondAlways === true;
             const outsideHours = isOutsideWorkingHours(
               botSettings?.workingHoursStart ?? 9,
               botSettings?.workingHoursEnd ?? 18
@@ -2994,9 +2994,9 @@ export async function registerRoutes(
                 activeProjects,
                 botSettings?.welcomeMessage ?? undefined,
                 isFirstBotInteraction,
-                (botSettings as any)?.botName ?? undefined,
-                (botSettings as any)?.companyName ?? undefined,
-                (botSettings as any)?.botPersonality ?? undefined
+                botSettings?.botName ?? undefined,
+                botSettings?.companyName ?? undefined,
+                botSettings?.botPersonality ?? undefined
               );
 
               // Build typed lead updates
