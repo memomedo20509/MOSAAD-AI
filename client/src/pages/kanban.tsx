@@ -33,7 +33,7 @@ import type { Lead, LeadState, User as UserType } from "@shared/schema";
 import { useLanguage } from "@/lib/i18n";
 import { format, differenceInDays, differenceInHours } from "date-fns";
 import { computeLeadScore, SCORE_COLORS } from "@/lib/scoring";
-import LeadDetailPanel from "@/components/lead-detail-panel";
+import { LeadDetailPanel } from "@/components/lead-detail-panel";
 
 export default function KanbanPage() {
   const { toast } = useToast();
