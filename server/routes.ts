@@ -45,6 +45,7 @@ import {
   insertLeadManagerCommentSchema,
   updateLeadManagerCommentSchema,
   insertEmailReportSettingsSchema,
+  insertMonthlyTargetSchema,
 } from "@shared/schema";
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
@@ -2576,6 +2577,134 @@ export async function registerRoutes(
   setInterval(runEmailReportScheduler, 60 * 60 * 1000);
   // Also run once at startup after 30s delay
   setTimeout(runEmailReportScheduler, 30000);
+
+  // Monthly Targets - GET targets for a specific month (managers/admins only)
+  app.get("/api/monthly-targets", isAuthenticated, requirePermission("canManageTeams"), async (req, res) => {
+    try {
+      const { month } = req.query;
+      const targetMonth = (month as string) || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+      const targets = await storage.getMonthlyTargetsByMonth(targetMonth);
+      res.json(targets);
+    } catch (error) {
+      console.error("Error fetching monthly targets:", error);
+      res.status(500).json({ error: "Failed to fetch monthly targets" });
+    }
+  });
+
+  // Monthly Targets - GET target for a specific user and month
+  // Auth rules: self-access; admin/sales_admin/super_admin for any user; team_leader for team members only
+  app.get("/api/monthly-targets/:userId", isAuthenticated, async (req, res) => {
+    try {
+      const requestingUser = req.user as any;
+      const userId = req.params.userId as string;
+      const isAdminRole = ["super_admin", "admin", "sales_admin"].includes(requestingUser.role);
+      const isSelf = requestingUser.id === userId;
+
+      if (!isSelf && !isAdminRole) {
+        if (requestingUser.role === "team_leader") {
+          // Team leader must be in the same team as the target user
+          const targetUser = await storage.getUser(userId);
+          if (!targetUser || targetUser.teamId !== requestingUser.teamId) {
+            return res.status(403).json({ error: "Access denied" });
+          }
+        } else {
+          return res.status(403).json({ error: "Access denied" });
+        }
+      }
+
+      const { month } = req.query;
+      const targetMonth = (month as string) || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+      const target = await storage.getMonthlyTarget(userId, targetMonth);
+      res.json(target || null);
+    } catch (error) {
+      console.error("Error fetching monthly target:", error);
+      res.status(500).json({ error: "Failed to fetch monthly target" });
+    }
+  });
+
+  // Monthly Targets - POST/PUT upsert target (admin/manager only)
+  const monthFormatRegex = /^\d{4}-(0[1-9]|1[0-2])$/;
+  const upsertMonthlyTargetHandler = async (req: any, res: any) => {
+    try {
+      const data = insertMonthlyTargetSchema.parse(req.body);
+      if (!monthFormatRegex.test(data.targetMonth)) {
+        return res.status(400).json({ error: "targetMonth must be in YYYY-MM format" });
+      }
+      const target = await storage.upsertMonthlyTarget(data);
+      res.json(target);
+    } catch (error) {
+      console.error("Error upserting monthly target:", error);
+      res.status(400).json({ error: "Failed to save monthly target" });
+    }
+  };
+  app.post("/api/monthly-targets", isAuthenticated, requirePermission("canManageTeams"), upsertMonthlyTargetHandler);
+  app.put("/api/monthly-targets", isAuthenticated, requirePermission("canManageTeams"), upsertMonthlyTargetHandler);
+
+  // Leaderboard - GET leaderboard data (supports period = YYYY-MM or YYYY for full year)
+  // Role-based scoping: team_leaders see their team only; sales_agents see all rankings (no commission data)
+  app.get("/api/leaderboard", isAuthenticated, async (req, res) => {
+    try {
+      const requestingUser = req.user as any;
+      const { month, period, teamId } = req.query;
+      const resolvedPeriod = (period as string) || (month as string) || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+
+      // Team leaders can only see their team
+      let scopedTeamId = teamId as string | undefined;
+      if (requestingUser.role === "team_leader") {
+        scopedTeamId = requestingUser.teamId;
+      }
+
+      const data = await storage.getLeaderboard(resolvedPeriod, scopedTeamId);
+
+      // Remove commissionTotal from leaderboard — it's sensitive compensation data
+      // Only deals/leads ranking metrics are returned
+      const safeData = data.map(({ commissionTotal: _c, ...entry }) => entry);
+
+      res.json(safeData);
+    } catch (error) {
+      console.error("Error fetching leaderboard:", error);
+      res.status(500).json({ error: "Failed to fetch leaderboard" });
+    }
+  });
+
+  // Monthly Targets with achievement data - GET targets + actual for all users in a month
+  // Restricted to managers/admins/team_leaders; team_leaders see only their own team
+  app.get("/api/monthly-targets-with-achievement", isAuthenticated, async (req, res) => {
+    try {
+      const requestingUser = req.user as any;
+      const isAdminRole = ["super_admin", "admin", "sales_admin", "company_owner", "sales_manager"].includes(requestingUser.role);
+      const isTeamLeader = requestingUser.role === "team_leader";
+
+      if (!isAdminRole && !isTeamLeader) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const { month } = req.query;
+      const targetMonth = (month as string) || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+
+      // For team leaders, scope to their team only
+      const teamIdFilter = isTeamLeader ? requestingUser.teamId : undefined;
+
+      const [targets, leaderboard] = await Promise.all([
+        storage.getMonthlyTargetsByMonth(targetMonth),
+        storage.getLeaderboard(targetMonth, teamIdFilter),
+      ]);
+      const combined = leaderboard.map(entry => {
+        const target = targets.find(t => t.userId === entry.userId);
+        const { commissionTotal: _c, ...safeEntry } = entry;
+        return {
+          ...safeEntry,
+          dealsTarget: target?.dealsTarget ?? 0,
+          leadsTarget: target?.leadsTarget ?? 0,
+          revenueTarget: target?.revenueTarget ?? null,
+        };
+      });
+      res.json(combined);
+    } catch (error) {
+      console.error("Error fetching monthly targets with achievement:", error);
+      res.status(500).json({ error: "Failed to fetch data" });
+    }
+  });
 
   // Restore WhatsApp sessions on startup
   restoreSessionsOnStartup().catch(console.error);

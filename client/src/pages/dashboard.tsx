@@ -35,6 +35,7 @@ import { Link } from "wouter";
 import { computeLeadScore } from "@/lib/scoring";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Progress } from "@/components/ui/progress";
 
 function formatResponseTime(minutes: number | null, minutesAbbr: string, hoursAbbr: string): string {
   if (minutes === null) return "—";
@@ -145,6 +146,17 @@ function SalesAgentDashboard() {
 
   const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
 
+  const { data: myTarget } = useQuery<{ dealsTarget: number; leadsTarget: number; revenueTarget: number | null } | null>({
+    queryKey: ["/api/monthly-targets", user?.id, currentMonth],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const res = await fetch(`/api/monthly-targets/${user.id}?month=${currentMonth}`, { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!user?.id,
+  });
+
   const myLeads = (leads || []).filter((l) => user && isAssignedToUser(l, user));
 
   const doneDealLeads = myLeads.filter((l) => {
@@ -156,9 +168,21 @@ function SalesAgentDashboard() {
     ? Math.round((doneDealLeads.length / myLeads.length) * 100)
     : 0;
 
+  const monthStart = startOfMonth(new Date());
+  const monthEnd = endOfMonth(new Date());
+  const myLeadsThisMonth = myLeads.filter(l => l.createdAt && new Date(l.createdAt) >= monthStart && new Date(l.createdAt) <= monthEnd);
+  const myDealsThisMonth = myLeads.filter(l => {
+    const state = (states || []).find((s) => s.id === l.stateId);
+    return state && isDoneState(state.name) && l.updatedAt && new Date(l.updatedAt) >= monthStart && new Date(l.updatedAt) <= monthEnd;
+  });
+
+  const dealsPct = myTarget?.dealsTarget ? Math.min(100, Math.round((myDealsThisMonth.length / myTarget.dealsTarget) * 100)) : 0;
+  const leadsPct = myTarget?.leadsTarget ? Math.min(100, Math.round((myLeadsThisMonth.length / myTarget.leadsTarget) * 100)) : 0;
+
   const myCommissionsThisMonth = commissions
     .filter((c) => c.agentId === user?.id && c.month === currentMonth)
     .reduce((sum, c) => sum + (c.commissionAmount || 0), 0);
+  const revenuePct = myTarget?.revenueTarget ? Math.min(100, Math.round((myCommissionsThisMonth / myTarget.revenueTarget) * 100)) : 0;
 
   const myReminders = reminders.filter((r) => !r.userId || r.userId === user?.id);
   const upcomingReminders = myReminders
@@ -196,6 +220,51 @@ function SalesAgentDashboard() {
             <KPICard title={t.myCommissions} value={`${myCommissionsThisMonth.toLocaleString()} ${t.currency}`} subtitle={currentMonth} icon={DollarSign} valueClass="text-green-600 dark:text-green-400" testId="text-my-commissions" />
             <KPICard title={t.newLeadsToday} value={newLeadsTodayCount} subtitle={format(new Date(), "MMM dd, yyyy")} icon={UserPlus} testId="text-new-leads-today" />
           </div>
+
+          {myTarget && (myTarget.dealsTarget > 0 || myTarget.leadsTarget > 0 || (myTarget.revenueTarget && myTarget.revenueTarget > 0)) && (
+            <Card data-testid="card-monthly-goal">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5 text-primary" />
+                  {t.myMonthlyGoal} — {currentMonth}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {myTarget.dealsTarget > 0 && (
+                    <div data-testid="progress-deals">
+                      <div className="flex items-center justify-between text-sm mb-1">
+                        <span className="font-medium">{t.dealsAchieved}</span>
+                        <span className="font-bold text-primary">{myDealsThisMonth.length} / {myTarget.dealsTarget}</span>
+                      </div>
+                      <Progress value={dealsPct} className="h-3" data-testid="progress-bar-deals" />
+                      <p className="text-xs text-muted-foreground mt-1">{dealsPct}% {t.achievementRate}</p>
+                    </div>
+                  )}
+                  {myTarget.leadsTarget > 0 && (
+                    <div data-testid="progress-leads">
+                      <div className="flex items-center justify-between text-sm mb-1">
+                        <span className="font-medium">{t.leadsAchieved}</span>
+                        <span className="font-bold text-primary">{myLeadsThisMonth.length} / {myTarget.leadsTarget}</span>
+                      </div>
+                      <Progress value={leadsPct} className="h-3" data-testid="progress-bar-leads" />
+                      <p className="text-xs text-muted-foreground mt-1">{leadsPct}% {t.achievementRate}</p>
+                    </div>
+                  )}
+                  {myTarget.revenueTarget && myTarget.revenueTarget > 0 && (
+                    <div data-testid="progress-revenue">
+                      <div className="flex items-center justify-between text-sm mb-1">
+                        <span className="font-medium">{t.revenueAchieved}</span>
+                        <span className="font-bold text-primary">{myCommissionsThisMonth.toLocaleString()} / {myTarget.revenueTarget.toLocaleString()} {t.currency}</span>
+                      </div>
+                      <Progress value={revenuePct} className="h-3" data-testid="progress-bar-revenue" />
+                      <p className="text-xs text-muted-foreground mt-1">{revenuePct}% {t.achievementRate}</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <div className="grid gap-4 md:grid-cols-3">
             <Card data-testid="card-lead-score-summary" className="col-span-1">
@@ -328,6 +397,22 @@ function TeamLeaderDashboard() {
   });
 
   const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+
+  const { data: targetsWithAchievement = [] } = useQuery<{
+    userId: string;
+    userName: string;
+    dealsCount: number;
+    leadsCount: number;
+    dealsTarget: number;
+    leadsTarget: number;
+  }[]>({
+    queryKey: ["/api/monthly-targets-with-achievement", currentMonth],
+    queryFn: async () => {
+      const res = await fetch(`/api/monthly-targets-with-achievement?month=${currentMonth}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
 
   const teamMembers = users.filter((u) => u.teamId === user?.teamId && u.role === "sales_agent");
   const teamMemberIds = new Set(teamMembers.map((u) => u.id));
@@ -501,6 +586,57 @@ function TeamLeaderDashboard() {
               )}
             </CardContent>
           </Card>
+
+          {targetsWithAchievement.length > 0 && (
+            <Card data-testid="card-team-targets">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5 text-primary" />
+                  {t.teamTargets} — {currentMonth}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-start py-2 px-2 font-medium">{t.agent}</th>
+                        <th className="text-center py-2 px-2 font-medium">{t.deals}</th>
+                        <th className="text-center py-2 px-2 font-medium">{t.allLeads}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {targetsWithAchievement.map((entry) => (
+                        <tr key={entry.userId} className="border-b last:border-0" data-testid={`row-target-${entry.userId}`}>
+                          <td className="py-2 px-2 font-medium">{entry.userName}</td>
+                          <td className="py-2 px-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground w-16 text-center">{entry.dealsCount}/{entry.dealsTarget || "—"}</span>
+                              {entry.dealsTarget > 0 && (
+                                <div className="h-2 flex-1 rounded-full bg-muted overflow-hidden">
+                                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${Math.min(100, Math.round((entry.dealsCount / entry.dealsTarget) * 100))}%` }} />
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2 px-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground w-16 text-center">{entry.leadsCount}/{entry.leadsTarget || "—"}</span>
+                              {entry.leadsTarget > 0 && (
+                                <div className="h-2 flex-1 rounded-full bg-muted overflow-hidden">
+                                  <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${Math.min(100, Math.round((entry.leadsCount / entry.leadsTarget) * 100))}%` }} />
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
     </div>

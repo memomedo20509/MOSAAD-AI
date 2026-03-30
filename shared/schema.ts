@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, numeric, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, numeric, timestamp, boolean, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { users } from "./models/auth";
@@ -403,6 +403,26 @@ export const updateEmailReportSettingsSchema = insertEmailReportSettingsSchema.p
 export type InsertEmailReportSettings = z.infer<typeof insertEmailReportSettingsSchema>;
 export type UpdateEmailReportSettings = z.infer<typeof updateEmailReportSettingsSchema>;
 export type EmailReportSettings = typeof emailReportSettings.$inferSelect;
+
+// Monthly Targets
+export const monthlyTargets = pgTable("monthly_targets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  targetMonth: text("target_month").notNull(), // YYYY-MM
+  dealsTarget: integer("deals_target").notNull().default(0),
+  leadsTarget: integer("leads_target").notNull().default(0),
+  revenueTarget: integer("revenue_target"), // optional
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("monthly_targets_user_month_unique").on(table.userId, table.targetMonth),
+]);
+
+export const insertMonthlyTargetSchema = createInsertSchema(monthlyTargets).omit({ id: true, createdAt: true, updatedAt: true });
+export const updateMonthlyTargetSchema = insertMonthlyTargetSchema.partial();
+export type InsertMonthlyTarget = z.infer<typeof insertMonthlyTargetSchema>;
+export type UpdateMonthlyTarget = z.infer<typeof updateMonthlyTargetSchema>;
+export type MonthlyTarget = typeof monthlyTargets.$inferSelect;
 
 // Export auth models (users, teams, sessions, role_permissions)
 export * from "./models/auth";

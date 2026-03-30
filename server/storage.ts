@@ -26,6 +26,7 @@ import {
   whatsappMessagesLog,
   leadManagerComments,
   emailReportSettings,
+  monthlyTargets,
   type User,
   type InsertUser,
   type UpdateUser,
@@ -75,6 +76,9 @@ import {
   type EmailReportSettings,
   type InsertEmailReportSettings,
   type UpdateEmailReportSettings,
+  type MonthlyTarget,
+  type InsertMonthlyTarget,
+  type UpdateMonthlyTarget,
 } from "@shared/schema";
 
 const PostgresSessionStore = connectPg(session);
@@ -283,6 +287,20 @@ export interface IStorage {
   upsertEmailReportSettings(data: InsertEmailReportSettings): Promise<EmailReportSettings>;
   getAllEnabledEmailReportSettings(): Promise<EmailReportSettings[]>;
   updateEmailReportLastSent(userId: string): Promise<void>;
+
+  // Monthly Targets
+  getMonthlyTarget(userId: string, targetMonth: string): Promise<MonthlyTarget | undefined>;
+  getMonthlyTargetsByMonth(targetMonth: string): Promise<MonthlyTarget[]>;
+  upsertMonthlyTarget(data: InsertMonthlyTarget): Promise<MonthlyTarget>;
+  getLeaderboard(period: string, teamId?: string): Promise<{
+    userId: string;
+    userName: string;
+    teamId: string | null;
+    teamName: string | null;
+    dealsCount: number;
+    leadsCount: number;
+    commissionTotal: number;
+  }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1418,6 +1436,120 @@ export class DatabaseStorage implements IStorage {
       .update(emailReportSettings)
       .set({ lastSentAt: new Date(), updatedAt: new Date() })
       .where(eq(emailReportSettings.userId, userId));
+  }
+
+  // Monthly Targets
+  async getMonthlyTarget(userId: string, targetMonth: string): Promise<MonthlyTarget | undefined> {
+    const [target] = await db.select().from(monthlyTargets)
+      .where(and(eq(monthlyTargets.userId, userId), eq(monthlyTargets.targetMonth, targetMonth)));
+    return target;
+  }
+
+  async getMonthlyTargetsByMonth(targetMonth: string): Promise<MonthlyTarget[]> {
+    return db.select().from(monthlyTargets).where(eq(monthlyTargets.targetMonth, targetMonth));
+  }
+
+  async upsertMonthlyTarget(data: InsertMonthlyTarget): Promise<MonthlyTarget> {
+    const existing = await this.getMonthlyTarget(data.userId, data.targetMonth);
+    if (existing) {
+      const [updated] = await db.update(monthlyTargets)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(monthlyTargets.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(monthlyTargets).values(data).returning();
+    return created;
+  }
+
+  async getLeaderboard(period: string, teamId?: string): Promise<{
+    userId: string;
+    userName: string;
+    teamId: string | null;
+    teamName: string | null;
+    dealsCount: number;
+    leadsCount: number;
+    commissionTotal: number;
+  }[]> {
+    const allUsers = await db.select().from(users).where(eq(users.isActive, true));
+    const allTeams = await db.select().from(teams);
+    const teamMap = new Map(allTeams.map(t => [t.id, t.name]));
+
+    let agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "team_leader");
+    if (teamId) {
+      agents = agents.filter(u => u.teamId === teamId);
+    }
+
+    // Parse period: either "YYYY-MM" (month) or "YYYY" (full year)
+    let periodStart: Date;
+    let periodEnd: Date;
+    let commissionFilter: string | null = null;
+
+    if (/^\d{4}$/.test(period)) {
+      // Year period
+      const year = parseInt(period, 10);
+      periodStart = new Date(year, 0, 1);
+      periodEnd = new Date(year + 1, 0, 1);
+      commissionFilter = null; // match any commission with month starting with year
+    } else {
+      // Month period "YYYY-MM"
+      const [year, month] = period.split("-").map(Number);
+      periodStart = new Date(year, month - 1, 1);
+      periodEnd = new Date(year, month, 1);
+      commissionFilter = period;
+    }
+
+    // Get done deal state ids
+    const allStates = await db.select().from(leadStates);
+    const doneStateIds = new Set(
+      allStates.filter(s => s.name === "Done Deal" || s.name === "تم الصفقة").map(s => s.id)
+    );
+
+    // Get all leads assigned to any agent (we'll filter per-agent)
+    const allLeads = await db.select().from(leads);
+
+    // Get all commissions
+    const allCommissions = await db.select().from(commissions);
+
+    return agents.map(agent => {
+      const agentName = `${agent.firstName || ""} ${agent.lastName || ""}`.trim() || agent.username;
+      const agentKeys = [agent.id, agent.username];
+      if (agent.firstName && agent.lastName) agentKeys.push(`${agent.firstName} ${agent.lastName}`);
+
+      // Leads added (created) in the period assigned to this agent
+      const agentLeads = allLeads.filter(l =>
+        l.assignedTo && agentKeys.includes(l.assignedTo) &&
+        l.createdAt && new Date(l.createdAt) >= periodStart && new Date(l.createdAt) < periodEnd
+      );
+      const leadsCount = agentLeads.length;
+
+      // Deals CLOSED in the period: leads in done state whose updatedAt falls in period
+      const dealsCount = allLeads.filter(l =>
+        l.assignedTo && agentKeys.includes(l.assignedTo) &&
+        l.stateId && doneStateIds.has(l.stateId) &&
+        l.updatedAt && new Date(l.updatedAt) >= periodStart && new Date(l.updatedAt) < periodEnd
+      ).length;
+
+      // Commissions for this period
+      const commissionTotal = allCommissions
+        .filter(c => {
+          if (c.agentId !== agent.id) return false;
+          if (commissionFilter) return c.month === commissionFilter;
+          // Year: match any month starting with year
+          return c.month && c.month.startsWith(period);
+        })
+        .reduce((sum, c) => sum + (c.commissionAmount || 0), 0);
+
+      return {
+        userId: agent.id,
+        userName: agentName,
+        teamId: agent.teamId ?? null,
+        teamName: agent.teamId ? (teamMap.get(agent.teamId) ?? null) : null,
+        dealsCount,
+        leadsCount,
+        commissionTotal,
+      };
+    });
   }
 }
 

@@ -24,6 +24,7 @@ import {
   Sun,
   MessageSquare,
   Mail,
+  Trophy,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -106,6 +107,11 @@ export function AppSidebar() {
       title: t.kanbanBoard,
       url: "/kanban",
       icon: Kanban,
+    },
+    {
+      title: t.leaderboard,
+      url: "/leaderboard",
+      icon: Trophy,
     },
     {
       title: t.reports,
