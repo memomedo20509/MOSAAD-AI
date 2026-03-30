@@ -445,7 +445,10 @@ export const chatbotSettings = pgTable("chatbot_settings", {
   welcomeMessage: text("welcome_message").default("أهلاً! 👋 أنا المساعد الذكي لشركتنا العقارية. يسعدني مساعدتك. ممكن تعرفني باسمك الكريم؟"),
   botName: varchar("bot_name").default("المساعد الذكي"),
   companyName: varchar("company_name").default("شركتنا العقارية"),
-  botPersonality: text("bot_personality").default("أنت مساعد مبيعات عقارية ذكي ولطيف وودود. تتكلم بالعربية المصرية بشكل طبيعي. مهمتك مساعدة العملاء واستخراج بياناتهم بطريقة محترمة وغير ملحّة."),
+  botRole: varchar("bot_role").default("مستشار عقاري"),
+  botPersonality: text("bot_personality").default("أنت مستشار عقاري مصري محترف وودود. بتتكلم بالمصري بشكل طبيعي. بتساعد العملاء يلاقوا الوحدة المناسبة ليهم وبتجمع بياناتهم بطريقة محترمة."),
+  botMission: text("bot_mission").default("جمع بيانات العميل الكاملة (الاسم، الميزانية، نوع الوحدة، عدد الغرف، الموقع المفضل، طريقة الدفع) وترشيح وحدات مناسبة من المشاريع المتاحة قبل تحويله للمندوب."),
+  companyKnowledge: text("company_knowledge").default(""),
   respondAlways: boolean("respond_always").default(false),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

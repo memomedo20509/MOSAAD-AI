@@ -2986,12 +2986,17 @@ export async function registerRoutes(
 
             if (respondAlways || outsideHours) {
               const { generateBotReply } = await import("./ai");
-              const currentStage: BotStage = (lead.botStage as BotStage) ?? "greeting";
+              const stageMap: Record<string, BotStage> = {
+                "collecting_budget": "collecting_needs",
+                "collecting_unit": "collecting_needs",
+                "collecting_rooms": "collecting_needs",
+              };
+              const rawStage = lead.botStage ?? "greeting";
+              const currentStage: BotStage = (stageMap[rawStage] ?? rawStage) as BotStage;
 
-              // Use priorMessages (fetched before inbound was logged) for context
-              // Get active projects for context
               const allProjects = await storage.getAllProjects();
               const activeProjects = allProjects.filter(p => p.isActive !== false);
+              const allUnits = await storage.getAllUnits();
 
               const botResult = await generateBotReply(
                 msg.messageText,
@@ -2999,14 +3004,19 @@ export async function registerRoutes(
                 lead,
                 priorMessages,
                 activeProjects,
-                botSettings?.welcomeMessage ?? undefined,
+                allUnits,
+                {
+                  botName: botSettings?.botName ?? undefined,
+                  companyName: botSettings?.companyName ?? undefined,
+                  botRole: (botSettings as Record<string, unknown>)?.botRole as string | undefined,
+                  botPersonality: botSettings?.botPersonality ?? undefined,
+                  botMission: (botSettings as Record<string, unknown>)?.botMission as string | undefined,
+                  companyKnowledge: (botSettings as Record<string, unknown>)?.companyKnowledge as string | undefined,
+                  welcomeMessage: botSettings?.welcomeMessage ?? undefined,
+                },
                 isFirstBotInteraction,
-                botSettings?.botName ?? undefined,
-                botSettings?.companyName ?? undefined,
-                botSettings?.botPersonality ?? undefined
               );
 
-              // Build typed lead updates
               const leadUpdates: Partial<Lead> = {
                 botStage: botResult.nextStage,
               };
@@ -3022,13 +3032,26 @@ export async function registerRoutes(
               if (botResult.extractedBedrooms && !lead.bedrooms) {
                 leadUpdates.bedrooms = botResult.extractedBedrooms;
               }
+              if (botResult.extractedBathrooms && !lead.bathrooms) {
+                leadUpdates.bathrooms = botResult.extractedBathrooms;
+              }
+              if (botResult.extractedLocation && !lead.location) {
+                leadUpdates.location = botResult.extractedLocation;
+              }
+              if (botResult.extractedArea && !lead.area) {
+                leadUpdates.area = botResult.extractedArea;
+              }
+              if (botResult.extractedPaymentType && !lead.paymentType) {
+                leadUpdates.paymentType = botResult.extractedPaymentType;
+              }
+              if (botResult.extractedDownPayment && !lead.downPayment) {
+                leadUpdates.downPayment = botResult.extractedDownPayment;
+              }
 
-              // Server-side enforcement: handoff only when ALL 4 fields are collected
               const resolvedName = leadUpdates.name || lead.name;
               const resolvedBudget = leadUpdates.budget || lead.budget;
               const resolvedUnit = leadUpdates.unitType || lead.unitType;
-              const resolvedBedrooms = leadUpdates.bedrooms || lead.bedrooms;
-              const allFieldsCollected = !!(resolvedName && !resolvedName.startsWith("واتساب -") && resolvedBudget && resolvedUnit && resolvedBedrooms);
+              const allFieldsCollected = !!(resolvedName && !resolvedName.startsWith("واتساب -") && (resolvedBudget || resolvedUnit));
 
               if (botResult.shouldHandoff && allFieldsCollected) {
                 leadUpdates.botActive = false;
@@ -3050,8 +3073,14 @@ export async function registerRoutes(
                   isRead: false,
                 });
 
-                // Notify assigned agent about handoff
-                const handoffSummary = `بيانات العميل: ${resolvedName || phone} | الميزانية: ${resolvedBudget || "لم تُحدد"} | نوع الوحدة: ${resolvedUnit || "لم تُحدد"} | الغرف: ${resolvedBedrooms || "لم تُحدد"}`;
+                const resolvedLocation = leadUpdates.location || lead.location;
+                const resolvedPayment = leadUpdates.paymentType || lead.paymentType;
+                const handoffParts = [`بيانات العميل: ${resolvedName || phone}`];
+                if (resolvedBudget) handoffParts.push(`الميزانية: ${resolvedBudget}`);
+                if (resolvedUnit) handoffParts.push(`نوع الوحدة: ${resolvedUnit}`);
+                if (resolvedLocation) handoffParts.push(`الموقع: ${resolvedLocation}`);
+                if (resolvedPayment) handoffParts.push(`الدفع: ${resolvedPayment}`);
+                const handoffSummary = handoffParts.join(" | ");
                 const notifTarget = lead.assignedTo || userId;
                 await storage.createNotification({
                   userId: notifTarget,

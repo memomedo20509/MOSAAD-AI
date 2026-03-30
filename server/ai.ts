@@ -1,4 +1,4 @@
-import type { Lead, WhatsappMessagesLog, Project } from "@shared/schema";
+import type { Lead, WhatsappMessagesLog, Project, Unit } from "@shared/schema";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
@@ -195,9 +195,9 @@ interface ParsedAnalysis {
 export type BotStage =
   | "greeting"
   | "collecting_name"
-  | "collecting_budget"
-  | "collecting_unit"
-  | "collecting_rooms"
+  | "collecting_needs"
+  | "recommending_units"
+  | "collecting_details"
   | "qualified"
   | "handed_off";
 
@@ -208,6 +208,12 @@ export interface BotReplyResult {
   extractedBudget?: string | null;
   extractedUnitType?: string | null;
   extractedBedrooms?: number | null;
+  extractedBathrooms?: number | null;
+  extractedLocation?: string | null;
+  extractedArea?: string | null;
+  extractedPaymentType?: string | null;
+  extractedDownPayment?: string | null;
+  extractedProject?: string | null;
   shouldHandoff: boolean;
 }
 
@@ -218,7 +224,66 @@ interface ParsedBotReply {
   extractedBudget?: unknown;
   extractedUnitType?: unknown;
   extractedBedrooms?: unknown;
+  extractedBathrooms?: unknown;
+  extractedLocation?: unknown;
+  extractedArea?: unknown;
+  extractedPaymentType?: unknown;
+  extractedDownPayment?: unknown;
+  extractedProject?: unknown;
   shouldHandoff?: unknown;
+}
+
+export interface BotConfig {
+  botName?: string;
+  companyName?: string;
+  botRole?: string;
+  botPersonality?: string;
+  botMission?: string;
+  companyKnowledge?: string;
+  welcomeMessage?: string;
+}
+
+function buildInventoryContext(projects: Project[], units: Unit[]): string {
+  if (projects.length === 0) return "لا توجد مشاريع مسجّلة حالياً في النظام.";
+
+  const sections: string[] = [];
+  for (const p of projects) {
+    const projectUnits = units.filter(u => u.projectId === p.id && u.status === "available");
+    let section = `📍 مشروع "${p.name}"`;
+    if (p.type) section += ` (${p.type})`;
+    if (p.location) section += ` — ${p.location}`;
+    if (p.description) section += `\n   ${p.description}`;
+    if (p.minPrice || p.maxPrice) {
+      section += `\n   الأسعار: من ${p.minPrice?.toLocaleString() ?? "?"} إلى ${p.maxPrice?.toLocaleString() ?? "?"} جنيه`;
+    }
+    if (p.amenities && p.amenities.length > 0) {
+      section += `\n   المميزات: ${p.amenities.join("، ")}`;
+    }
+    if (p.deliveryDate) section += ` | التسليم: ${p.deliveryDate}`;
+    if (p.status) section += ` | الحالة: ${p.status === "ready" ? "جاهز للتسليم" : p.status === "under_construction" ? "تحت الإنشاء" : p.status}`;
+
+    if (projectUnits.length > 0) {
+      section += `\n   الوحدات المتاحة (${projectUnits.length} وحدة):`;
+      for (const u of projectUnits.slice(0, 15)) {
+        let unitLine = `     • ${u.type ?? "وحدة"} ${u.unitNumber}`;
+        if (u.bedrooms) unitLine += ` | ${u.bedrooms} غرف`;
+        if (u.bathrooms) unitLine += ` | ${u.bathrooms} حمام`;
+        if (u.area) unitLine += ` | ${u.area} م²`;
+        if (u.price) unitLine += ` | ${u.price.toLocaleString()} جنيه`;
+        if (u.floor) unitLine += ` | دور ${u.floor}`;
+        if (u.finishing) unitLine += ` | ${u.finishing}`;
+        if (u.view) unitLine += ` | إطلالة: ${u.view}`;
+        section += `\n${unitLine}`;
+      }
+      if (projectUnits.length > 15) {
+        section += `\n     ... و${projectUnits.length - 15} وحدة أخرى`;
+      }
+    } else {
+      section += `\n   لا توجد وحدات متاحة حالياً في هذا المشروع.`;
+    }
+    sections.push(section);
+  }
+  return sections.join("\n\n");
 }
 
 export async function generateBotReply(
@@ -227,65 +292,75 @@ export async function generateBotReply(
   lead: Lead,
   recentMessages: WhatsappMessagesLog[],
   projects: Project[],
-  welcomeMessage?: string,
+  units: Unit[],
+  config: BotConfig,
   isFirstInteraction?: boolean,
-  botName?: string,
-  companyName?: string,
-  botPersonality?: string
 ): Promise<BotReplyResult> {
-  const projectsInfo = projects.length > 0
-    ? projects.map(p => `- ${p.name}: ${p.type ?? ""} في ${p.location ?? ""}, السعر من ${p.minPrice?.toLocaleString() ?? "?"} إلى ${p.maxPrice?.toLocaleString() ?? "?"} جنيه, ${p.description ?? ""}`).join("\n")
-    : "لا توجد مشاريع مسجّلة حالياً.";
+  const inventoryContext = buildInventoryContext(projects, units);
 
   const conversationHistory = recentMessages
-    .slice(-6)
+    .slice(-8)
     .map(m => `${m.direction === "inbound" ? "العميل" : "البوت"}: ${m.messageText}`)
     .join("\n");
 
   const leadInfo = buildLeadContext(lead);
 
-  // Use the explicitly passed isFirstInteraction flag (computed before inbound is logged)
-  const greetingInstruction = (isFirstInteraction && welcomeMessage && currentStage === "greeting")
-    ? `للتحية الأولى استخدم هذه الرسالة تحديداً: "${welcomeMessage}"`
+  const greetingInstruction = (isFirstInteraction && config.welcomeMessage && currentStage === "greeting")
+    ? `للتحية الأولى استخدم هذه الرسالة تحديداً: "${config.welcomeMessage}"`
     : "ابدأ بتحية ودية واسأل عن الاسم";
 
-  const resolvedBotName = botName ?? "المساعد الذكي";
-  const resolvedCompany = companyName ?? "شركتنا العقارية";
-  const resolvedPersonality = botPersonality ?? "أنت مساعد مبيعات عقارية ذكي ولطيف وودود. تتكلم بالعربية المصرية بشكل طبيعي. مهمتك مساعدة العملاء واستخراج بياناتهم بطريقة محترمة وغير ملحّة.";
+  const resolvedName = config.botName ?? "المساعد الذكي";
+  const resolvedCompany = config.companyName ?? "شركتنا العقارية";
+  const resolvedRole = config.botRole ?? "مستشار عقاري";
+  const resolvedPersonality = config.botPersonality ?? "أنت مستشار عقاري مصري محترف وودود. بتتكلم بالمصري بشكل طبيعي. بتساعد العملاء يلاقوا الوحدة المناسبة ليهم وبتجمع بياناتهم بطريقة محترمة.";
+  const resolvedMission = config.botMission ?? "جمع بيانات العميل الكاملة وترشيح وحدات مناسبة من المشاريع المتاحة قبل تحويله للمندوب.";
+  const resolvedKnowledge = config.companyKnowledge ?? "";
 
-  const systemPrompt = `اسمك "${resolvedBotName}" وتعمل في شركة "${resolvedCompany}".
+  const systemPrompt = `أنت "${resolvedName}" — ${resolvedRole} في شركة "${resolvedCompany}".
 ${resolvedPersonality}
 
-مهمتك جمع بيانات العميل (الاسم، الميزانية، نوع الوحدة، عدد الغرف) قبل تحويله للمندوب.
+🎯 مهمتك:
+${resolvedMission}
 
-المشاريع المتاحة في الشركة:
-${projectsInfo}
+${resolvedKnowledge ? `📋 معلومات إضافية عن الشركة:\n${resolvedKnowledge}\n` : ""}
+🏗️ المشاريع والوحدات المتاحة:
+${inventoryContext}
 
-البيانات المجمّعة للعميل حتى الآن: ${leadInfo}
+📊 البيانات المجمّعة للعميل حتى الآن:
+${leadInfo}
 
-مراحل المحادثة:
-- greeting: ${greetingInstruction}
-- collecting_name: اسأل عن الميزانية بعد معرفة الاسم
-- collecting_budget: اسأل عن نوع الوحدة بعد الميزانية
-- collecting_unit: اسأل عن عدد الغرف
-- collecting_rooms: أكمل البيانات وانتقل لـ qualified
-- qualified: البيانات اكتملت (اسم + ميزانية + نوع وحدة + غرف)، جهّز للتحويل للمندوب
+📋 مراحل المحادثة:
+1. greeting: ${greetingInstruction}
+2. collecting_name: بعد التحية، اعرف اسم العميل. لو قال اسمه في أول رسالة، انتقل لـ collecting_needs على طول.
+3. collecting_needs: اسأل عن احتياجاته — الميزانية، نوع الوحدة (شقة/فيلا/دوبلكس/توين هاوس/تاون هاوس/بنتهاوس/ستوديو/محل/مكتب)، عدد الغرف، المنطقة المفضلة. ممكن تجمع أكتر من معلومة في رسالة واحدة. لو العميل ذكر معلومات كتير مرة واحدة، استخرجها كلها.
+4. recommending_units: بناءً على اللي العميل قاله، رشّحله وحدات محددة من القائمة أعلاه. اذكر اسم المشروع، رقم الوحدة، المساحة، السعر، والمميزات. لو مافيش وحدات تناسبه، قوله واقترح بدائل قريبة.
+5. collecting_details: بعد ما يبدي اهتمام بوحدة أو مشروع، اسأل عن تفاصيل إضافية: طريقة الدفع (كاش/تقسيط)، المقدم المتاح، الجدول الزمني.
+6. qualified: البيانات الأساسية اكتملت (اسم + ميزانية أو اهتمام بمشروع + نوع وحدة). جهّز للتحويل للمندوب.
 
-القواعد:
-- ردود قصيرة ومودبة (3-5 جمل)
-- اللهجة المصرية الودية
-- لو العميل سأل عن مشروع معين، أجب بمعلوماته من القائمة أعلاه
-- shouldHandoff = true فقط لو اكتملت البيانات الأربعة: الاسم والميزانية ونوع الوحدة وعدد الغرف
-- استخرج البيانات من رسالة العميل إذا وُجدت
+⚡ قواعد مهمة:
+- اتكلم بالمصري العامي الطبيعي مش الفصحى (يعني "إيه" مش "ماذا"، "عايز" مش "أريد"، "كويس" مش "جيد")
+- ردود قصيرة ومركزة (2-4 جمل) — ده واتساب مش إيميل
+- لو العميل سأل عن مشروع أو سعر أو وحدة، رد بمعلومات حقيقية من القائمة أعلاه — ماتأخترعش أرقام
+- لو العميل اعترض على السعر أو قال غالي، حاول تعرض بدائل أرخص أو اتكلم عن التقسيط
+- لو العميل مش عايز يكمل أو قال "لا شكراً"، احترم قراره بلباقة
+- استخرج أي بيانات ذكرها العميل في رسالته حتى لو ماطلبتهاش
+- shouldHandoff = true بس لما يبقى عندك على الأقل: الاسم + (الميزانية أو اهتمام واضح بمشروع) + نوع الوحدة
+- لو العميل طلب يتكلم مع حد أو طلب مندوب، حط shouldHandoff = true على طول
 
-أرجع JSON فقط بهذا الشكل:
+🔄 أرجع JSON فقط بهذا الشكل:
 {
-  "reply": "نص الرد بالعربية",
+  "reply": "نص الرد بالمصري",
   "nextStage": "اسم المرحلة التالية",
   "extractedName": "الاسم أو null",
   "extractedBudget": "الميزانية أو null",
   "extractedUnitType": "نوع الوحدة أو null",
   "extractedBedrooms": عدد الغرف كرقم أو null,
+  "extractedBathrooms": عدد الحمامات كرقم أو null,
+  "extractedLocation": "المنطقة/الموقع المفضل أو null",
+  "extractedArea": "المساحة المطلوبة أو null",
+  "extractedPaymentType": "كاش أو تقسيط أو null",
+  "extractedDownPayment": "مبلغ المقدم أو null",
+  "extractedProject": "اسم المشروع اللي العميل مهتم بيه أو null",
   "shouldHandoff": true أو false
 }`;
 
@@ -295,7 +370,7 @@ ${conversationHistory}
 
 آخر رسالة من العميل: ${currentMessage}
 
-رد على العميل وانتقل للمرحلة المناسبة.`;
+رد على العميل بصفتك بروكر عقاري مصري محترف وانتقل للمرحلة المناسبة.`;
 
   const raw = await callGemini(systemPrompt, userPrompt);
 
@@ -309,7 +384,7 @@ ${conversationHistory}
   }
 
   const parsed = JSON.parse(jsonMatch[0]) as ParsedBotReply;
-  const validStages: BotStage[] = ["greeting", "collecting_name", "collecting_budget", "collecting_unit", "collecting_rooms", "qualified", "handed_off"];
+  const validStages: BotStage[] = ["greeting", "collecting_name", "collecting_needs", "recommending_units", "collecting_details", "qualified", "handed_off"];
   const nextStage = validStages.includes(parsed.nextStage as BotStage)
     ? (parsed.nextStage as BotStage)
     : currentStage;
@@ -321,6 +396,12 @@ ${conversationHistory}
     extractedBudget: typeof parsed.extractedBudget === "string" ? parsed.extractedBudget : null,
     extractedUnitType: typeof parsed.extractedUnitType === "string" ? parsed.extractedUnitType : null,
     extractedBedrooms: typeof parsed.extractedBedrooms === "number" ? parsed.extractedBedrooms : null,
+    extractedBathrooms: typeof parsed.extractedBathrooms === "number" ? parsed.extractedBathrooms : null,
+    extractedLocation: typeof parsed.extractedLocation === "string" ? parsed.extractedLocation : null,
+    extractedArea: typeof parsed.extractedArea === "string" ? parsed.extractedArea : null,
+    extractedPaymentType: typeof parsed.extractedPaymentType === "string" ? parsed.extractedPaymentType : null,
+    extractedDownPayment: typeof parsed.extractedDownPayment === "string" ? parsed.extractedDownPayment : null,
+    extractedProject: typeof parsed.extractedProject === "string" ? parsed.extractedProject : null,
     shouldHandoff: parsed.shouldHandoff === true,
   };
 }

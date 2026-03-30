@@ -29,7 +29,10 @@ interface ChatbotSettings {
   welcomeMessage: string;
   botName?: string;
   companyName?: string;
+  botRole?: string;
   botPersonality?: string;
+  botMission?: string;
+  companyKnowledge?: string;
   respondAlways?: boolean;
 }
 
@@ -44,7 +47,10 @@ export default function WhatsAppSettingsPage() {
     welcomeMessage: "أهلاً! 👋 أنا المساعد الذكي لشركتنا العقارية. يسعدني مساعدتك. ممكن تعرفني باسمك الكريم؟",
     botName: "المساعد الذكي",
     companyName: "شركتنا العقارية",
-    botPersonality: "أنت مساعد مبيعات عقارية ذكي ولطيف وودود. تتكلم بالعربية المصرية بشكل طبيعي. مهمتك مساعدة العملاء واستخراج بياناتهم بطريقة محترمة وغير ملحّة.",
+    botRole: "مستشار عقاري",
+    botPersonality: "أنت مستشار عقاري مصري محترف وودود. بتتكلم بالمصري بشكل طبيعي. بتساعد العملاء يلاقوا الوحدة المناسبة ليهم وبتجمع بياناتهم بطريقة محترمة.",
+    botMission: "جمع بيانات العميل الكاملة (الاسم، الميزانية، نوع الوحدة، عدد الغرف، الموقع المفضل، طريقة الدفع) وترشيح وحدات مناسبة من المشاريع المتاحة قبل تحويله للمندوب.",
+    companyKnowledge: "",
     respondAlways: false,
   });
 
@@ -66,7 +72,10 @@ export default function WhatsAppSettingsPage() {
         welcomeMessage: botSettings.welcomeMessage ?? "أهلاً! 👋 أنا المساعد الذكي لشركتنا العقارية. يسعدني مساعدتك. ممكن تعرفني باسمك الكريم؟",
         botName: botSettings.botName ?? "المساعد الذكي",
         companyName: botSettings.companyName ?? "شركتنا العقارية",
-        botPersonality: botSettings.botPersonality ?? "أنت مساعد مبيعات عقارية ذكي ولطيف وودود. تتكلم بالعربية المصرية بشكل طبيعي. مهمتك مساعدة العملاء واستخراج بياناتهم بطريقة محترمة وغير ملحّة.",
+        botRole: botSettings.botRole ?? "مستشار عقاري",
+        botPersonality: botSettings.botPersonality ?? "أنت مستشار عقاري مصري محترف وودود. بتتكلم بالمصري بشكل طبيعي. بتساعد العملاء يلاقوا الوحدة المناسبة ليهم وبتجمع بياناتهم بطريقة محترمة.",
+        botMission: botSettings.botMission ?? "جمع بيانات العميل الكاملة (الاسم، الميزانية، نوع الوحدة، عدد الغرف، الموقع المفضل، طريقة الدفع) وترشيح وحدات مناسبة من المشاريع المتاحة قبل تحويله للمندوب.",
+        companyKnowledge: botSettings.companyKnowledge ?? "",
         respondAlways: botSettings.respondAlways ?? false,
       });
     }
@@ -480,7 +489,7 @@ export default function WhatsAppSettingsPage() {
                   <User className="h-4 w-4 text-muted-foreground" />
                   <span>هوية البوت</span>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1.5">
                     <Label className="text-xs text-muted-foreground">اسم البوت</Label>
                     <Input
@@ -503,6 +512,17 @@ export default function WhatsAppSettingsPage() {
                       data-testid="input-company-name"
                     />
                   </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">الوظيفة</Label>
+                    <Input
+                      value={botForm.botRole ?? ""}
+                      onChange={(e) => setBotForm(f => ({ ...f, botRole: e.target.value }))}
+                      placeholder="مستشار عقاري"
+                      className="text-sm"
+                      dir="rtl"
+                      data-testid="input-bot-role"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -515,13 +535,49 @@ export default function WhatsAppSettingsPage() {
                 <Textarea
                   value={botForm.botPersonality ?? ""}
                   onChange={(e) => setBotForm(f => ({ ...f, botPersonality: e.target.value }))}
-                  rows={4}
-                  placeholder="مثال: أنت مستشار عقاري محترف وودود، تتكلم بالمصري، وتساعد العملاء باحترام دون ضغط..."
+                  rows={3}
+                  placeholder="مثال: أنت مستشار عقاري محترف وودود، بتتكلم بالمصري، وبتساعد العملاء باحترام..."
                   className="resize-none text-sm"
                   dir="rtl"
                   data-testid="textarea-bot-personality"
                 />
-                <p className="text-xs text-muted-foreground">وصف شخصية البوت وأسلوبه في الرد — الذكاء الاصطناعي سيلتزم بهذا الوصف</p>
+                <p className="text-xs text-muted-foreground">وصف شخصية البوت وأسلوبه — الذكاء الاصطناعي هيلتزم بالوصف ده</p>
+              </div>
+
+              {/* Bot Mission */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Building2 className="h-4 w-4 text-blue-500" />
+                  <span>مهمة البوت</span>
+                </div>
+                <Textarea
+                  value={botForm.botMission ?? ""}
+                  onChange={(e) => setBotForm(f => ({ ...f, botMission: e.target.value }))}
+                  rows={3}
+                  placeholder="مثال: جمع بيانات العميل الكاملة وترشيح وحدات مناسبة من المشاريع..."
+                  className="resize-none text-sm"
+                  dir="rtl"
+                  data-testid="textarea-bot-mission"
+                />
+                <p className="text-xs text-muted-foreground">إيه اللي عايز البوت يعمله بالظبط — إيه البيانات اللي يجمعها وإزاي يتعامل مع العميل</p>
+              </div>
+
+              {/* Company Knowledge */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <AlarmClock className="h-4 w-4 text-orange-500" />
+                  <span>معلومات الشركة (اختياري)</span>
+                </div>
+                <Textarea
+                  value={botForm.companyKnowledge ?? ""}
+                  onChange={(e) => setBotForm(f => ({ ...f, companyKnowledge: e.target.value }))}
+                  rows={4}
+                  placeholder={"مثال:\n- خطط التقسيط: مقدم 10% وتقسيط على 7 سنين\n- عرض خاص: خصم 5% للدفع الكاش\n- مواعيد التسليم: Q4 2026\n- مميزات الشركة: 15 سنة خبرة في السوق المصري"}
+                  className="resize-none text-sm"
+                  dir="rtl"
+                  data-testid="textarea-company-knowledge"
+                />
+                <p className="text-xs text-muted-foreground">أي معلومات إضافية عن الشركة — خطط تقسيط، عروض، مميزات — البوت هيستخدمها في ردوده</p>
               </div>
 
               {/* Welcome Message */}
@@ -547,11 +603,12 @@ export default function WhatsAppSettingsPage() {
                 <p className="text-xs font-medium text-blue-700 dark:text-blue-400">كيف يعمل البوت؟</p>
                 <ul className="text-xs text-blue-600 dark:text-blue-500 space-y-1 list-disc list-inside">
                   <li>يرد تلقائياً على الرسائل الواردة (بعد الدوام أو دايماً حسب الإعداد)</li>
-                  <li>يتكلم بالعربية المصرية وبالأسلوب اللي حددته</li>
-                  <li>يجمع بيانات العميل: الاسم، الميزانية، نوع الوحدة، عدد الغرف</li>
-                  <li>يجيب على أسئلة المشاريع من قاعدة البيانات</li>
-                  <li>بعد جمع البيانات، يحيل العميل للمندوب المعيّن</li>
-                  <li>المندوب يمكنه تعطيل البوت لأي ليد من بانيل الليد</li>
+                  <li>يتكلم بالعربية المصرية كبروكر عقاري محترف</li>
+                  <li>يجمع بيانات العميل الكاملة: الاسم، الميزانية، نوع الوحدة، الغرف، الموقع، طريقة الدفع</li>
+                  <li>يشوف كل المشاريع والوحدات المتاحة ويرشّح وحدات مناسبة للعميل</li>
+                  <li>بيرد على أسئلة الأسعار والمساحات والتشطيبات من البيانات الحقيقية</li>
+                  <li>بعد جمع البيانات، بيحيل العميل للمندوب المعيّن مع ملخص كامل</li>
+                  <li>المندوب يقدر يوقف البوت لأي ليد من بانيل الليد</li>
                 </ul>
               </div>
 

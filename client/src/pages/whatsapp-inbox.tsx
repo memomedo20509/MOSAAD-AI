@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MessageSquare, PhoneCall, ExternalLink, Clock, Inbox, Send, Sparkles, Loader2 } from "lucide-react";
+import { MessageSquare, PhoneCall, ExternalLink, Clock, Inbox, Send, Sparkles, Loader2, Pencil, Check, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +55,8 @@ export default function WhatsAppInboxPage() {
   const [search, setSearch] = useState("");
   const [replyText, setReplyText] = useState("");
   const [suggestedReplies, setSuggestedReplies] = useState<string[]>([]);
+  const [editingName, setEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: waStatus } = useQuery<{ status: string }>({
@@ -119,6 +121,20 @@ export default function WhatsAppInboxPage() {
     },
   });
 
+  const updateNameMutation = useMutation({
+    mutationFn: async ({ leadId, name }: { leadId: string; name: string }) => {
+      await apiRequest("PATCH", `/api/leads/${leadId}`, { name });
+    },
+    onSuccess: () => {
+      setEditingName(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/inbox"] });
+      toast({ title: "تم تحديث الاسم" });
+    },
+    onError: () => {
+      toast({ title: "فشل التحديث", variant: "destructive" });
+    },
+  });
+
   useEffect(() => {
     if (!selectedLeadId) return;
     const conv = conversations.find((c) => c.leadId === selectedLeadId);
@@ -127,6 +143,7 @@ export default function WhatsAppInboxPage() {
     }
     setSuggestedReplies([]);
     setReplyText("");
+    setEditingName(false);
   }, [selectedLeadId]);
 
   useEffect(() => {
@@ -324,14 +341,70 @@ export default function WhatsAppInboxPage() {
                 {/* Chat header */}
                 <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
                   <div>
-                    <p
-                      className="font-semibold text-sm"
-                      data-testid="text-chat-lead-name"
-                    >
-                      {selectedConv?.leadName || selectedConv?.phone || "—"}
-                    </p>
-                    {selectedConv?.leadName && (
-                      <p className="text-xs text-muted-foreground">
+                    {editingName ? (
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          value={editNameValue}
+                          onChange={(e) => setEditNameValue(e.target.value)}
+                          className="h-7 text-sm w-48"
+                          dir="rtl"
+                          autoFocus
+                          data-testid="input-edit-lead-name"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && editNameValue.trim() && selectedLeadId) {
+                              updateNameMutation.mutate({ leadId: selectedLeadId, name: editNameValue.trim() });
+                            }
+                            if (e.key === "Escape") setEditingName(false);
+                          }}
+                        />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-6 w-6"
+                          onClick={() => {
+                            if (editNameValue.trim() && selectedLeadId) {
+                              updateNameMutation.mutate({ leadId: selectedLeadId, name: editNameValue.trim() });
+                            }
+                          }}
+                          disabled={updateNameMutation.isPending}
+                          data-testid="button-save-lead-name"
+                        >
+                          <Check className="h-3.5 w-3.5 text-green-600" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-6 w-6"
+                          onClick={() => setEditingName(false)}
+                          data-testid="button-cancel-edit-name"
+                        >
+                          <X className="h-3.5 w-3.5 text-red-500" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <p
+                          className="font-semibold text-sm"
+                          data-testid="text-chat-lead-name"
+                        >
+                          {selectedConv?.leadName || selectedConv?.phone || "—"}
+                        </p>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-5 w-5"
+                          onClick={() => {
+                            setEditNameValue(selectedConv?.leadName || selectedConv?.phone || "");
+                            setEditingName(true);
+                          }}
+                          data-testid="button-edit-lead-name"
+                        >
+                          <Pencil className="h-3 w-3 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    )}
+                    {selectedConv?.phone && (
+                      <p className="text-xs text-muted-foreground" data-testid="text-chat-phone">
                         {selectedConv.phone}
                       </p>
                     )}

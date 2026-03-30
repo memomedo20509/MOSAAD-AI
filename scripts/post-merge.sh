@@ -119,6 +119,15 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS bot_stage TEXT DEFAULT 'greeting';
 -- leads: ai_analyzed_at column (Task #9)
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS ai_analyzed_at TIMESTAMP;
 
+-- chatbot_settings: new columns (Task #3)
+ALTER TABLE chatbot_settings ADD COLUMN IF NOT EXISTS bot_name VARCHAR DEFAULT 'المساعد الذكي';
+ALTER TABLE chatbot_settings ADD COLUMN IF NOT EXISTS company_name VARCHAR DEFAULT 'شركتنا العقارية';
+ALTER TABLE chatbot_settings ADD COLUMN IF NOT EXISTS bot_role VARCHAR DEFAULT 'مستشار عقاري';
+ALTER TABLE chatbot_settings ADD COLUMN IF NOT EXISTS bot_personality TEXT DEFAULT '';
+ALTER TABLE chatbot_settings ADD COLUMN IF NOT EXISTS bot_mission TEXT DEFAULT '';
+ALTER TABLE chatbot_settings ADD COLUMN IF NOT EXISTS company_knowledge TEXT DEFAULT '';
+ALTER TABLE chatbot_settings ADD COLUMN IF NOT EXISTS respond_always BOOLEAN DEFAULT false;
+
 SELECT 'Schema migration complete' as status;
 ENDSQL
   echo "SQL migrations applied successfully."
