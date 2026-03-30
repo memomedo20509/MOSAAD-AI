@@ -319,15 +319,16 @@ export async function sendWhatsAppMessage(
 
   const jid = `${normalized}@s.whatsapp.net`;
 
-  // Validate that the recipient has a WhatsApp account before sending
+  // Soft-check: verify number exists on WhatsApp, but proceed even if check fails or returns false
+  // (onWhatsApp can return false-negatives especially for international numbers or recently active JIDs)
   try {
     const results = await session.socket.onWhatsApp(jid);
     const result = results?.[0];
     if (!result?.exists) {
-      return { success: false, error: "This phone number is not registered on WhatsApp" };
+      console.warn(`[WhatsApp] onWhatsApp check returned false for ${normalized}, proceeding with send anyway`);
     }
   } catch (err) {
-    console.warn("WhatsApp existence check failed, proceeding anyway:", err instanceof Error ? err.message : err);
+    console.warn("[WhatsApp] existence check failed, proceeding anyway:", err instanceof Error ? err.message : err);
   }
 
   const delay = 2000 + Math.random() * 3000;
