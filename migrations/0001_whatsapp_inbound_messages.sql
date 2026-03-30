@@ -19,7 +19,8 @@ ALTER TABLE whatsapp_messages_log
 ALTER TABLE whatsapp_messages_log
   ALTER COLUMN agent_id DROP NOT NULL;
 
--- Optional: index on message_id for fast deduplication lookup
-CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_log_message_id
+-- Partial unique index on message_id for concurrency-safe deduplication
+-- (partial because message_id is null for outbound messages without WhatsApp IDs)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_messages_log_message_id
   ON whatsapp_messages_log (message_id)
   WHERE message_id IS NOT NULL;

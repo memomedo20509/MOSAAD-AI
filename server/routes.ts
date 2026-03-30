@@ -2764,7 +2764,7 @@ export async function registerRoutes(
           console.log(`[WhatsApp] Auto-created lead ${lead.id} for phone ${phone}`);
         }
 
-        // Save inbound message
+        // Save inbound message (use WhatsApp message timestamp as createdAt for accurate ordering)
         await storage.logWhatsappMessage({
           leadId: lead.id,
           agentId: null,
@@ -2775,7 +2775,8 @@ export async function registerRoutes(
           direction: "inbound",
           messageText: msg.messageText,
           messageId: msg.messageId || null,
-        });
+          createdAt: msg.timestamp,
+        } as any);
 
         // Add to lead history
         await storage.createHistory({
