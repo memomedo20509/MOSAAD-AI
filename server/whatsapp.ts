@@ -396,7 +396,8 @@ export async function sendWhatsAppMessage(
       continue;
     }
 
-    const ws = (session.socket as any)?.ws;
+    const sockObj = session.socket as Record<string, unknown>;
+    const ws = sockObj?.ws as { readyState?: number } | undefined;
     if (ws && ws.readyState !== undefined && ws.readyState !== 1) {
       console.warn(`[WhatsApp] sendWhatsAppMessage: WebSocket readyState=${ws.readyState} (not OPEN), attempt ${attempt}/${MAX_RETRIES}`);
       if (attempt < MAX_RETRIES) {
