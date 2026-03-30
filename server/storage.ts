@@ -270,8 +270,11 @@ export interface IStorage {
   // WhatsApp Messages Log
   logWhatsappMessage(log: InsertWhatsappMessagesLog): Promise<WhatsappMessagesLog>;
   getWhatsappLogsByLead(leadId: string): Promise<WhatsappMessagesLog[]>;
+  getWhatsappConversation(leadId: string): Promise<WhatsappMessagesLog[]>;
   countAgentMessagesInLastHour(agentId: string): Promise<number>;
   countAgentMessagesInLastDay(agentId: string): Promise<number>;
+  findLeadByPhone(phone: string): Promise<Lead | undefined>;
+  findMessageByWhatsAppId(messageId: string): Promise<WhatsappMessagesLog | undefined>;
 
   // Lead Manager Comments
   getManagerCommentsByLead(leadId: string): Promise<LeadManagerComment[]>;
@@ -1338,6 +1341,35 @@ export class DatabaseStorage implements IStorage {
 
   async getWhatsappLogsByLead(leadId: string): Promise<WhatsappMessagesLog[]> {
     return db.select().from(whatsappMessagesLog).where(eq(whatsappMessagesLog.leadId, leadId)).orderBy(whatsappMessagesLog.createdAt);
+  }
+
+  async getWhatsappConversation(leadId: string): Promise<WhatsappMessagesLog[]> {
+    return db.select().from(whatsappMessagesLog).where(eq(whatsappMessagesLog.leadId, leadId)).orderBy(whatsappMessagesLog.createdAt);
+  }
+
+  async findLeadByPhone(phone: string): Promise<Lead | undefined> {
+    const cleaned = phone.replace(/\D/g, "");
+    if (!cleaned) return undefined;
+    const variants: string[] = [cleaned];
+    if (cleaned.startsWith("20")) variants.push("0" + cleaned.slice(2));
+    else if (cleaned.startsWith("0")) variants.push("20" + cleaned.slice(1));
+    else variants.push("20" + cleaned, "0" + cleaned);
+
+    for (const variant of variants) {
+      const [lead] = await db.select().from(leads).where(eq(leads.phone, variant));
+      if (lead) return lead;
+    }
+
+    const allLeads = await db.select().from(leads);
+    const phone2Match = allLeads.filter(l => l.phone2 && variants.includes(l.phone2.replace(/\D/g, "")));
+    if (phone2Match.length > 0) return phone2Match[phone2Match.length - 1];
+
+    return undefined;
+  }
+
+  async findMessageByWhatsAppId(messageId: string): Promise<WhatsappMessagesLog | undefined> {
+    const [msg] = await db.select().from(whatsappMessagesLog).where(eq(whatsappMessagesLog.messageId, messageId));
+    return msg;
   }
 
   async countAgentMessagesInLastHour(agentId: string): Promise<number> {

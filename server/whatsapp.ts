@@ -31,6 +31,22 @@ export interface WaSession {
 
 const sessions = new Map<string, WaSession>();
 
+export interface IncomingWAMessage {
+  userId: string;
+  phone: string;
+  messageText: string;
+  messageId: string;
+  timestamp: Date;
+}
+
+type IncomingMessageHandler = (msg: IncomingWAMessage) => Promise<void>;
+
+const incomingMessageHandlers = new Map<string, IncomingMessageHandler>();
+
+export function setIncomingMessageHandler(userId: string, handler: IncomingMessageHandler): void {
+  incomingMessageHandlers.set(userId, handler);
+}
+
 function getSessionDir(userId: string): string {
   return path.join(SESSIONS_DIR, userId);
 }
@@ -115,6 +131,49 @@ export async function startConnection(userId: string): Promise<WaSession> {
 
     session.socket = sock;
     sock.ev.on("creds.update", saveCreds);
+
+    sock.ev.on("messages.upsert", async ({ messages, type }) => {
+      if (type !== "notify") return;
+      const handler = incomingMessageHandlers.get(userId);
+      if (!handler) return;
+
+      for (const msg of messages) {
+        try {
+          // Skip messages sent by this account
+          if (msg.key.fromMe) continue;
+
+          const remoteJid = msg.key.remoteJid;
+          if (!remoteJid) continue;
+
+          // Skip group messages and status broadcasts
+          if (remoteJid === "status@broadcast") continue;
+          if (remoteJid.endsWith("@g.us")) continue;
+
+          // Extract phone from JID (e.g. "201234567890@s.whatsapp.net" → "201234567890")
+          const rawPhone = remoteJid.split("@")[0];
+          if (!rawPhone) continue;
+
+          // Extract message text (text message or extended text)
+          const text =
+            msg.message?.conversation ||
+            msg.message?.extendedTextMessage?.text ||
+            msg.message?.imageMessage?.caption ||
+            msg.message?.videoMessage?.caption ||
+            null;
+
+          if (!text) continue;
+
+          const messageId = msg.key.id || "";
+          const timestamp = msg.messageTimestamp
+            ? new Date(Number(msg.messageTimestamp) * 1000)
+            : new Date();
+
+          await handler({ userId, phone: rawPhone, messageText: text, messageId, timestamp });
+        } catch (err) {
+          console.error("[WhatsApp] Error processing incoming message:", err);
+        }
+      }
+    });
 
     sock.ev.on("connection.update", async ({ connection, lastDisconnect, qr }) => {
       if (qr) {

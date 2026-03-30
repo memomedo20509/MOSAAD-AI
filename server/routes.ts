@@ -14,6 +14,8 @@ import {
   getSessionStatus,
   sendWhatsAppMessage,
   restoreSessionsOnStartup,
+  setIncomingMessageHandler,
+  type IncomingWAMessage,
 } from "./whatsapp";
 import { 
   insertLeadSchema, 
@@ -1951,6 +1953,7 @@ export async function registerRoutes(
   app.post("/api/whatsapp/connect", isAuthenticated, async (req, res) => {
     try {
       const userId = req.user!.id;
+      registerWAIncomingHandler(userId);
       await startConnection(userId);
       const { status, qrDataUrl, errorMessage } = getSessionStatus(userId);
       res.json({ status, qrDataUrl, errorMessage });
@@ -2119,6 +2122,9 @@ export async function registerRoutes(
         templateId: templateId || null,
         templateName: templateName || null,
         phone,
+        direction: "outbound",
+        messageText: message,
+        messageId: null,
       });
 
       // Add to lead history (without message body for privacy)
@@ -2706,8 +2712,103 @@ export async function registerRoutes(
     }
   });
 
-  // Restore WhatsApp sessions on startup
-  restoreSessionsOnStartup().catch(console.error);
+  // GET /api/leads/:leadId/whatsapp-conversation — get full chat conversation (inbound + outbound)
+  app.get("/api/leads/:leadId/whatsapp-conversation", isAuthenticated, async (req, res) => {
+    try {
+      const leadId = req.params.leadId as string;
+      if (!(await canAccessLead(req.user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const messages = await storage.getWhatsappConversation(leadId);
+      res.json(messages);
+    } catch (error) {
+      console.error("Error fetching WhatsApp conversation:", error);
+      res.status(500).json({ error: "Failed to fetch conversation" });
+    }
+  });
+
+  // Helper: register incoming WhatsApp message handler for a user
+  function registerWAIncomingHandler(userId: string): void {
+    setIncomingMessageHandler(userId, async (msg: IncomingWAMessage) => {
+      try {
+        // Deduplicate by WhatsApp message ID
+        if (msg.messageId) {
+          const existing = await storage.findMessageByWhatsAppId(msg.messageId);
+          if (existing) return;
+        }
+
+        // Normalize the incoming phone number (same logic as whatsapp.ts)
+        let phone = msg.phone;
+        if (!phone.startsWith("20") && phone.startsWith("0")) {
+          phone = "20" + phone.slice(1);
+        } else if (!phone.startsWith("20") && phone.length === 10) {
+          phone = "20" + phone;
+        }
+
+        // Find or create the lead
+        let lead = await storage.findLeadByPhone(phone);
+        let isNewLead = false;
+
+        if (!lead) {
+          isNewLead = true;
+          lead = await storage.createLead({
+            name: `واتساب - ${phone}`,
+            phone,
+            channel: "واتساب",
+            assignedTo: userId,
+          });
+          console.log(`[WhatsApp] Auto-created lead ${lead.id} for phone ${phone}`);
+        }
+
+        // Save inbound message
+        await storage.logWhatsappMessage({
+          leadId: lead.id,
+          agentId: null,
+          agentName: null,
+          templateId: null,
+          templateName: null,
+          phone,
+          direction: "inbound",
+          messageText: msg.messageText,
+          messageId: msg.messageId || null,
+        });
+
+        // Add to lead history
+        await storage.createHistory({
+          leadId: lead.id,
+          action: "رسالة واتساب واردة",
+          description: `رسالة من ${phone}: ${msg.messageText.substring(0, 100)}${msg.messageText.length > 100 ? "..." : ""}`,
+          performedBy: "واتساب",
+        });
+
+        // Create notification for the assigned agent
+        const notifUserId = lead.assignedTo || userId;
+        const leadDisplayName = lead.name || phone;
+        await storage.createNotification({
+          userId: notifUserId,
+          type: "whatsapp_message",
+          message: isNewLead
+            ? `رسالة واتساب جديدة — ليد جديد من ${phone}: ${msg.messageText.substring(0, 80)}`
+            : `رسالة واتساب من ${leadDisplayName}: ${msg.messageText.substring(0, 80)}`,
+          leadId: lead.id,
+          isRead: false,
+        });
+
+      } catch (err) {
+        console.error("[WhatsApp] Error in incoming message handler:", err);
+      }
+    });
+  }
+
+  // Restore WhatsApp sessions on startup and register incoming message handlers
+  restoreSessionsOnStartup()
+    .then(async () => {
+      const allUsers = await storage.getAllUsers();
+      for (const user of allUsers) {
+        registerWAIncomingHandler(user.id);
+      }
+    })
+    .catch(console.error);
 
   return httpServer;
 }

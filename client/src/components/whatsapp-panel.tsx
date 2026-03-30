@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,8 +12,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Wifi,
   WifiOff,
   Send,
   MessageSquare,
@@ -24,7 +24,9 @@ import {
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import type { WhatsappTemplate, Lead } from "@shared/schema";
+import { format } from "date-fns";
+import { useState } from "react";
+import type { WhatsappTemplate, Lead, WhatsappMessagesLog } from "@shared/schema";
 
 type WaStatus = "disconnected" | "connecting" | "qr" | "connected";
 
@@ -45,10 +47,40 @@ function interpolateTemplate(body: string, lead: Lead): string {
     .replace(/\{\{project_name\}\}/g, lead.location || lead.campaign || "");
 }
 
+function ChatBubble({ msg }: { msg: WhatsappMessagesLog }) {
+  const isOutbound = msg.direction === "outbound" || !msg.direction;
+  const time = msg.createdAt ? format(new Date(msg.createdAt), "HH:mm") : "";
+  const text = msg.messageText;
+
+  if (!text) return null;
+
+  return (
+    <div className={`flex ${isOutbound ? "justify-end" : "justify-start"} mb-2`}>
+      <div
+        className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm ${
+          isOutbound
+            ? "bg-green-500 text-white rounded-br-sm"
+            : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-bl-sm"
+        }`}
+        data-testid={`bubble-wa-${msg.id}`}
+      >
+        <p className="whitespace-pre-wrap break-words leading-relaxed">{text}</p>
+        <div className={`flex items-center justify-end gap-1 mt-1 ${isOutbound ? "text-green-100" : "text-gray-400 dark:text-gray-500"}`}>
+          <span className="text-[10px]">{time}</span>
+          {isOutbound && msg.agentName && (
+            <span className="text-[10px] opacity-80">· {msg.agentName}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function WhatsAppPanel({ lead, agentName }: WhatsAppPanelProps) {
   const { toast } = useToast();
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [messageText, setMessageText] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: statusData, isLoading: statusLoading } = useQuery<WaStatusResponse>({
     queryKey: ["/api/whatsapp/status"],
@@ -59,8 +91,20 @@ export function WhatsAppPanel({ lead, agentName }: WhatsAppPanelProps) {
     queryKey: ["/api/whatsapp/templates"],
   });
 
+  const { data: conversation = [], isLoading: convLoading } = useQuery<WhatsappMessagesLog[]>({
+    queryKey: ["/api/leads", lead.id, "whatsapp-conversation"],
+    enabled: !!lead.id,
+    refetchInterval: 15000,
+  });
+
   const status = statusData?.status ?? "disconnected";
   const isConnected = status === "connected";
+
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [conversation.length]);
 
   function handleTemplateChange(id: string) {
     setSelectedTemplateId(id);
@@ -81,6 +125,7 @@ export function WhatsAppPanel({ lead, agentName }: WhatsAppPanelProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads", lead.id, "history"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", lead.id, "whatsapp-conversation"] });
       setMessageText("");
       setSelectedTemplateId("");
       toast({ title: "تم إرسال الرسالة بنجاح" });
@@ -104,6 +149,8 @@ export function WhatsAppPanel({ lead, agentName }: WhatsAppPanelProps) {
       </Card>
     );
   }
+
+  const hasConversation = conversation.some(m => m.messageText);
 
   return (
     <Card>
@@ -144,7 +191,30 @@ export function WhatsAppPanel({ lead, agentName }: WhatsAppPanelProps) {
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-3 p-3">
+        {/* Chat Conversation Bubbles */}
+        {convLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-10 w-3/4 ml-auto rounded-2xl" />
+            <Skeleton className="h-8 w-2/3 rounded-2xl" />
+          </div>
+        ) : hasConversation ? (
+          <div className="rounded-lg border bg-[#e5ddd5] dark:bg-gray-900 overflow-hidden">
+            <div className="px-2 py-1 bg-green-600 text-white text-xs text-center">
+              محادثة واتساب مع {lead.name || lead.phone}
+            </div>
+            <ScrollArea className="h-52 p-2" data-testid="scroll-wa-conversation">
+              <div className="space-y-1">
+                {conversation.filter(m => m.messageText).map((msg) => (
+                  <ChatBubble key={msg.id} msg={msg} />
+                ))}
+                <div ref={messagesEndRef} />
+              </div>
+            </ScrollArea>
+          </div>
+        ) : null}
+
+        {/* Send Panel */}
         {!isConnected ? (
           <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
             <WifiOff className="h-6 w-6 mx-auto mb-2 text-muted-foreground/60" />
@@ -189,7 +259,7 @@ export function WhatsAppPanel({ lead, agentName }: WhatsAppPanelProps) {
                 value={messageText}
                 onChange={(e) => setMessageText(e.target.value)}
                 placeholder="اكتب رسالتك هنا..."
-                rows={4}
+                rows={3}
                 className="text-sm"
                 data-testid="textarea-wa-message"
               />

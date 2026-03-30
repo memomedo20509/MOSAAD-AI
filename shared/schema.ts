@@ -355,11 +355,14 @@ export type WhatsappTemplate = typeof whatsappTemplates.$inferSelect;
 export const whatsappMessagesLog = pgTable("whatsapp_messages_log", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   leadId: varchar("lead_id").references(() => leads.id),
-  agentId: varchar("agent_id").notNull(),
+  agentId: varchar("agent_id"),
   agentName: text("agent_name"),
   templateId: varchar("template_id"),
   templateName: text("template_name"),
   phone: text("phone").notNull(),
+  direction: text("direction").default("outbound"),
+  messageText: text("message_text"),
+  messageId: varchar("message_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
