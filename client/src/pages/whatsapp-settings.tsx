@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Wifi, WifiOff, RefreshCw, SmartphoneNfc, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
+import { ArrowLeft, Wifi, WifiOff, RefreshCw, SmartphoneNfc, CheckCircle2, AlertCircle, XCircle, Trash2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -60,6 +60,21 @@ export default function WhatsAppSettingsPage() {
     },
   });
 
+  const resetMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/whatsapp/reset");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/status"] });
+      refetch();
+      toast({ title: "تم مسح البيانات القديمة وبدء اتصال جديد" });
+    },
+    onError: () => {
+      toast({ title: "فشل في إعادة الضبط، حاول مرة أخرى", variant: "destructive" });
+    },
+  });
+
   const disconnectMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/whatsapp/disconnect");
@@ -99,6 +114,8 @@ export default function WhatsAppSettingsPage() {
   };
 
   const cfg = statusConfig[status];
+  const isResetting = resetMutation.isPending;
+  const isConnecting = connectMutation.isPending;
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -143,36 +160,91 @@ export default function WhatsAppSettingsPage() {
               {status === "disconnected" && (
                 <div className="space-y-3">
                   {errorMessage ? (
-                    <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/10 p-4 flex items-start gap-3">
-                      <XCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-red-700 dark:text-red-400">فشل الاتصال بواتساب</p>
-                        <p className="text-xs text-red-600 dark:text-red-500 mt-1">{errorMessage}</p>
+                    <>
+                      {/* Error state: show clear explanation + reset button */}
+                      <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/10 p-4 flex items-start gap-3">
+                        <XCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-red-700 dark:text-red-400">حدث خطأ في الاتصال</p>
+                          <p className="text-xs text-red-600 dark:text-red-500 mt-1">{errorMessage}</p>
+                        </div>
                       </div>
-                    </div>
+
+                      {/* Primary fix: clear old data and reconnect */}
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/10 p-4 space-y-3">
+                        <div className="flex items-start gap-3">
+                          <Trash2 className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                              مسح البيانات القديمة وإعادة الاتصال
+                            </p>
+                            <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                              في حالة تكرار الخطأ، اضغط هذا الزرار — سيمسح بيانات الاتصال القديمة ويبدأ من جديد ويظهر لك كود QR جديد.
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => resetMutation.mutate()}
+                          disabled={isResetting}
+                          className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+                          data-testid="button-wa-reset"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          {isResetting ? "جاري المسح وإعادة الاتصال..." : "مسح وإعادة الاتصال"}
+                        </Button>
+                      </div>
+
+                      {/* Secondary: simple retry without clearing */}
+                      <Button
+                        variant="outline"
+                        onClick={() => connectMutation.mutate()}
+                        disabled={isConnecting}
+                        className="w-full"
+                        data-testid="button-wa-connect"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        {isConnecting ? "جاري المحاولة..." : "إعادة المحاولة فقط"}
+                      </Button>
+                    </>
                   ) : (
-                    <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
-                      <WifiOff className="h-8 w-8 mx-auto mb-2 text-muted-foreground/60" />
-                      <p>لم يتم ربط الواتساب بعد</p>
-                      <p className="text-xs mt-1">اضغط على زر الاتصال لبدء عملية الربط</p>
-                    </div>
+                    <>
+                      <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+                        <WifiOff className="h-8 w-8 mx-auto mb-2 text-muted-foreground/60" />
+                        <p>لم يتم ربط الواتساب بعد</p>
+                        <p className="text-xs mt-1">اضغط على زر الاتصال لبدء عملية الربط وعرض كود QR</p>
+                      </div>
+                      <Button
+                        onClick={() => connectMutation.mutate()}
+                        disabled={isConnecting}
+                        className="w-full"
+                        data-testid="button-wa-connect"
+                      >
+                        <Wifi className="h-4 w-4 mr-2" />
+                        {isConnecting ? "جاري الاتصال..." : "اتصل بالواتساب"}
+                      </Button>
+                    </>
                   )}
-                  <Button
-                    onClick={() => connectMutation.mutate()}
-                    disabled={connectMutation.isPending}
-                    className="w-full"
-                    data-testid="button-wa-connect"
-                  >
-                    <Wifi className="h-4 w-4 mr-2" />
-                    {connectMutation.isPending ? "جاري الاتصال..." : errorMessage ? "إعادة المحاولة" : "اتصل بالواتساب"}
-                  </Button>
                 </div>
               )}
 
-              {(status === "connecting") && (
-                <div className="rounded-lg border p-6 text-center space-y-3">
-                  <RefreshCw className="h-10 w-10 mx-auto animate-spin text-primary" />
-                  <p className="text-sm text-muted-foreground">جاري الاتصال بالواتساب...</p>
+              {status === "connecting" && (
+                <div className="space-y-3">
+                  <div className="rounded-lg border p-6 text-center space-y-3">
+                    <RefreshCw className="h-10 w-10 mx-auto animate-spin text-primary" />
+                    <p className="text-sm text-muted-foreground">جاري الاتصال بالواتساب...</p>
+                    <p className="text-xs text-muted-foreground">سيظهر كود QR خلال ثوانٍ</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => resetMutation.mutate()}
+                    disabled={isResetting}
+                    className="w-full text-amber-700 border-amber-300 hover:bg-amber-50"
+                    data-testid="button-wa-reset-connecting"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    {isResetting ? "جاري المسح..." : "تأخر الاتصال؟ امسح وابدأ من جديد"}
+                  </Button>
                 </div>
               )}
 

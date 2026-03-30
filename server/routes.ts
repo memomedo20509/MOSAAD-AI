@@ -2022,6 +2022,21 @@ export async function registerRoutes(
     }
   });
 
+  // POST /api/whatsapp/reset — clear session data and reconnect (fixes corrupted auth state)
+  app.post("/api/whatsapp/reset", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      await disconnectSession(userId);
+      await startConnection(userId);
+      const { status, qrDataUrl, errorMessage } = getSessionStatus(userId);
+      res.json({ status, qrDataUrl, errorMessage });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("WhatsApp reset error:", message);
+      res.status(500).json({ error: "فشل في إعادة ضبط الاتصال" });
+    }
+  });
+
   // POST /api/whatsapp/disconnect — disconnect the session
   app.post("/api/whatsapp/disconnect", isAuthenticated, async (req, res) => {
     try {
