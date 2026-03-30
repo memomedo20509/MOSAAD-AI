@@ -317,7 +317,7 @@ export async function sendWhatsAppMessage(
   userId: string,
   phone: string,
   message: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; messageId?: string }> {
   console.log(`[WhatsApp] sendWhatsAppMessage called for user=${userId}, phone=${phone}`);
 
   const session = sessions.get(userId);
@@ -372,9 +372,14 @@ export async function sendWhatsAppMessage(
   await new Promise((r) => setTimeout(r, delay));
 
   try {
-    await session.socket!.sendMessage(jid, { text: message });
-    console.log(`[WhatsApp] sendWhatsAppMessage: SUCCESS sent to ${jid}`);
-    return { success: true };
+    const sentMsg = await session.socket!.sendMessage(jid, { text: message });
+    const msgId = sentMsg?.key?.id;
+    if (!msgId) {
+      console.warn(`[WhatsApp] sendWhatsAppMessage: sent to ${jid} but no message ID returned — message may not have been delivered`);
+      return { success: false, error: "الرسالة لم تُرسل فعلياً — يرجى إعادة الاتصال بواتساب" };
+    }
+    console.log(`[WhatsApp] sendWhatsAppMessage: SUCCESS sent to ${jid}, msgId=${msgId}`);
+    return { success: true, messageId: msgId };
   } catch (err) {
     console.error(`[WhatsApp] sendWhatsAppMessage: FAILED to send to ${jid}:`, err);
     return { success: false, error: err instanceof Error ? err.message : "Send failed" };

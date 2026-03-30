@@ -2105,9 +2105,9 @@ export async function registerRoutes(
         });
       }
 
-      console.log(`[WhatsApp Send Route] Attempting send: userId=${userId}, leadId=${leadId}, phone=${phone}`);
+      console.log(`[WhatsApp Send Route] Attempting send: userId=${userId}, leadId=${leadId}, phone=${phone}, msgLength=${message.length}`);
       const result = await sendWhatsAppMessage(userId, phone, message);
-      console.log(`[WhatsApp Send Route] Result:`, JSON.stringify(result));
+      console.log(`[WhatsApp Send Route] Result: success=${result.success}, msgId=${result.messageId || 'none'}, error=${result.error || 'none'}`);
       if (!result.success) {
         return res.status(400).json({ error: result.error });
       }
@@ -2130,7 +2130,7 @@ export async function registerRoutes(
         phone,
         direction: "outbound",
         messageText: message,
-        messageId: null,
+        messageId: result.messageId || null,
       });
 
       // Add to lead history (without message body for privacy)
