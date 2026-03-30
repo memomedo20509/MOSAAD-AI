@@ -2105,7 +2105,9 @@ export async function registerRoutes(
         });
       }
 
+      console.log(`[WhatsApp Send Route] Attempting send: userId=${userId}, leadId=${leadId}, phone=${phone}`);
       const result = await sendWhatsAppMessage(userId, phone, message);
+      console.log(`[WhatsApp Send Route] Result:`, JSON.stringify(result));
       if (!result.success) {
         return res.status(400).json({ error: result.error });
       }
@@ -3057,7 +3059,9 @@ export async function registerRoutes(
                 // Send bot reply
                 const botSendResult = await sendWhatsAppMessage(userId, phone, botResult.reply);
                 if (!botSendResult.success) {
-                  console.warn(`[Chatbot] sendWhatsAppMessage failed for ${phone}:`, botSendResult.error);
+                  console.warn(`[Chatbot] sendWhatsAppMessage FAILED for ${phone}:`, botSendResult.error);
+                } else {
+                  console.log(`[Chatbot] sendWhatsAppMessage SUCCESS for ${phone}`);
                 }
                 await storage.logWhatsappMessage({
                   leadId: lead.id,
@@ -3067,7 +3071,7 @@ export async function registerRoutes(
                   templateName: null,
                   phone,
                   direction: "outbound",
-                  messageText: botResult.reply,
+                  messageText: botSendResult.success ? botResult.reply : `[فشل الإرسال] ${botResult.reply}`,
                   messageId: null,
                   isRead: false,
                 });

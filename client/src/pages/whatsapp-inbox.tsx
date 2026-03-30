@@ -95,8 +95,12 @@ export default function WhatsAppInboxPage() {
     onError: async (err: any) => {
       let msg = "فشل إرسال الرسالة";
       try {
-        const body = typeof err?.message === "string" ? JSON.parse(err.message) : null;
-        if (body?.error) msg = body.error;
+        const raw = typeof err?.message === "string" ? err.message : "";
+        const jsonStart = raw.indexOf("{");
+        if (jsonStart >= 0) {
+          const body = JSON.parse(raw.slice(jsonStart));
+          if (body?.error) msg = body.error;
+        }
       } catch {}
       toast({ title: "فشل الإرسال", description: msg, variant: "destructive" });
     },

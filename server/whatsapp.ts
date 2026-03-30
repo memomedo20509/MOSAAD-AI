@@ -73,10 +73,10 @@ const reconnectAttempts = new Map<string, number>();
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY_MS = 3000;
 
-export async function startConnection(userId: string, freshSession = false): Promise<WaSession> {
+export async function startConnection(userId: string, freshSession = false, forceReconnect = false): Promise<WaSession> {
   const session = await getOrCreateSession(userId);
 
-  if (session.status === "connected" || session.status === "connecting" || session.status === "qr") {
+  if (!forceReconnect && (session.status === "connected" || session.status === "connecting" || session.status === "qr")) {
     return session;
   }
 
@@ -230,10 +230,11 @@ export async function startConnection(userId: string, freshSession = false): Pro
             session.emitter.emit("status", { status: "connecting" });
             setTimeout(async () => {
               try {
-                session.status = "disconnected";
-                await startConnection(userId, false);
+                await startConnection(userId, false, true);
               } catch (err) {
                 console.error(`[WhatsApp] Reconnect failed for user ${userId}:`, err instanceof Error ? err.message : err);
+                session.status = "disconnected";
+                session.socket = null;
               }
             }, delay);
           } else {
@@ -317,37 +318,65 @@ export async function sendWhatsAppMessage(
   phone: string,
   message: string
 ): Promise<{ success: boolean; error?: string }> {
+  console.log(`[WhatsApp] sendWhatsAppMessage called for user=${userId}, phone=${phone}`);
+
   const session = sessions.get(userId);
   if (!session) {
-    return { success: false, error: "WhatsApp not connected" };
+    console.log(`[WhatsApp] sendWhatsAppMessage: no session found for user ${userId}`);
+    return { success: false, error: "WhatsApp not connected — لا يوجد جلسة واتساب" };
   }
 
-  // If connecting, wait up to 15s for the session to be ready
+  console.log(`[WhatsApp] sendWhatsAppMessage: session status=${session.status}, hasSocket=${!!session.socket}`);
+
   if (session.status !== "connected" || !session.socket) {
-    if (session.status === "connecting") {
-      console.log(`[WhatsApp] sendWhatsAppMessage: session is connecting for ${userId}, waiting...`);
-      const ok = await waitForConnected(session, 15000);
-      if (!ok) return { success: false, error: "WhatsApp not connected — يرجى الانتظار قليلاً وإعادة المحاولة" };
+    if (session.status === "connecting" || session.status === "qr") {
+      console.log(`[WhatsApp] sendWhatsAppMessage: session is ${session.status}, waiting up to 20s...`);
+      const ok = await waitForConnected(session, 20000);
+      if (!ok) {
+        console.log(`[WhatsApp] sendWhatsAppMessage: wait timed out, status=${session.status}`);
+        return { success: false, error: "WhatsApp reconnecting — يرجى الانتظار قليلاً وإعادة المحاولة" };
+      }
+    } else if (session.status === "disconnected") {
+      console.log(`[WhatsApp] sendWhatsAppMessage: session disconnected, attempting reconnect...`);
+      try {
+        await startConnection(userId, false, true);
+        const ok = await waitForConnected(session, 20000);
+        if (!ok) {
+          console.log(`[WhatsApp] sendWhatsAppMessage: reconnect wait timed out`);
+          return { success: false, error: "WhatsApp disconnected — تعذر إعادة الاتصال" };
+        }
+      } catch (err) {
+        console.error(`[WhatsApp] sendWhatsAppMessage: reconnect failed:`, err);
+        return { success: false, error: "WhatsApp disconnected — فشل إعادة الاتصال" };
+      }
     } else {
       return { success: false, error: "WhatsApp not connected" };
     }
   }
 
+  if (!session.socket) {
+    console.log(`[WhatsApp] sendWhatsAppMessage: socket still null after waiting`);
+    return { success: false, error: "WhatsApp socket not available" };
+  }
+
   const normalized = normalizePhone(phone);
   if (!normalized) {
+    console.log(`[WhatsApp] sendWhatsAppMessage: invalid phone number: ${phone}`);
     return { success: false, error: "Invalid phone number" };
   }
 
   const jid = `${normalized}@s.whatsapp.net`;
+  console.log(`[WhatsApp] sendWhatsAppMessage: sending to jid=${jid}`);
 
-  const delay = 1000 + Math.random() * 2000;
+  const delay = 500 + Math.random() * 1500;
   await new Promise((r) => setTimeout(r, delay));
 
   try {
-    await session.socket.sendMessage(jid, { text: message });
+    await session.socket!.sendMessage(jid, { text: message });
+    console.log(`[WhatsApp] sendWhatsAppMessage: SUCCESS sent to ${jid}`);
     return { success: true };
   } catch (err) {
-    console.error("WhatsApp send error:", err);
+    console.error(`[WhatsApp] sendWhatsAppMessage: FAILED to send to ${jid}:`, err);
     return { success: false, error: err instanceof Error ? err.message : "Send failed" };
   }
 }
