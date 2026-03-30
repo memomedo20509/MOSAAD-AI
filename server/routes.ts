@@ -1936,8 +1936,8 @@ export async function registerRoutes(
   app.get("/api/whatsapp/status", isAuthenticated, async (req, res) => {
     try {
       const userId = req.user!.id;
-      const { status, qrDataUrl } = getSessionStatus(userId);
-      res.json({ status, qrDataUrl });
+      const { status, qrDataUrl, errorMessage } = getSessionStatus(userId);
+      res.json({ status, qrDataUrl, errorMessage });
     } catch (error) {
       console.error("WhatsApp status error:", error);
       res.status(500).json({ error: "Failed to get status" });
@@ -1949,8 +1949,8 @@ export async function registerRoutes(
     try {
       const userId = req.user!.id;
       await startConnection(userId);
-      const { status, qrDataUrl } = getSessionStatus(userId);
-      res.json({ status, qrDataUrl });
+      const { status, qrDataUrl, errorMessage } = getSessionStatus(userId);
+      res.json({ status, qrDataUrl, errorMessage });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const stack = error instanceof Error ? error.stack : undefined;

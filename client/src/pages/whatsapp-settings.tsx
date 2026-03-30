@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Wifi, WifiOff, RefreshCw, SmartphoneNfc, CheckCircle2, AlertCircle } from "lucide-react";
+import { ArrowLeft, Wifi, WifiOff, RefreshCw, SmartphoneNfc, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -14,6 +14,7 @@ type WaStatus = "disconnected" | "connecting" | "qr" | "connected";
 interface WaStatusResponse {
   status: WaStatus;
   qrDataUrl: string | null;
+  errorMessage: string | null;
 }
 
 export default function WhatsAppSettingsPage() {
@@ -27,6 +28,7 @@ export default function WhatsAppSettingsPage() {
 
   const status = data?.status ?? "disconnected";
   const qrDataUrl = data?.qrDataUrl ?? null;
+  const errorMessage = data?.errorMessage ?? null;
 
   useEffect(() => {
     if (status === "qr" || status === "connecting") {
@@ -140,11 +142,21 @@ export default function WhatsAppSettingsPage() {
             <>
               {status === "disconnected" && (
                 <div className="space-y-3">
-                  <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
-                    <WifiOff className="h-8 w-8 mx-auto mb-2 text-muted-foreground/60" />
-                    <p>لم يتم ربط الواتساب بعد</p>
-                    <p className="text-xs mt-1">اضغط على زر الاتصال لبدء عملية الربط</p>
-                  </div>
+                  {errorMessage ? (
+                    <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/10 p-4 flex items-start gap-3">
+                      <XCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium text-red-700 dark:text-red-400">فشل الاتصال بواتساب</p>
+                        <p className="text-xs text-red-600 dark:text-red-500 mt-1">{errorMessage}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+                      <WifiOff className="h-8 w-8 mx-auto mb-2 text-muted-foreground/60" />
+                      <p>لم يتم ربط الواتساب بعد</p>
+                      <p className="text-xs mt-1">اضغط على زر الاتصال لبدء عملية الربط</p>
+                    </div>
+                  )}
                   <Button
                     onClick={() => connectMutation.mutate()}
                     disabled={connectMutation.isPending}
@@ -152,7 +164,7 @@ export default function WhatsAppSettingsPage() {
                     data-testid="button-wa-connect"
                   >
                     <Wifi className="h-4 w-4 mr-2" />
-                    {connectMutation.isPending ? "جاري الاتصال..." : "اتصل بالواتساب"}
+                    {connectMutation.isPending ? "جاري الاتصال..." : errorMessage ? "إعادة المحاولة" : "اتصل بالواتساب"}
                   </Button>
                 </div>
               )}

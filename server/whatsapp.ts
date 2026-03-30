@@ -24,6 +24,7 @@ export interface WaSession {
   socket: WASocket | null;
   status: WaStatus;
   qrDataUrl: string | null;
+  errorMessage: string | null;
   emitter: EventEmitter;
 }
 
@@ -43,6 +44,7 @@ export async function getOrCreateSession(userId: string): Promise<WaSession> {
       socket: null,
       status: "disconnected",
       qrDataUrl: null,
+      errorMessage: null,
       emitter,
     };
     sessions.set(userId, session);
@@ -59,6 +61,7 @@ export async function startConnection(userId: string): Promise<WaSession> {
 
   session.status = "connecting";
   session.qrDataUrl = null;
+  session.errorMessage = null;
 
   const sessionDir = getSessionDir(userId);
   if (!fs.existsSync(sessionDir)) {
@@ -86,17 +89,29 @@ export async function startConnection(userId: string): Promise<WaSession> {
     printQRInTerminal: false,
     logger,
     browser: ["HomeAdvisor CRM", "Chrome", "1.0"],
-    connectTimeoutMs: 60000,
-    defaultQueryTimeoutMs: 60000,
+    connectTimeoutMs: 30000,
+    defaultQueryTimeoutMs: 30000,
     keepAliveIntervalMs: 30000,
   });
 
   session.socket = sock;
 
+  // If no QR received within 45 seconds, give up with a clear error
+  const qrTimeout = setTimeout(() => {
+    if (session.status === "connecting") {
+      console.error(`[WhatsApp] QR timeout for user ${userId} — WhatsApp servers may be unreachable from this server IP`);
+      session.status = "disconnected";
+      session.errorMessage = "تعذّر الاتصال بخوادم واتساب — تأكد من إمكانية الوصول للإنترنت من السيرفر";
+      session.emitter.emit("status", { status: "disconnected", errorMessage: session.errorMessage });
+      try { sock.end(undefined); } catch {}
+    }
+  }, 45000);
+
   sock.ev.on("creds.update", saveCreds);
 
   sock.ev.on("connection.update", async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
+      clearTimeout(qrTimeout);
       try {
         const dataUrl = await QRCode.toDataURL(qr, {
           width: 256,
@@ -105,6 +120,7 @@ export async function startConnection(userId: string): Promise<WaSession> {
         });
         session.qrDataUrl = dataUrl;
         session.status = "qr";
+        session.errorMessage = null;
         session.emitter.emit("status", { status: "qr", qrDataUrl: dataUrl });
       } catch (err) {
         console.error("QR generation error:", err);
@@ -112,12 +128,15 @@ export async function startConnection(userId: string): Promise<WaSession> {
     }
 
     if (connection === "open") {
+      clearTimeout(qrTimeout);
       session.status = "connected";
       session.qrDataUrl = null;
+      session.errorMessage = null;
       session.emitter.emit("status", { status: "connected" });
     }
 
     if (connection === "close") {
+      clearTimeout(qrTimeout);
       const code = (lastDisconnect?.error as Boom)?.output?.statusCode;
       const shouldReconnect = code !== DisconnectReason.loggedOut;
       session.socket = null;
@@ -125,9 +144,6 @@ export async function startConnection(userId: string): Promise<WaSession> {
       if (shouldReconnect) {
         session.status = "disconnected";
         session.emitter.emit("status", { status: "disconnected" });
-        setTimeout(() => {
-          startConnection(userId).catch(console.error);
-        }, 5000);
       } else {
         await disconnectSession(userId);
       }
@@ -160,16 +176,12 @@ export async function disconnectSession(userId: string): Promise<void> {
   }
 }
 
-export function getSessionStatus(userId: string): { status: WaStatus; qrDataUrl: string | null } {
+export function getSessionStatus(userId: string): { status: WaStatus; qrDataUrl: string | null; errorMessage: string | null } {
   const session = sessions.get(userId);
   if (!session) {
-    const sessionDir = getSessionDir(userId);
-    if (fs.existsSync(sessionDir)) {
-      return { status: "disconnected", qrDataUrl: null };
-    }
-    return { status: "disconnected", qrDataUrl: null };
+    return { status: "disconnected", qrDataUrl: null, errorMessage: null };
   }
-  return { status: session.status, qrDataUrl: session.qrDataUrl };
+  return { status: session.status, qrDataUrl: session.qrDataUrl, errorMessage: session.errorMessage };
 }
 
 export async function sendWhatsAppMessage(
