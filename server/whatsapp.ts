@@ -31,9 +31,16 @@ export interface WaSession {
 
 const sessions = new Map<string, WaSession>();
 
+const phoneToJid = new Map<string, string>();
+
+export function getStoredJid(phone: string): string | undefined {
+  return phoneToJid.get(phone);
+}
+
 export interface IncomingWAMessage {
   userId: string;
   phone: string;
+  jid: string;
   messageText: string;
   messageId: string;
   timestamp: Date;
@@ -162,6 +169,9 @@ export async function startConnection(userId: string, freshSession = false, forc
           const rawPhone = remoteJid.split("@")[0];
           if (!rawPhone) continue;
 
+          phoneToJid.set(rawPhone, remoteJid);
+          console.log(`[WhatsApp] Incoming message: remoteJid=${remoteJid}, rawPhone=${rawPhone}`);
+
           const text =
             msg.message?.conversation ||
             msg.message?.extendedTextMessage?.text ||
@@ -176,7 +186,7 @@ export async function startConnection(userId: string, freshSession = false, forc
             ? new Date(Number(msg.messageTimestamp) * 1000)
             : new Date();
 
-          await handler({ userId, phone: rawPhone, messageText: text, messageId, timestamp });
+          await handler({ userId, phone: rawPhone, jid: remoteJid, messageText: text, messageId, timestamp });
         } catch (err) {
           console.error("[WhatsApp] Error processing incoming message:", err);
         }
@@ -359,31 +369,87 @@ export async function sendWhatsAppMessage(
     return { success: false, error: "WhatsApp socket not available" };
   }
 
-  const normalized = normalizePhone(phone);
-  if (!normalized) {
-    console.log(`[WhatsApp] sendWhatsAppMessage: invalid phone number: ${phone}`);
-    return { success: false, error: "Invalid phone number" };
-  }
+  const storedJid = phoneToJid.get(phone);
+  let jid: string;
 
-  const jid = `${normalized}@s.whatsapp.net`;
-  console.log(`[WhatsApp] sendWhatsAppMessage: sending to jid=${jid}`);
-
-  const delay = 500 + Math.random() * 1500;
-  await new Promise((r) => setTimeout(r, delay));
-
-  try {
-    const sentMsg = await session.socket!.sendMessage(jid, { text: message });
-    const msgId = sentMsg?.key?.id;
-    if (!msgId) {
-      console.warn(`[WhatsApp] sendWhatsAppMessage: sent to ${jid} but no message ID returned — message may not have been delivered`);
-      return { success: false, error: "الرسالة لم تُرسل فعلياً — يرجى إعادة الاتصال بواتساب" };
+  if (storedJid) {
+    jid = storedJid;
+    console.log(`[WhatsApp] sendWhatsAppMessage: using stored JID=${jid} for phone=${phone}`);
+  } else {
+    const normalized = normalizePhone(phone);
+    if (!normalized) {
+      console.log(`[WhatsApp] sendWhatsAppMessage: invalid phone number: ${phone}`);
+      return { success: false, error: "Invalid phone number" };
     }
-    console.log(`[WhatsApp] sendWhatsAppMessage: SUCCESS sent to ${jid}, msgId=${msgId}`);
-    return { success: true, messageId: msgId };
-  } catch (err) {
-    console.error(`[WhatsApp] sendWhatsAppMessage: FAILED to send to ${jid}:`, err);
-    return { success: false, error: err instanceof Error ? err.message : "Send failed" };
+    jid = `${normalized}@s.whatsapp.net`;
+    console.log(`[WhatsApp] sendWhatsAppMessage: no stored JID, constructed jid=${jid} for phone=${phone}`);
   }
+
+  const MAX_RETRIES = 3;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    if (!session.socket) {
+      console.warn(`[WhatsApp] sendWhatsAppMessage: socket became null before attempt ${attempt}`);
+      if (attempt < MAX_RETRIES) {
+        const ok = await waitForConnected(session, 10000);
+        if (!ok) continue;
+      }
+      continue;
+    }
+
+    const ws = (session.socket as any)?.ws;
+    if (ws && ws.readyState !== undefined && ws.readyState !== 1) {
+      console.warn(`[WhatsApp] sendWhatsAppMessage: WebSocket readyState=${ws.readyState} (not OPEN), attempt ${attempt}/${MAX_RETRIES}`);
+      if (attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, 2000 + attempt * 1000));
+        continue;
+      }
+    }
+
+    const delay = 300 + Math.random() * 700;
+    await new Promise((r) => setTimeout(r, delay));
+
+    try {
+      const sentMsg = await session.socket.sendMessage(jid, { text: message });
+      const msgId = sentMsg?.key?.id;
+      if (msgId) {
+        console.log(`[WhatsApp] sendWhatsAppMessage: SUCCESS sent to ${jid}, msgId=${msgId}, attempt=${attempt}`);
+        return { success: true, messageId: msgId };
+      }
+      console.warn(`[WhatsApp] sendWhatsAppMessage: no messageId on attempt ${attempt}/${MAX_RETRIES} for ${jid}`);
+      if (attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, 2000 + attempt * 1000));
+      }
+    } catch (err) {
+      console.error(`[WhatsApp] sendWhatsAppMessage: error on attempt ${attempt}/${MAX_RETRIES} for ${jid}:`, err);
+      if (attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, 2000 + attempt * 1000));
+      } else {
+        return { success: false, error: err instanceof Error ? err.message : "Send failed" };
+      }
+    }
+  }
+
+  if (!storedJid && jid.endsWith("@s.whatsapp.net")) {
+    const lidJid = jid.replace("@s.whatsapp.net", "@lid");
+    console.log(`[WhatsApp] sendWhatsAppMessage: retrying with LID format: ${lidJid}`);
+    if (session.socket) {
+      try {
+        const sentMsg = await session.socket.sendMessage(lidJid, { text: message });
+        const msgId = sentMsg?.key?.id;
+        if (msgId) {
+          const rawPhone = lidJid.split("@")[0];
+          phoneToJid.set(rawPhone, lidJid);
+          console.log(`[WhatsApp] sendWhatsAppMessage: SUCCESS with LID format ${lidJid}, msgId=${msgId}`);
+          return { success: true, messageId: msgId };
+        }
+      } catch (err) {
+        console.error(`[WhatsApp] sendWhatsAppMessage: LID format also failed for ${lidJid}:`, err);
+      }
+    }
+  }
+
+  console.error(`[WhatsApp] sendWhatsAppMessage: ALL attempts failed for ${jid}`);
+  return { success: false, error: "فشل الإرسال بعد عدة محاولات — يرجى إعادة الاتصال بواتساب" };
 }
 
 function normalizePhone(phone: string): string | null {
