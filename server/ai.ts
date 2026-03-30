@@ -2,7 +2,7 @@ import type { Lead, WhatsappMessagesLog } from "@shared/schema";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
-const MODEL = "google/gemini-flash-1.5";
+const MODEL = "google/gemini-2.0-flash-001";
 
 async function callGemini(systemPrompt: string, userPrompt: string): Promise<string> {
   if (!OPENROUTER_API_KEY) {
