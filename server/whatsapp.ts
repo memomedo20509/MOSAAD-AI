@@ -66,7 +66,14 @@ export async function startConnection(userId: string): Promise<WaSession> {
   }
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-  const { version } = await fetchLatestBaileysVersion();
+
+  let version: [number, number, number] = [2, 3000, 1015901307];
+  try {
+    const latest = await fetchLatestBaileysVersion();
+    version = latest.version;
+  } catch (err) {
+    console.error("[WhatsApp] fetchLatestBaileysVersion failed, using fallback version:", err);
+  }
 
   const logger = pino({ level: "silent" });
 

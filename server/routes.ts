@@ -1952,8 +1952,13 @@ export async function registerRoutes(
       const { status, qrDataUrl } = getSessionStatus(userId);
       res.json({ status, qrDataUrl });
     } catch (error) {
-      console.error("WhatsApp connect error:", error);
-      res.status(500).json({ error: "Failed to start connection" });
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      console.error("[WhatsApp] connect error:", message, "\n", stack);
+      res.status(500).json({
+        error: "Failed to start connection",
+        detail: process.env.NODE_ENV !== "production" ? message : undefined,
+      });
     }
   });
 
