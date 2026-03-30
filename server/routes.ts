@@ -2751,11 +2751,15 @@ export async function registerRoutes(
 
         if (!lead) {
           isNewLead = true;
+          // Resolve the "ليد جديد" state id
+          const allStates = await storage.getAllStates();
+          const newLeadState = allStates.find(s => s.name === "ليد جديد" || s.order === 0);
           lead = await storage.createLead({
             name: `واتساب - ${phone}`,
             phone,
             channel: "واتساب",
             assignedTo: userId,
+            stateId: newLeadState?.id ?? null,
           });
           console.log(`[WhatsApp] Auto-created lead ${lead.id} for phone ${phone}`);
         }

@@ -1355,14 +1355,23 @@ export class DatabaseStorage implements IStorage {
     else if (cleaned.startsWith("0")) variants.push("20" + cleaned.slice(1));
     else variants.push("20" + cleaned, "0" + cleaned);
 
+    // Search primary phone — return newest match
+    const primaryMatches: Lead[] = [];
     for (const variant of variants) {
-      const [lead] = await db.select().from(leads).where(eq(leads.phone, variant));
-      if (lead) return lead;
+      const rows = await db.select().from(leads)
+        .where(eq(leads.phone, variant))
+        .orderBy(sql`${leads.createdAt} DESC`);
+      primaryMatches.push(...rows);
+    }
+    if (primaryMatches.length > 0) {
+      primaryMatches.sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+      return primaryMatches[0];
     }
 
-    const allLeads = await db.select().from(leads);
+    // Search phone2 — return newest match
+    const allLeads = await db.select().from(leads).orderBy(sql`${leads.createdAt} DESC`);
     const phone2Match = allLeads.filter(l => l.phone2 && variants.includes(l.phone2.replace(/\D/g, "")));
-    if (phone2Match.length > 0) return phone2Match[phone2Match.length - 1];
+    if (phone2Match.length > 0) return phone2Match[0];
 
     return undefined;
   }
