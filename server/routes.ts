@@ -2727,6 +2727,46 @@ export async function registerRoutes(
     }
   });
 
+  // POST /api/leads/:leadId/ai/suggest-replies — AI suggested WhatsApp replies (Gemini Flash)
+  app.post("/api/leads/:leadId/ai/suggest-replies", isAuthenticated, async (req, res) => {
+    try {
+      const leadId = req.params.leadId as string;
+      if (!(await canAccessLead(req.user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const lead = await storage.getLead(leadId);
+      if (!lead) return res.status(404).json({ error: "Lead not found" });
+
+      const messages = await storage.getWhatsappConversation(leadId);
+      const { suggestReplies } = await import("./ai");
+      const result = await suggestReplies(messages, lead);
+      res.json(result);
+    } catch (error: any) {
+      console.error("[AI] suggest-replies error:", error);
+      res.status(500).json({ error: error?.message || "AI request failed" });
+    }
+  });
+
+  // POST /api/leads/:leadId/ai/analyze — AI lead analysis (Gemini Flash)
+  app.post("/api/leads/:leadId/ai/analyze", isAuthenticated, async (req, res) => {
+    try {
+      const leadId = req.params.leadId as string;
+      if (!(await canAccessLead(req.user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const lead = await storage.getLead(leadId);
+      if (!lead) return res.status(404).json({ error: "Lead not found" });
+
+      const messages = await storage.getWhatsappConversation(leadId);
+      const { analyzeLead } = await import("./ai");
+      const result = await analyzeLead(messages, lead);
+      res.json(result);
+    } catch (error: any) {
+      console.error("[AI] analyze error:", error);
+      res.status(500).json({ error: error?.message || "AI request failed" });
+    }
+  });
+
   // Helper: register incoming WhatsApp message handler for a user
   function registerWAIncomingHandler(userId: string): void {
     setIncomingMessageHandler(userId, async (msg: IncomingWAMessage) => {

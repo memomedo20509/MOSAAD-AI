@@ -65,6 +65,13 @@ import {
   Shuffle,
   Calculator,
   GitCompare,
+  Sparkles,
+  Brain,
+  Send,
+  RefreshCw,
+  Copy,
+  CheckCheck,
+  Loader2,
 } from "lucide-react";
 import type {
   Lead,
@@ -131,6 +138,22 @@ export function LeadDetailPanel({
   const [calcUnitId, setCalcUnitId] = useState<string | null>(null);
   const [compareUnitIds, setCompareUnitIds] = useState<Set<string>>(new Set());
   const [isCompareOpen, setIsCompareOpen] = useState(false);
+
+  // AI panel state
+  const [aiReplies, setAiReplies] = useState<string[]>([]);
+  const [aiRepliesLoading, setAiRepliesLoading] = useState(false);
+  const [aiRepliesError, setAiRepliesError] = useState<string | null>(null);
+  const [aiAnalysis, setAiAnalysis] = useState<{
+    budget: string | null;
+    unitType: string | null;
+    bedrooms: number | null;
+    interestLevel: "hot" | "warm" | "cold" | null;
+    summary: string;
+  } | null>(null);
+  const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
+  const [aiAnalysisError, setAiAnalysisError] = useState<string | null>(null);
+  const [aiAnalysisApplied, setAiAnalysisApplied] = useState(false);
+  const [copiedReplyIdx, setCopiedReplyIdx] = useState<number | null>(null);
 
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
@@ -418,6 +441,63 @@ export function LeadDetailPanel({
       toast({ title: t.reminderCompleted });
     },
   });
+
+  const handleAISuggestReplies = async () => {
+    if (!lead?.id) return;
+    setAiRepliesLoading(true);
+    setAiRepliesError(null);
+    setAiReplies([]);
+    try {
+      const res = await apiRequest("POST", `/api/leads/${lead.id}/ai/suggest-replies`, {});
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setAiReplies(data.replies || []);
+    } catch (err: any) {
+      setAiRepliesError(err?.message || "فشل في الحصول على اقتراحات");
+    } finally {
+      setAiRepliesLoading(false);
+    }
+  };
+
+  const handleAIAnalyze = async () => {
+    if (!lead?.id) return;
+    setAiAnalysisLoading(true);
+    setAiAnalysisError(null);
+    setAiAnalysis(null);
+    setAiAnalysisApplied(false);
+    try {
+      const res = await apiRequest("POST", `/api/leads/${lead.id}/ai/analyze`, {});
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setAiAnalysis(data);
+    } catch (err: any) {
+      setAiAnalysisError(err?.message || "فشل في تحليل الليد");
+    } finally {
+      setAiAnalysisLoading(false);
+    }
+  };
+
+  const handleApplyAIAnalysis = () => {
+    if (!aiAnalysis || !lead) return;
+    const updates: Partial<Lead> = {};
+    if (aiAnalysis.budget) updates.budget = aiAnalysis.budget;
+    if (aiAnalysis.unitType) updates.unitType = aiAnalysis.unitType;
+    if (aiAnalysis.bedrooms) updates.bedrooms = aiAnalysis.bedrooms;
+    if (aiAnalysis.interestLevel) updates.score = aiAnalysis.interestLevel;
+    onUpdate(updates);
+    setAiAnalysisApplied(true);
+    toast({ title: "تم تطبيق تحليل الذكاء الاصطناعي على بيانات الليد" });
+  };
+
+  const handleCopyReply = async (text: string, idx: number) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedReplyIdx(idx);
+      setTimeout(() => setCopiedReplyIdx(null), 2000);
+    } catch {
+      toast({ title: "تعذّر النسخ", variant: "destructive" });
+    }
+  };
 
   const handleSave = () => {
     onUpdate(formData);
@@ -1020,6 +1100,178 @@ export function LeadDetailPanel({
                 {lead.phone && (
                   <WhatsAppPanel lead={lead} agentName={currentUser?.username} />
                 )}
+
+                {/* AI Assistant Panel */}
+                <Card className="border-purple-200 dark:border-purple-800">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle className="text-sm flex items-center gap-2 text-purple-700 dark:text-purple-400">
+                        <Sparkles className="h-4 w-4" />
+                        مساعد الذكاء الاصطناعي
+                      </CardTitle>
+                      {aiAnalysisApplied && (
+                        <Badge className="text-xs bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300" data-testid="badge-ai-analyzed">
+                          <CheckCheck className="h-3 w-3 mr-1" />
+                          تم التحليل بالـ AI
+                        </Badge>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+
+                    {/* Section 1: Suggest Replies */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                          <MessageSquare className="h-3.5 w-3.5" />
+                          اقتراح ردود واتساب
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-950"
+                          onClick={handleAISuggestReplies}
+                          disabled={aiRepliesLoading}
+                          data-testid="button-ai-suggest-replies"
+                        >
+                          {aiRepliesLoading ? (
+                            <>
+                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              جاري التوليد...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-3 w-3 mr-1" />
+                              اقترح رداً
+                            </>
+                          )}
+                        </Button>
+                      </div>
+
+                      {aiRepliesError && (
+                        <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950 rounded p-2" data-testid="text-ai-replies-error">{aiRepliesError}</p>
+                      )}
+
+                      {aiReplies.length > 0 && (
+                        <div className="space-y-2" data-testid="container-ai-replies">
+                          {aiReplies.map((reply, idx) => (
+                            <div key={idx} className="rounded-lg border border-purple-100 dark:border-purple-900 bg-purple-50/50 dark:bg-purple-950/30 p-2.5 space-y-2">
+                              <p className="text-sm leading-relaxed text-right" data-testid={`text-ai-reply-${idx}`}>{reply}</p>
+                              <div className="flex gap-2 justify-end">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                                  onClick={() => handleCopyReply(reply, idx)}
+                                  data-testid={`button-ai-copy-reply-${idx}`}
+                                >
+                                  {copiedReplyIdx === idx ? (
+                                    <><CheckCheck className="h-3 w-3 text-green-500" />تم النسخ</>
+                                  ) : (
+                                    <><Copy className="h-3 w-3" />نسخ</>
+                                  )}
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="border-t" />
+
+                    {/* Section 2: Analyze Lead */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                          <Brain className="h-3.5 w-3.5" />
+                          تحليل الليد
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-950"
+                          onClick={handleAIAnalyze}
+                          disabled={aiAnalysisLoading}
+                          data-testid="button-ai-analyze"
+                        >
+                          {aiAnalysisLoading ? (
+                            <>
+                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              جاري التحليل...
+                            </>
+                          ) : (
+                            <>
+                              <Brain className="h-3 w-3 mr-1" />
+                              حلّل المحادثة
+                            </>
+                          )}
+                        </Button>
+                      </div>
+
+                      {aiAnalysisError && (
+                        <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950 rounded p-2" data-testid="text-ai-analysis-error">{aiAnalysisError}</p>
+                      )}
+
+                      {aiAnalysis && (
+                        <div className="rounded-lg border border-purple-100 dark:border-purple-900 bg-purple-50/50 dark:bg-purple-950/30 p-3 space-y-3" data-testid="container-ai-analysis">
+                          <p className="text-sm leading-relaxed text-right text-muted-foreground" data-testid="text-ai-summary">{aiAnalysis.summary}</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {aiAnalysis.interestLevel && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[10px] text-muted-foreground">مستوى الاهتمام</span>
+                                <Badge
+                                  className={`text-xs w-fit ${
+                                    aiAnalysis.interestLevel === "hot"
+                                      ? "bg-red-100 text-red-700 border-red-200"
+                                      : aiAnalysis.interestLevel === "warm"
+                                      ? "bg-orange-100 text-orange-700 border-orange-200"
+                                      : "bg-blue-100 text-blue-700 border-blue-200"
+                                  }`}
+                                  data-testid="badge-ai-interest"
+                                >
+                                  {aiAnalysis.interestLevel === "hot" ? "🔥 ساخن" : aiAnalysis.interestLevel === "warm" ? "⚡ دافئ" : "❄️ بارد"}
+                                </Badge>
+                              </div>
+                            )}
+                            {aiAnalysis.budget && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[10px] text-muted-foreground">الميزانية</span>
+                                <span className="text-xs font-medium" data-testid="text-ai-budget">{aiAnalysis.budget}</span>
+                              </div>
+                            )}
+                            {aiAnalysis.unitType && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[10px] text-muted-foreground">نوع الوحدة</span>
+                                <span className="text-xs font-medium" data-testid="text-ai-unittype">{aiAnalysis.unitType}</span>
+                              </div>
+                            )}
+                            {aiAnalysis.bedrooms && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[10px] text-muted-foreground">عدد الغرف</span>
+                                <span className="text-xs font-medium" data-testid="text-ai-bedrooms">{aiAnalysis.bedrooms} غرف</span>
+                              </div>
+                            )}
+                          </div>
+                          <Button
+                            size="sm"
+                            className="w-full h-7 text-xs bg-purple-600 hover:bg-purple-700 text-white"
+                            onClick={handleApplyAIAnalysis}
+                            disabled={aiAnalysisApplied}
+                            data-testid="button-ai-apply-analysis"
+                          >
+                            {aiAnalysisApplied ? (
+                              <><CheckCheck className="h-3 w-3 mr-1" />تم التطبيق</>
+                            ) : (
+                              <><CheckCheck className="h-3 w-3 mr-1" />تطبيق على بيانات الليد</>
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                  </CardContent>
+                </Card>
 
                 {/* Communications timeline */}
                 <Card>
