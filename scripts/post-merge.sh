@@ -60,6 +60,65 @@ CREATE TABLE IF NOT EXISTS lead_manager_comments (
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
+-- whatsapp_campaigns table (Task #10)
+CREATE TABLE IF NOT EXISTS whatsapp_campaigns (
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  message TEXT NOT NULL,
+  filter_state_id VARCHAR,
+  filter_channel TEXT,
+  filter_days_no_reply INTEGER,
+  scheduled_at TIMESTAMP,
+  status TEXT DEFAULT 'draft',
+  created_by TEXT NOT NULL,
+  total_count INTEGER DEFAULT 0,
+  sent_count INTEGER DEFAULT 0,
+  failed_count INTEGER DEFAULT 0,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- whatsapp_campaign_recipients table (Task #10)
+CREATE TABLE IF NOT EXISTS whatsapp_campaign_recipients (
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id VARCHAR REFERENCES whatsapp_campaigns(id),
+  lead_id VARCHAR REFERENCES leads(id),
+  phone TEXT NOT NULL,
+  status TEXT DEFAULT 'pending',
+  sent_at TIMESTAMP,
+  error_message TEXT
+);
+
+-- whatsapp_followup_rules table (Task #10)
+CREATE TABLE IF NOT EXISTS whatsapp_followup_rules (
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  message TEXT NOT NULL,
+  days_after_no_reply INTEGER NOT NULL DEFAULT 3,
+  is_active BOOLEAN DEFAULT true,
+  created_by TEXT NOT NULL,
+  last_run_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- chatbot_settings table (Task #11)
+CREATE TABLE IF NOT EXISTS chatbot_settings (
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id VARCHAR NOT NULL UNIQUE,
+  is_active BOOLEAN DEFAULT false,
+  working_hours_start INTEGER DEFAULT 9,
+  working_hours_end INTEGER DEFAULT 18,
+  welcome_message TEXT DEFAULT 'أهلاً! 👋 أنا المساعد الذكي لشركتنا العقارية.',
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- leads: bot columns (Task #11)
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS bot_active BOOLEAN DEFAULT true;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS bot_stage TEXT DEFAULT 'greeting';
+
+-- leads: ai_analyzed_at column (Task #9)
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS ai_analyzed_at TIMESTAMP;
+
 SELECT 'Schema migration complete' as status;
 ENDSQL
   echo "SQL migrations applied successfully."

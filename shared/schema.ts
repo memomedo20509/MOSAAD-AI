@@ -452,5 +452,56 @@ export type InsertChatbotSettings = z.infer<typeof insertChatbotSettingsSchema>;
 export type UpdateChatbotSettings = z.infer<typeof updateChatbotSettingsSchema>;
 export type ChatbotSettings = typeof chatbotSettings.$inferSelect;
 
+// WhatsApp Campaigns
+export const whatsappCampaigns = pgTable("whatsapp_campaigns", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  message: text("message").notNull(),
+  filterStateId: varchar("filter_state_id"),
+  filterChannel: text("filter_channel"),
+  filterDaysNoReply: integer("filter_days_no_reply"),
+  scheduledAt: timestamp("scheduled_at"),
+  status: text("status").default("draft"), // draft | scheduled | running | completed | cancelled
+  createdBy: text("created_by").notNull(),
+  totalCount: integer("total_count").default(0),
+  sentCount: integer("sent_count").default(0),
+  failedCount: integer("failed_count").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertWhatsappCampaignSchema = createInsertSchema(whatsappCampaigns).omit({ id: true, createdAt: true, updatedAt: true, totalCount: true, sentCount: true, failedCount: true, status: true });
+export type InsertWhatsappCampaign = z.infer<typeof insertWhatsappCampaignSchema>;
+export type WhatsappCampaign = typeof whatsappCampaigns.$inferSelect;
+
+// WhatsApp Campaign Recipients
+export const whatsappCampaignRecipients = pgTable("whatsapp_campaign_recipients", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  campaignId: varchar("campaign_id").references(() => whatsappCampaigns.id),
+  leadId: varchar("lead_id").references(() => leads.id),
+  phone: text("phone").notNull(),
+  status: text("status").default("pending"), // pending | sent | failed
+  sentAt: timestamp("sent_at"),
+  errorMessage: text("error_message"),
+});
+
+export type WhatsappCampaignRecipient = typeof whatsappCampaignRecipients.$inferSelect;
+
+// WhatsApp Follow-up Rules (global when leadId is null, lead-specific otherwise)
+export const whatsappFollowupRules = pgTable("whatsapp_followup_rules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  message: text("message").notNull(),
+  daysAfterNoReply: integer("days_after_no_reply").notNull().default(3),
+  isActive: boolean("is_active").default(true),
+  createdBy: text("created_by").notNull(),
+  lastRunAt: timestamp("last_run_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertWhatsappFollowupRuleSchema = createInsertSchema(whatsappFollowupRules).omit({ id: true, createdAt: true, lastRunAt: true });
+export type InsertWhatsappFollowupRule = z.infer<typeof insertWhatsappFollowupRuleSchema>;
+export type WhatsappFollowupRule = typeof whatsappFollowupRules.$inferSelect;
+
 // Export auth models (users, teams, sessions, role_permissions)
 export * from "./models/auth";

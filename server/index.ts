@@ -94,6 +94,51 @@ app.use((req, res, next) => {
     ALTER TABLE whatsapp_messages_log ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE
   `).catch(() => {});
 
+  // WhatsApp Campaigns tables (Task #10)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS whatsapp_campaigns (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT NOT NULL,
+      message TEXT NOT NULL,
+      filter_state_id VARCHAR,
+      filter_channel TEXT,
+      filter_days_no_reply INTEGER,
+      scheduled_at TIMESTAMP,
+      status TEXT DEFAULT 'draft',
+      created_by TEXT NOT NULL,
+      total_count INTEGER DEFAULT 0,
+      sent_count INTEGER DEFAULT 0,
+      failed_count INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `).catch(() => {});
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS whatsapp_campaign_recipients (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      campaign_id VARCHAR REFERENCES whatsapp_campaigns(id),
+      lead_id VARCHAR REFERENCES leads(id),
+      phone TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      sent_at TIMESTAMP,
+      error_message TEXT
+    )
+  `).catch(() => {});
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS whatsapp_followup_rules (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT NOT NULL,
+      message TEXT NOT NULL,
+      days_after_no_reply INTEGER NOT NULL DEFAULT 3,
+      is_active BOOLEAN DEFAULT true,
+      created_by TEXT NOT NULL,
+      last_run_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `).catch(() => {});
+
   await registerRoutes(httpServer, app);
   
   await seedDefaultAdmin();

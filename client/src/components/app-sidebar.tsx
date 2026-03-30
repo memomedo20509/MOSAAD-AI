@@ -25,6 +25,7 @@ import {
   MessageSquare,
   Mail,
   Trophy,
+  Megaphone,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -377,6 +378,16 @@ export function AppSidebar() {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              {isManager(userRole) && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/whatsapp-campaigns"}>
+                    <Link href="/whatsapp-campaigns" data-testid="link-nav-whatsapp-campaigns">
+                      <Megaphone className="h-4 w-4" />
+                      <span>حملات واتساب</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

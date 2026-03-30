@@ -83,6 +83,14 @@ import {
   type ChatbotSettings,
   type InsertChatbotSettings,
   type UpdateChatbotSettings,
+  whatsappCampaigns,
+  whatsappCampaignRecipients,
+  whatsappFollowupRules,
+  type WhatsappCampaign,
+  type InsertWhatsappCampaign,
+  type WhatsappCampaignRecipient,
+  type WhatsappFollowupRule,
+  type InsertWhatsappFollowupRule,
 } from "@shared/schema";
 
 const PostgresSessionStore = connectPg(session);
@@ -324,6 +332,27 @@ export interface IStorage {
   getChatbotSettings(userId: string): Promise<ChatbotSettings | undefined>;
   upsertChatbotSettings(data: InsertChatbotSettings): Promise<ChatbotSettings>;
   updateChatbotSettings(userId: string, data: UpdateChatbotSettings): Promise<ChatbotSettings | undefined>;
+
+  // WhatsApp Campaigns
+  getAllCampaigns(): Promise<WhatsappCampaign[]>;
+  getCampaign(id: string): Promise<WhatsappCampaign | undefined>;
+  createCampaign(data: InsertWhatsappCampaign): Promise<WhatsappCampaign>;
+  updateCampaign(id: string, data: Partial<WhatsappCampaign>): Promise<WhatsappCampaign | undefined>;
+  deleteCampaign(id: string): Promise<boolean>;
+  getCampaignRecipients(campaignId: string): Promise<WhatsappCampaignRecipient[]>;
+  createCampaignRecipients(recipients: { campaignId: string; leadId: string; phone: string }[]): Promise<void>;
+  updateRecipientStatus(id: string, status: string, sentAt?: Date, errorMessage?: string): Promise<void>;
+  getLeadsForCampaignFilter(filterStateId?: string | null, filterChannel?: string | null, filterDaysNoReply?: number | null): Promise<Lead[]>;
+  getPendingCampaigns(): Promise<WhatsappCampaign[]>;
+
+  // WhatsApp Follow-up Rules
+  getAllFollowupRules(): Promise<WhatsappFollowupRule[]>;
+  getFollowupRule(id: string): Promise<WhatsappFollowupRule | undefined>;
+  createFollowupRule(data: InsertWhatsappFollowupRule): Promise<WhatsappFollowupRule>;
+  updateFollowupRule(id: string, data: Partial<WhatsappFollowupRule>): Promise<WhatsappFollowupRule | undefined>;
+  deleteFollowupRule(id: string): Promise<boolean>;
+  getActiveFollowupRules(): Promise<WhatsappFollowupRule[]>;
+  getLeadsForFollowupRule(daysAfterNoReply: number): Promise<Lead[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1706,6 +1735,115 @@ export class DatabaseStorage implements IStorage {
       .where(eq(chatbotSettings.userId, userId))
       .returning();
     return updated;
+  }
+
+  // WhatsApp Campaigns
+  async getAllCampaigns(): Promise<WhatsappCampaign[]> {
+    return db.select().from(whatsappCampaigns).orderBy(sql`created_at DESC`);
+  }
+
+  async getCampaign(id: string): Promise<WhatsappCampaign | undefined> {
+    const [c] = await db.select().from(whatsappCampaigns).where(eq(whatsappCampaigns.id, id));
+    return c;
+  }
+
+  async createCampaign(data: InsertWhatsappCampaign): Promise<WhatsappCampaign> {
+    const [c] = await db.insert(whatsappCampaigns).values({ ...data, status: "scheduled" }).returning();
+    return c;
+  }
+
+  async updateCampaign(id: string, data: Partial<WhatsappCampaign>): Promise<WhatsappCampaign | undefined> {
+    const [c] = await db.update(whatsappCampaigns)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(whatsappCampaigns.id, id))
+      .returning();
+    return c;
+  }
+
+  async deleteCampaign(id: string): Promise<boolean> {
+    await pool.query(`DELETE FROM whatsapp_campaign_recipients WHERE campaign_id = $1`, [id]);
+    const result = await db.delete(whatsappCampaigns).where(eq(whatsappCampaigns.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getCampaignRecipients(campaignId: string): Promise<WhatsappCampaignRecipient[]> {
+    return db.select().from(whatsappCampaignRecipients).where(eq(whatsappCampaignRecipients.campaignId, campaignId));
+  }
+
+  async createCampaignRecipients(recipients: { campaignId: string; leadId: string; phone: string }[]): Promise<void> {
+    if (recipients.length === 0) return;
+    await db.insert(whatsappCampaignRecipients).values(recipients.map(r => ({ ...r, status: "pending" })));
+  }
+
+  async updateRecipientStatus(id: string, status: string, sentAt?: Date, errorMessage?: string): Promise<void> {
+    await db.update(whatsappCampaignRecipients)
+      .set({ status, ...(sentAt ? { sentAt } : {}), ...(errorMessage ? { errorMessage } : {}) })
+      .where(eq(whatsappCampaignRecipients.id, id));
+  }
+
+  async getLeadsForCampaignFilter(filterStateId?: string | null, filterChannel?: string | null, filterDaysNoReply?: number | null): Promise<Lead[]> {
+    let query = db.select().from(leads).$dynamic();
+    const conditions = [isNotNull(leads.phone)];
+    if (filterStateId) conditions.push(eq(leads.stateId, filterStateId));
+    if (filterChannel) conditions.push(eq(leads.channel, filterChannel));
+    if (filterDaysNoReply && filterDaysNoReply > 0) {
+      const cutoff = new Date(Date.now() - filterDaysNoReply * 24 * 60 * 60 * 1000);
+      conditions.push(
+        sql`(${leads.lastActionDate} IS NULL AND ${leads.createdAt} < ${cutoff}) OR (${leads.lastActionDate} IS NOT NULL AND ${leads.lastActionDate} < ${cutoff})`
+      );
+    }
+    query = query.where(and(...conditions));
+    return query;
+  }
+
+  async getPendingCampaigns(): Promise<WhatsappCampaign[]> {
+    const now = new Date();
+    const result = await pool.query<WhatsappCampaign>(
+      `SELECT * FROM whatsapp_campaigns WHERE status = 'scheduled' AND (scheduled_at IS NULL OR scheduled_at <= $1) ORDER BY created_at ASC`,
+      [now]
+    );
+    return result.rows;
+  }
+
+  // WhatsApp Follow-up Rules
+  async getAllFollowupRules(): Promise<WhatsappFollowupRule[]> {
+    return db.select().from(whatsappFollowupRules).orderBy(sql`created_at DESC`);
+  }
+
+  async getFollowupRule(id: string): Promise<WhatsappFollowupRule | undefined> {
+    const [r] = await db.select().from(whatsappFollowupRules).where(eq(whatsappFollowupRules.id, id));
+    return r;
+  }
+
+  async createFollowupRule(data: InsertWhatsappFollowupRule): Promise<WhatsappFollowupRule> {
+    const [r] = await db.insert(whatsappFollowupRules).values(data).returning();
+    return r;
+  }
+
+  async updateFollowupRule(id: string, data: Partial<WhatsappFollowupRule>): Promise<WhatsappFollowupRule | undefined> {
+    const [r] = await db.update(whatsappFollowupRules).set(data).where(eq(whatsappFollowupRules.id, id)).returning();
+    return r;
+  }
+
+  async deleteFollowupRule(id: string): Promise<boolean> {
+    const result = await db.delete(whatsappFollowupRules).where(eq(whatsappFollowupRules.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getActiveFollowupRules(): Promise<WhatsappFollowupRule[]> {
+    return db.select().from(whatsappFollowupRules).where(eq(whatsappFollowupRules.isActive, true));
+  }
+
+  async getLeadsForFollowupRule(daysAfterNoReply: number): Promise<Lead[]> {
+    const cutoff = new Date(Date.now() - daysAfterNoReply * 24 * 60 * 60 * 1000);
+    const result = await pool.query<Lead>(
+      `SELECT * FROM leads WHERE phone IS NOT NULL AND (
+        (last_action_date IS NULL AND created_at < $1) OR
+        (last_action_date IS NOT NULL AND last_action_date < $1)
+      )`,
+      [cutoff]
+    );
+    return result.rows;
   }
 }
 

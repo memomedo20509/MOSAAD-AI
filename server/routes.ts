@@ -49,6 +49,8 @@ import {
   updateLeadManagerCommentSchema,
   insertEmailReportSettingsSchema,
   insertMonthlyTargetSchema,
+  insertWhatsappCampaignSchema,
+  insertWhatsappFollowupRuleSchema,
   type Lead,
 } from "@shared/schema";
 
@@ -3091,6 +3093,231 @@ export async function registerRoutes(
       }
     });
   }
+
+  // ── WhatsApp Campaigns ────────────────────────────────────────────────────
+  // GET /api/campaigns — list all campaigns
+  app.get("/api/campaigns", isAuthenticated, requireRole(["super_admin", "admin", "sales_admin", "sales_manager", "company_owner"]), async (_req, res) => {
+    try {
+      const campaigns = await storage.getAllCampaigns();
+      res.json(campaigns);
+    } catch (err) {
+      console.error("Get campaigns error:", err);
+      res.status(500).json({ error: "فشل في تحميل الحملات" });
+    }
+  });
+
+  // POST /api/campaigns/preview — count leads matching filter
+  app.post("/api/campaigns/preview", isAuthenticated, requireRole(["super_admin", "admin", "sales_admin", "sales_manager", "company_owner"]), async (req, res) => {
+    try {
+      const { filterStateId, filterChannel, filterDaysNoReply } = req.body as { filterStateId?: string; filterChannel?: string; filterDaysNoReply?: number };
+      const matchedLeads = await storage.getLeadsForCampaignFilter(filterStateId, filterChannel, filterDaysNoReply);
+      res.json({ count: matchedLeads.length, leads: matchedLeads.slice(0, 5).map(l => ({ id: l.id, name: l.name, phone: l.phone })) });
+    } catch (err) {
+      console.error("Preview campaign error:", err);
+      res.status(500).json({ error: "فشل في معاينة الليدز" });
+    }
+  });
+
+  // POST /api/campaigns — create campaign and prepare recipients
+  app.post("/api/campaigns", isAuthenticated, requireRole(["super_admin", "admin", "sales_admin", "sales_manager", "company_owner"]), async (req, res) => {
+    try {
+      const parsed = insertWhatsappCampaignSchema.safeParse({ ...req.body, createdBy: req.user!.id });
+      if (!parsed.success) return res.status(400).json({ error: "بيانات غير صحيحة", details: parsed.error.flatten() });
+
+      const campaign = await storage.createCampaign(parsed.data);
+
+      const matchedLeads = await storage.getLeadsForCampaignFilter(
+        parsed.data.filterStateId ?? null,
+        parsed.data.filterChannel ?? null,
+        parsed.data.filterDaysNoReply ?? null
+      );
+
+      const recipients = matchedLeads
+        .filter(l => l.phone)
+        .map(l => ({ campaignId: campaign.id, leadId: l.id, phone: l.phone! }));
+
+      await storage.createCampaignRecipients(recipients);
+      await storage.updateCampaign(campaign.id, { totalCount: recipients.length });
+
+      res.status(201).json({ ...campaign, totalCount: recipients.length });
+    } catch (err) {
+      console.error("Create campaign error:", err);
+      res.status(500).json({ error: "فشل في إنشاء الحملة" });
+    }
+  });
+
+  // GET /api/campaigns/:id/recipients — get recipients for a campaign
+  app.get("/api/campaigns/:id/recipients", isAuthenticated, requireRole(["super_admin", "admin", "sales_admin", "sales_manager", "company_owner"]), async (req, res) => {
+    try {
+      const recipients = await storage.getCampaignRecipients(req.params.id);
+      res.json(recipients);
+    } catch (err) {
+      console.error("Get recipients error:", err);
+      res.status(500).json({ error: "فشل في تحميل المستلمين" });
+    }
+  });
+
+  // DELETE /api/campaigns/:id — cancel/delete a campaign
+  app.delete("/api/campaigns/:id", isAuthenticated, requireRole(["super_admin", "admin", "sales_admin", "sales_manager", "company_owner"]), async (req, res) => {
+    try {
+      const campaign = await storage.getCampaign(req.params.id);
+      if (!campaign) return res.status(404).json({ error: "الحملة غير موجودة" });
+      if (campaign.status === "running") return res.status(400).json({ error: "لا يمكن حذف حملة جارية" });
+      await storage.deleteCampaign(req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Delete campaign error:", err);
+      res.status(500).json({ error: "فشل في حذف الحملة" });
+    }
+  });
+
+  // ── WhatsApp Follow-up Rules ──────────────────────────────────────────────
+  // GET /api/followup-rules
+  app.get("/api/followup-rules", isAuthenticated, requireRole(["super_admin", "admin", "sales_admin", "sales_manager", "company_owner"]), async (_req, res) => {
+    try {
+      const rules = await storage.getAllFollowupRules();
+      res.json(rules);
+    } catch (err) {
+      console.error("Get followup rules error:", err);
+      res.status(500).json({ error: "فشل في تحميل قواعد المتابعة" });
+    }
+  });
+
+  // POST /api/followup-rules
+  app.post("/api/followup-rules", isAuthenticated, requireRole(["super_admin", "admin", "sales_admin", "sales_manager", "company_owner"]), async (req, res) => {
+    try {
+      const parsed = insertWhatsappFollowupRuleSchema.safeParse({ ...req.body, createdBy: req.user!.id });
+      if (!parsed.success) return res.status(400).json({ error: "بيانات غير صحيحة", details: parsed.error.flatten() });
+      const rule = await storage.createFollowupRule(parsed.data);
+      res.status(201).json(rule);
+    } catch (err) {
+      console.error("Create followup rule error:", err);
+      res.status(500).json({ error: "فشل في إنشاء قاعدة المتابعة" });
+    }
+  });
+
+  // PATCH /api/followup-rules/:id — update (toggle active/inactive)
+  app.patch("/api/followup-rules/:id", isAuthenticated, requireRole(["super_admin", "admin", "sales_admin", "sales_manager", "company_owner"]), async (req, res) => {
+    try {
+      const rule = await storage.updateFollowupRule(req.params.id, req.body as Partial<{ isActive: boolean; message: string; daysAfterNoReply: number; name: string }>);
+      if (!rule) return res.status(404).json({ error: "القاعدة غير موجودة" });
+      res.json(rule);
+    } catch (err) {
+      console.error("Update followup rule error:", err);
+      res.status(500).json({ error: "فشل في تحديث القاعدة" });
+    }
+  });
+
+  // DELETE /api/followup-rules/:id
+  app.delete("/api/followup-rules/:id", isAuthenticated, requireRole(["super_admin", "admin", "sales_admin", "sales_manager", "company_owner"]), async (req, res) => {
+    try {
+      const deleted = await storage.deleteFollowupRule(req.params.id);
+      if (!deleted) return res.status(404).json({ error: "القاعدة غير موجودة" });
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Delete followup rule error:", err);
+      res.status(500).json({ error: "فشل في حذف القاعدة" });
+    }
+  });
+
+  // ── Campaign Cron Job (every 60s) ─────────────────────────────────────────
+  let cronRunning = false;
+  setInterval(async () => {
+    if (cronRunning) return;
+    cronRunning = true;
+    try {
+      // 1. Send pending scheduled campaigns
+      const pendingCampaigns = await storage.getPendingCampaigns();
+      for (const campaign of pendingCampaigns) {
+        try {
+          await storage.updateCampaign(campaign.id, { status: "running" });
+          const recipients = await storage.getCampaignRecipients(campaign.id);
+          const pendingRecipients = recipients.filter(r => r.status === "pending");
+          let sentCount = campaign.sentCount ?? 0;
+          let failedCount = campaign.failedCount ?? 0;
+
+          for (const recipient of pendingRecipients) {
+            try {
+              const result = await sendWhatsAppMessage(campaign.createdBy, recipient.phone, campaign.message);
+              if (result.success) {
+                await storage.updateRecipientStatus(recipient.id, "sent", new Date());
+                sentCount++;
+              } else {
+                await storage.updateRecipientStatus(recipient.id, "failed", undefined, result.error);
+                failedCount++;
+              }
+            } catch (sendErr) {
+              await storage.updateRecipientStatus(recipient.id, "failed", undefined, sendErr instanceof Error ? sendErr.message : "خطأ غير معروف");
+              failedCount++;
+            }
+            // Delay 3-6s between messages to avoid spam detection
+            await new Promise(r => setTimeout(r, 3000 + Math.random() * 3000));
+          }
+
+          const allDone = await storage.getCampaignRecipients(campaign.id);
+          const stillPending = allDone.filter(r => r.status === "pending").length;
+          await storage.updateCampaign(campaign.id, {
+            status: stillPending === 0 ? "completed" : "running",
+            sentCount,
+            failedCount,
+          });
+
+          console.log(`[Campaign] ${campaign.name}: sent=${sentCount}, failed=${failedCount}`);
+        } catch (campErr) {
+          console.error(`[Campaign] Error processing campaign ${campaign.id}:`, campErr instanceof Error ? campErr.message : campErr);
+          await storage.updateCampaign(campaign.id, { status: "draft" }).catch(() => {});
+        }
+      }
+
+      // 2. Check follow-up rules
+      const activeRules = await storage.getActiveFollowupRules();
+      for (const rule of activeRules) {
+        try {
+          const eligibleLeads = await storage.getLeadsForFollowupRule(rule.daysAfterNoReply);
+          let ruleRunCount = 0;
+
+          for (const lead of eligibleLeads) {
+            if (!lead.phone || !lead.assignedTo) continue;
+            try {
+              const result = await sendWhatsAppMessage(lead.assignedTo, lead.phone, rule.message);
+              if (result.success) {
+                ruleRunCount++;
+                await storage.logWhatsappMessage({
+                  leadId: lead.id,
+                  userId: lead.assignedTo,
+                  direction: "outbound",
+                  messageText: rule.message,
+                  messageId: null,
+                  isRead: false,
+                });
+                await storage.createHistory({
+                  leadId: lead.id,
+                  action: "whatsapp_followup",
+                  performedBy: lead.assignedTo,
+                  notes: `رسالة متابعة تلقائية (${rule.name}): ${rule.message.substring(0, 60)}...`,
+                  createdAt: new Date(),
+                });
+              }
+            } catch (leadErr) {
+              console.error(`[FollowUp] Error sending to lead ${lead.id}:`, leadErr instanceof Error ? leadErr.message : leadErr);
+            }
+            await new Promise(r => setTimeout(r, 3000 + Math.random() * 3000));
+          }
+
+          if (ruleRunCount > 0) {
+            await storage.updateFollowupRule(rule.id, { lastRunAt: new Date() });
+            console.log(`[FollowUp] Rule "${rule.name}": sent to ${ruleRunCount} leads`);
+          }
+        } catch (ruleErr) {
+          console.error(`[FollowUp] Error processing rule ${rule.id}:`, ruleErr instanceof Error ? ruleErr.message : ruleErr);
+        }
+      }
+    } catch (err) {
+      console.error("[Cron] Campaign/FollowUp job error:", err instanceof Error ? err.message : err);
+    } finally {
+      cronRunning = false;
+    }
+  }, 60_000);
 
   // Restore WhatsApp sessions on startup and register incoming message handlers
   restoreSessionsOnStartup()
