@@ -64,91 +64,115 @@ export async function startConnection(userId: string): Promise<WaSession> {
   session.errorMessage = null;
 
   const sessionDir = getSessionDir(userId);
-  if (!fs.existsSync(sessionDir)) {
-    fs.mkdirSync(sessionDir, { recursive: true });
-  }
 
-  const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-
-  let version: [number, number, number] = [2, 3000, 1015901307];
-  try {
-    const latest = await fetchLatestBaileysVersion();
-    version = latest.version;
-  } catch (err) {
-    console.error("[WhatsApp] fetchLatestBaileysVersion failed, using fallback version:", err);
-  }
-
-  const logger = pino({ level: "silent" });
-
-  const sock = makeWASocket({
-    version,
-    auth: {
-      creds: state.creds,
-      keys: makeCacheableSignalKeyStore(state.keys, logger),
-    },
-    printQRInTerminal: false,
-    logger,
-    browser: ["HomeAdvisor CRM", "Chrome", "1.0"],
-    connectTimeoutMs: 30000,
-    defaultQueryTimeoutMs: 30000,
-    keepAliveIntervalMs: 30000,
-  });
-
-  session.socket = sock;
-
-  // If no QR received within 45 seconds, give up with a clear error
-  const qrTimeout = setTimeout(() => {
+  // Safety timeout — fires if no QR received within 45s regardless of where the failure occurs
+  const safetyTimeout = setTimeout(() => {
     if (session.status === "connecting") {
-      console.error(`[WhatsApp] QR timeout for user ${userId} — WhatsApp servers may be unreachable from this server IP`);
+      console.error(`[WhatsApp] Safety timeout for user ${userId} — no QR received after 45s`);
       session.status = "disconnected";
-      session.errorMessage = "تعذّر الاتصال بخوادم واتساب — تأكد من إمكانية الوصول للإنترنت من السيرفر";
+      session.errorMessage = "تعذّر الاتصال بخوادم واتساب — يرجى المحاولة مجدداً أو التحقق من إعدادات الشبكة";
       session.emitter.emit("status", { status: "disconnected", errorMessage: session.errorMessage });
-      try { sock.end(undefined); } catch {}
+      if (session.socket) { try { session.socket.end(undefined); } catch {} session.socket = null; }
     }
   }, 45000);
 
-  sock.ev.on("creds.update", saveCreds);
+  try {
+    // Clean up potentially corrupted auth state before retrying
+    if (!fs.existsSync(sessionDir)) {
+      fs.mkdirSync(sessionDir, { recursive: true });
+    }
 
-  sock.ev.on("connection.update", async ({ connection, lastDisconnect, qr }) => {
-    if (qr) {
-      clearTimeout(qrTimeout);
-      try {
-        const dataUrl = await QRCode.toDataURL(qr, {
-          width: 256,
-          margin: 2,
-          color: { dark: "#000000", light: "#ffffff" },
-        });
-        session.qrDataUrl = dataUrl;
-        session.status = "qr";
+    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+
+    let version: [number, number, number] = [2, 3000, 1015901307];
+    try {
+      const latest = await fetchLatestBaileysVersion();
+      version = latest.version;
+      console.log(`[WhatsApp] Using version ${version.join(".")} for user ${userId}`);
+    } catch (err) {
+      console.error("[WhatsApp] fetchLatestBaileysVersion failed, using fallback version:", (err as Error).message);
+    }
+
+    const logger = pino({ level: "silent" });
+
+    const sock = makeWASocket({
+      version,
+      auth: {
+        creds: state.creds,
+        keys: makeCacheableSignalKeyStore(state.keys, logger),
+      },
+      printQRInTerminal: false,
+      logger,
+      browser: ["HomeAdvisor CRM", "Chrome", "1.0"],
+      connectTimeoutMs: 30000,
+      defaultQueryTimeoutMs: 30000,
+      keepAliveIntervalMs: 30000,
+    });
+
+    session.socket = sock;
+    sock.ev.on("creds.update", saveCreds);
+
+    sock.ev.on("connection.update", async ({ connection, lastDisconnect, qr }) => {
+      if (qr) {
+        clearTimeout(safetyTimeout);
+        try {
+          const dataUrl = await QRCode.toDataURL(qr, {
+            width: 256,
+            margin: 2,
+            color: { dark: "#000000", light: "#ffffff" },
+          });
+          session.qrDataUrl = dataUrl;
+          session.status = "qr";
+          session.errorMessage = null;
+          session.emitter.emit("status", { status: "qr", qrDataUrl: dataUrl });
+        } catch (err) {
+          console.error("[WhatsApp] QR generation error:", err);
+        }
+      }
+
+      if (connection === "open") {
+        clearTimeout(safetyTimeout);
+        session.status = "connected";
+        session.qrDataUrl = null;
         session.errorMessage = null;
-        session.emitter.emit("status", { status: "qr", qrDataUrl: dataUrl });
-      } catch (err) {
-        console.error("QR generation error:", err);
+        session.emitter.emit("status", { status: "connected" });
       }
-    }
 
-    if (connection === "open") {
-      clearTimeout(qrTimeout);
-      session.status = "connected";
-      session.qrDataUrl = null;
-      session.errorMessage = null;
-      session.emitter.emit("status", { status: "connected" });
-    }
+      if (connection === "close") {
+        clearTimeout(safetyTimeout);
+        const code = (lastDisconnect?.error as Boom)?.output?.statusCode;
+        const shouldReconnect = code !== DisconnectReason.loggedOut;
+        session.socket = null;
 
-    if (connection === "close") {
-      clearTimeout(qrTimeout);
-      const code = (lastDisconnect?.error as Boom)?.output?.statusCode;
-      const shouldReconnect = code !== DisconnectReason.loggedOut;
-      session.socket = null;
-
-      if (shouldReconnect) {
-        session.status = "disconnected";
-        session.emitter.emit("status", { status: "disconnected" });
-      } else {
-        await disconnectSession(userId);
+        if (shouldReconnect) {
+          session.status = "disconnected";
+          session.emitter.emit("status", { status: "disconnected" });
+        } else {
+          await disconnectSession(userId);
+        }
       }
-    }
-  });
+    });
+
+  } catch (initError) {
+    // Socket initialization failed — reset state immediately and clean corrupt auth data
+    clearTimeout(safetyTimeout);
+    const errMsg = initError instanceof Error ? initError.message : String(initError);
+    console.error(`[WhatsApp] Socket init error for user ${userId}:`, errMsg);
+
+    session.status = "disconnected";
+    session.socket = null;
+    session.errorMessage = `فشل في تهيئة الاتصال: ${errMsg}`;
+    session.emitter.emit("status", { status: "disconnected", errorMessage: session.errorMessage });
+
+    // Remove potentially corrupted auth state so next attempt starts fresh
+    try {
+      if (fs.existsSync(sessionDir)) {
+        fs.rmSync(sessionDir, { recursive: true, force: true });
+      }
+    } catch {}
+
+    throw initError;
+  }
 
   return session;
 }

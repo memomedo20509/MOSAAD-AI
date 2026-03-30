@@ -1962,6 +1962,64 @@ export async function registerRoutes(
     }
   });
 
+  // GET /api/whatsapp/diagnose — diagnose WhatsApp connection issues (admin only)
+  app.get("/api/whatsapp/diagnose", isAuthenticated, async (req, res) => {
+    if ((req.user as any)?.role !== "super_admin" && (req.user as any)?.role !== "admin") {
+      return res.status(403).json({ error: "Admin only" });
+    }
+    const steps: Record<string, string> = {};
+    try {
+      steps.node_version = process.version;
+      steps.platform = process.platform;
+      steps.arch = process.arch;
+
+      const { fetchLatestBaileysVersion, makeWASocket, useMultiFileAuthState, makeCacheableSignalKeyStore } = await import("@whiskeysockets/baileys");
+      steps.baileys_import = "OK";
+
+      try {
+        const { version } = await Promise.race([
+          fetchLatestBaileysVersion(),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout after 5s")), 5000)),
+        ]);
+        steps.fetch_version = `OK — ${version.join(".")}`;
+      } catch (e) {
+        steps.fetch_version = `FAILED: ${(e as Error).message}`;
+      }
+
+      const pino = (await import("pino")).default;
+      const logger = pino({ level: "silent" });
+      steps.pino = "OK";
+
+      const fs = await import("fs");
+      const path = await import("path");
+      const testDir = path.join(process.cwd(), ".whatsapp_sessions", "_diag_test");
+      fs.mkdirSync(testDir, { recursive: true });
+      const { state } = await useMultiFileAuthState(testDir);
+      steps.auth_state = "OK";
+
+      try {
+        const sock = makeWASocket({
+          version: [2, 3000, 1015901307],
+          auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
+          printQRInTerminal: false,
+          logger,
+          browser: ["HomeAdvisor CRM", "Chrome", "1.0"],
+          connectTimeoutMs: 5000,
+          defaultQueryTimeoutMs: 5000,
+        });
+        steps.make_socket = "OK — socket created";
+        setTimeout(() => { try { sock.end(undefined); } catch {} fs.rmSync(testDir, { recursive: true, force: true }); }, 500);
+      } catch (e) {
+        steps.make_socket = `FAILED: ${(e as Error).message}`;
+        fs.rmSync(testDir, { recursive: true, force: true });
+      }
+
+      res.json({ ok: true, steps });
+    } catch (e) {
+      res.json({ ok: false, steps, fatal: (e as Error).message });
+    }
+  });
+
   // POST /api/whatsapp/disconnect — disconnect the session
   app.post("/api/whatsapp/disconnect", isAuthenticated, async (req, res) => {
     try {
