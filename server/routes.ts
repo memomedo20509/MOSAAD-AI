@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import path from "path";
 import fs from "fs";
 import multer from "multer";
+import nodemailer from "nodemailer";
 import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated, requireRole, requirePermission } from "./auth";
 import { hashPassword } from "./auth";
@@ -43,6 +44,7 @@ import {
   updateWhatsappTemplateSchema,
   insertLeadManagerCommentSchema,
   updateLeadManagerCommentSchema,
+  insertEmailReportSettingsSchema,
 } from "@shared/schema";
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
@@ -2184,6 +2186,381 @@ export async function registerRoutes(
       res.status(500).json({ error: "Failed to fetch log" });
     }
   });
+
+  // Helper: escape HTML to prevent injection
+  function escHtml(s: string): string {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  // Helper: build HTML email body from report data
+  function buildEmailHtml(
+    isArabic: boolean,
+    totalLeads: number,
+    closedDeals: number,
+    conversionRate: string | number,
+    sources: { name: string; value: number }[],
+    agents: { name: string; count: number; deals: number }[]
+  ): string {
+    const dir = isArabic ? "rtl" : "ltr";
+    const reportTitle = isArabic ? "تقرير الأداء" : "Performance Report";
+    const generatedOn = isArabic ? "تم الإنشاء في" : "Generated on";
+    const now = new Date().toLocaleDateString(isArabic ? "ar-EG" : "en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+
+    const sourcesRows = sources
+      .map(
+        (s) =>
+          `<tr><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${escHtml(s.name)}</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">${Number(s.value)}</td></tr>`
+      )
+      .join("");
+
+    const agentsRows = agents
+      .map(
+        (a) =>
+          `<tr><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${escHtml(a.name)}</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">${Number(a.count)}</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">${Number(a.deals)}</td></tr>`
+      )
+      .join("");
+
+    return `<!DOCTYPE html>
+<html dir="${dir}" lang="${isArabic ? "ar" : "en"}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${escHtml(reportTitle)}</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:${isArabic ? "'Noto Sans Arabic', Arial" : "Arial"}, sans-serif;">
+  <div style="max-width:600px;margin:32px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+    <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:32px 24px;text-align:center;">
+      <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700;">HomeAdvisor CRM</h1>
+      <p style="color:rgba(255,255,255,0.9);margin:6px 0 0;font-size:16px;font-weight:600;">${escHtml(reportTitle)}</p>
+      <p style="color:rgba(255,255,255,0.7);margin:6px 0 0;font-size:13px;">${escHtml(generatedOn)}: ${escHtml(now)}</p>
+    </div>
+    <div style="padding:24px;">
+      <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+        <tr>
+          <td style="padding:12px 8px;background:#f5f3ff;border-radius:8px;text-align:center;width:33%;">
+            <div style="font-size:26px;font-weight:700;color:#6366f1;">${Number(totalLeads)}</div>
+            <div style="font-size:12px;color:#6b7280;margin-top:4px;">${isArabic ? "إجمالي الليدز" : "Total Leads"}</div>
+          </td>
+          <td style="width:4%;"></td>
+          <td style="padding:12px 8px;background:#f0fdf4;border-radius:8px;text-align:center;width:33%;">
+            <div style="font-size:26px;font-weight:700;color:#16a34a;">${Number(closedDeals)}</div>
+            <div style="font-size:12px;color:#6b7280;margin-top:4px;">${isArabic ? "الصفقات المغلقة" : "Closed Deals"}</div>
+          </td>
+          <td style="width:4%;"></td>
+          <td style="padding:12px 8px;background:#fff7ed;border-radius:8px;text-align:center;width:33%;">
+            <div style="font-size:26px;font-weight:700;color:#ea580c;">${escHtml(String(conversionRate))}%</div>
+            <div style="font-size:12px;color:#6b7280;margin-top:4px;">${isArabic ? "نسبة التحويل" : "Conversion Rate"}</div>
+          </td>
+        </tr>
+      </table>
+      ${sources.length > 0 ? `
+      <h2 style="font-size:15px;font-weight:600;color:#111827;margin:0 0 10px;">${isArabic ? "مصادر الليدز" : "Lead Sources"}</h2>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+        <thead>
+          <tr style="background:#f9fafb;">
+            <th style="padding:8px 12px;text-align:${isArabic ? "right" : "left"};font-size:12px;color:#6b7280;font-weight:600;">${isArabic ? "المصدر" : "Source"}</th>
+            <th style="padding:8px 12px;text-align:center;font-size:12px;color:#6b7280;font-weight:600;">${isArabic ? "الليدز" : "Leads"}</th>
+          </tr>
+        </thead>
+        <tbody>${sourcesRows}</tbody>
+      </table>` : ""}
+      ${agents.length > 0 ? `
+      <h2 style="font-size:15px;font-weight:600;color:#111827;margin:0 0 10px;">${isArabic ? "أداء الفريق" : "Team Performance"}</h2>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+        <thead>
+          <tr style="background:#f9fafb;">
+            <th style="padding:8px 12px;text-align:${isArabic ? "right" : "left"};font-size:12px;color:#6b7280;font-weight:600;">${isArabic ? "المندوب" : "Agent"}</th>
+            <th style="padding:8px 12px;text-align:center;font-size:12px;color:#6b7280;font-weight:600;">${isArabic ? "الليدز" : "Leads"}</th>
+            <th style="padding:8px 12px;text-align:center;font-size:12px;color:#6b7280;font-weight:600;">${isArabic ? "الصفقات" : "Deals"}</th>
+          </tr>
+        </thead>
+        <tbody>${agentsRows}</tbody>
+      </table>` : ""}
+    </div>
+    <div style="padding:14px 24px;background:#f9fafb;text-align:center;border-top:1px solid #e5e7eb;">
+      <p style="margin:0;font-size:11px;color:#9ca3af;">HomeAdvisor CRM &mdash; ${escHtml(reportTitle)}</p>
+    </div>
+  </div>
+</body>
+</html>`;
+  }
+
+  // Helper: create nodemailer transporter from env
+  function createEmailTransporter() {
+    const emailHost = process.env.EMAIL_HOST;
+    const emailUser = process.env.EMAIL_USER;
+    const emailPass = process.env.EMAIL_PASS;
+    const emailPort = parseInt(process.env.EMAIL_PORT || "587", 10);
+    if (!emailHost || !emailUser || !emailPass) return null;
+    return {
+      transporter: nodemailer.createTransport({
+        host: emailHost,
+        port: emailPort,
+        secure: emailPort === 465,
+        auth: { user: emailUser, pass: emailPass },
+      }),
+      emailUser,
+    };
+  }
+
+  // Helper: build report data from DB for a given period
+  async function buildReportDataFromDb(since?: Date) {
+    const allLeads = await storage.getAllLeads();
+    const allStates = await storage.getAllStates();
+    const allUsers = await storage.getAllUsers();
+
+    const periodLeads = since
+      ? allLeads.filter((l) => l.createdAt && new Date(l.createdAt) >= since)
+      : allLeads;
+
+    const doneDealState = allStates.find(
+      (s) =>
+        s.name.toLowerCase().includes("done") ||
+        s.name.toLowerCase().includes("closed") ||
+        s.name.includes("صفقة")
+    );
+
+    const totalLeads = periodLeads.length;
+    const closedDeals = doneDealState
+      ? periodLeads.filter((l) => l.stateId === doneDealState.id).length
+      : 0;
+    const conversionRate =
+      totalLeads > 0 ? ((closedDeals / totalLeads) * 100).toFixed(1) : "0";
+
+    const sourceMap: Record<string, number> = {};
+    periodLeads.forEach((l) => {
+      const src = l.channel || "Unknown";
+      sourceMap[src] = (sourceMap[src] || 0) + 1;
+    });
+    const sources = Object.entries(sourceMap)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5);
+
+    const agentMap: Record<string, { count: number; deals: number }> = {};
+    periodLeads.forEach((l) => {
+      const u = allUsers.find((u) => u.id === l.assignedTo);
+      const name =
+        u
+          ? `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.username
+          : "Unassigned";
+      if (!agentMap[name]) agentMap[name] = { count: 0, deals: 0 };
+      agentMap[name].count++;
+      if (doneDealState && l.stateId === doneDealState.id) agentMap[name].deals++;
+    });
+    const agents = Object.entries(agentMap)
+      .map(([name, d]) => ({ name, ...d }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    return { totalLeads, closedDeals, conversionRate, sources, agents };
+  }
+
+  // GET /api/email/settings — get email report settings for current user
+  app.get("/api/email/settings", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user!;
+      const settings = await storage.getEmailReportSettings(user.id);
+      res.json(settings || null);
+    } catch (error) {
+      console.error("Email settings fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch email settings" });
+    }
+  });
+
+  // PUT /api/email/settings — save email report settings for current user
+  app.put("/api/email/settings", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user!;
+      const isManagerRole =
+        user.role === "super_admin" ||
+        user.role === "admin" ||
+        user.role === "sales_manager" ||
+        user.role === "company_owner";
+      if (!isManagerRole) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const { toEmail: bodyEmail, frequency, language: bodyLang, enabled } = req.body;
+
+      if (!bodyEmail || typeof bodyEmail !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bodyEmail)) {
+        return res.status(400).json({ error: "Valid toEmail address is required" });
+      }
+      if (!["weekly", "monthly"].includes(frequency)) {
+        return res.status(400).json({ error: "frequency must be 'weekly' or 'monthly'" });
+      }
+      if (bodyLang !== undefined && !["ar", "en"].includes(bodyLang)) {
+        return res.status(400).json({ error: "language must be 'ar' or 'en'" });
+      }
+
+      const parsed = insertEmailReportSettingsSchema.safeParse({
+        toEmail: bodyEmail,
+        frequency,
+        language: bodyLang ?? "ar",
+        enabled: Boolean(enabled),
+        userId: user.id,
+      });
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid settings data" });
+      }
+
+      const saved = await storage.upsertEmailReportSettings(parsed.data);
+      res.json(saved);
+    } catch (error) {
+      console.error("Email settings save error:", error);
+      res.status(500).json({ error: "Failed to save email settings" });
+    }
+  });
+
+  // POST /api/email/send-report — send an HTML performance report via email
+  app.post("/api/email/send-report", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user!;
+      const isManagerRole =
+        user.role === "super_admin" ||
+        user.role === "admin" ||
+        user.role === "sales_manager" ||
+        user.role === "company_owner";
+      if (!isManagerRole) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const { toEmail, reportData, language } = req.body;
+      if (!toEmail || typeof toEmail !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail)) {
+        return res.status(400).json({ error: "Valid toEmail is required" });
+      }
+
+      const emailConfig = createEmailTransporter();
+      if (!emailConfig) {
+        return res.status(503).json({
+          error: "Email not configured. Set EMAIL_HOST, EMAIL_USER, EMAIL_PASS environment variables.",
+        });
+      }
+
+      const isArabic = language === "ar";
+      const rd = reportData || {};
+      const totalLeads = Number(rd.totalLeads ?? 0);
+      const closedDeals = Number(rd.closedDeals ?? 0);
+      const conversionRate = rd.conversionRate ?? "0";
+      const sources: { name: string; value: number }[] = Array.isArray(rd.sources) ? rd.sources : [];
+      const agents: { name: string; count: number; deals: number }[] = Array.isArray(rd.agents) ? rd.agents : [];
+
+      const reportTitle = isArabic ? "تقرير الأداء" : "Performance Report";
+      const now = new Date().toLocaleDateString(isArabic ? "ar-EG" : "en-US", { year: "numeric", month: "long", day: "numeric" });
+      const htmlBody = buildEmailHtml(isArabic, totalLeads, closedDeals, conversionRate, sources, agents);
+
+      await emailConfig.transporter.sendMail({
+        from: `"HomeAdvisor CRM" <${emailConfig.emailUser}>`,
+        to: toEmail,
+        subject: `${reportTitle} - ${now}`,
+        html: htmlBody,
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Email send error:", error);
+      res.status(500).json({ error: "Failed to send email report" });
+    }
+  });
+
+  // Scheduled email report sender — runs every hour to check if reports need sending
+  async function runEmailReportScheduler() {
+    try {
+      const enabledSettings = await storage.getAllEnabledEmailReportSettings();
+      if (enabledSettings.length === 0) return;
+
+      const emailConfig = createEmailTransporter();
+      if (!emailConfig) return;
+
+      const now = new Date();
+      const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon
+      const dayOfMonth = now.getDate();
+      const hour = now.getHours();
+
+      for (const setting of enabledSettings) {
+        const shouldSend =
+          (setting.frequency === "weekly" && dayOfWeek === 1 && hour === 8) ||
+          (setting.frequency === "monthly" && dayOfMonth === 1 && hour === 8);
+
+        if (!shouldSend) continue;
+
+        // Prevent duplicate sends: check if already sent today
+        if (setting.lastSentAt) {
+          const lastSent = new Date(setting.lastSentAt);
+          const sameDay =
+            lastSent.getFullYear() === now.getFullYear() &&
+            lastSent.getMonth() === now.getMonth() &&
+            lastSent.getDate() === now.getDate();
+          if (sameDay) continue;
+        }
+
+        try {
+          // Compute period start date for period-specific metrics
+          const periodStart = new Date(now);
+          if (setting.frequency === "weekly") {
+            periodStart.setDate(periodStart.getDate() - 7);
+          } else {
+            periodStart.setMonth(periodStart.getMonth() - 1);
+          }
+
+          const { totalLeads, closedDeals, conversionRate, sources, agents } =
+            await buildReportDataFromDb(periodStart);
+          const isArabic = setting.language !== "en";
+          const reportTitle = isArabic ? "تقرير الأداء" : "Performance Report";
+          const periodLabel = isArabic
+            ? (setting.frequency === "weekly" ? "الأسبوع الماضي" : "الشهر الماضي")
+            : (setting.frequency === "weekly" ? "Last Week" : "Last Month");
+          const locale = isArabic ? "ar-EG" : "en-US";
+          const now2 = now.toLocaleDateString(locale, {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          });
+          const htmlBody = buildEmailHtml(
+            isArabic,
+            totalLeads,
+            closedDeals,
+            conversionRate,
+            sources,
+            agents
+          );
+
+          await emailConfig.transporter.sendMail({
+            from: `"HomeAdvisor CRM" <${emailConfig.emailUser}>`,
+            to: setting.toEmail,
+            subject: `${reportTitle} — ${periodLabel} (${now2})`,
+            html: htmlBody,
+          });
+
+          await storage.updateEmailReportLastSent(setting.userId);
+          console.log(
+            `[EmailScheduler] Sent ${setting.frequency} report to ${setting.toEmail} covering ${periodStart.toISOString()} - ${now.toISOString()}`
+          );
+        } catch (sendErr) {
+          console.error(
+            `[EmailScheduler] Failed to send report to ${setting.toEmail}:`,
+            sendErr
+          );
+        }
+      }
+    } catch (err) {
+      console.error("[EmailScheduler] Scheduler error:", err);
+    }
+  }
+
+  // Run scheduler every hour
+  setInterval(runEmailReportScheduler, 60 * 60 * 1000);
+  // Also run once at startup after 30s delay
+  setTimeout(runEmailReportScheduler, 30000);
 
   // Restore WhatsApp sessions on startup
   restoreSessionsOnStartup().catch(console.error);

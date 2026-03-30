@@ -11,10 +11,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Users, TrendingUp, Target, BarChart3, PieChart, Calendar, Clock, AlertTriangle, Zap, Download, TrendingDown } from "lucide-react";
+import { Loader2, Users, TrendingUp, Target, BarChart3, PieChart, Calendar, Clock, AlertTriangle, Zap, Download, TrendingDown, FileText } from "lucide-react";
 import { useLanguage } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { useState, useMemo } from "react";
+import { useToast } from "@/hooks/use-toast";
 import type { Lead, LeadState, User } from "@shared/schema";
 import {
   BarChart,
@@ -57,12 +58,14 @@ type MarketingRow = {
 };
 
 export default function ReportsPage() {
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL, language } = useLanguage();
   const [timeRange, setTimeRange] = useState<string>("month");
   const [marketingTimeRange, setMarketingTimeRange] = useState<string>("month");
   const [customFrom, setCustomFrom] = useState<string>("");
   const [customTo, setCustomTo] = useState<string>("");
+  const [pdfExporting, setPdfExporting] = useState(false);
   const { user } = useAuth();
+  const { toast } = useToast();
 
   const { data: leads = [], isLoading: leadsLoading } = useQuery<Lead[]>({
     queryKey: ["/api/leads"],
@@ -76,7 +79,11 @@ export default function ReportsPage() {
     queryKey: ["/api/users"],
   });
 
-  const isManager = user?.role === "super_admin" || user?.role === "admin" || user?.role === "sales_manager";
+  const isManager =
+    user?.role === "super_admin" ||
+    user?.role === "admin" ||
+    user?.role === "sales_manager" ||
+    user?.role === "company_owner";
 
   const { data: responseTimeReport = [] } = useQuery<{
     agentId: string;
@@ -225,6 +232,60 @@ export default function ReportsPage() {
     return Object.entries(dayMap).map(([date, count]) => ({ date, count }));
   }, [filteredLeads, timeRange]);
 
+  const handleExportPDF = async () => {
+    setPdfExporting(true);
+    try {
+      const { generateReportPdf } = await import("@/lib/report-pdf");
+
+      const isAr = language === "ar";
+      const doneDealState = states.find(
+        (s) =>
+          s.name.toLowerCase().includes("done") ||
+          s.name.toLowerCase().includes("closed") ||
+          s.name.includes("صفقة")
+      );
+
+      const agentsData = leadsByAgent.map((agent) => {
+        const agentLeads = filteredLeads.filter((l) => {
+          const u = users.find((u) => u.id === l.assignedTo);
+          const agentName =
+            u
+              ? `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.username
+              : "Unassigned";
+          return agentName === agent.name;
+        });
+        const deals = agentLeads.filter(
+          (l) => l.stateId === doneDealState?.id
+        ).length;
+        const rate =
+          agent.count > 0
+            ? `${((deals / agent.count) * 100).toFixed(1)}%`
+            : "0%";
+        return { name: agent.name, count: agent.count, deals, rate };
+      });
+
+      await generateReportPdf(
+        {
+          totalLeads: conversionData.totalLeads,
+          closedDeals: conversionData.convertedLeads,
+          conversionRate: conversionData.conversionRate,
+          sources: leadsBySource,
+          agents: agentsData,
+          generatedAt: new Date(),
+        },
+        isAr ? "ar" : "en",
+        `report-${format(new Date(), "yyyy-MM-dd")}.pdf`
+      );
+
+      toast({ title: t.pdfExportSuccess });
+    } catch (err) {
+      console.error("PDF export error:", err);
+      toast({ title: t.pdfExportError, variant: "destructive" });
+    } finally {
+      setPdfExporting(false);
+    }
+  };
+
   const handleExportMarketing = () => {
     import("xlsx").then((XLSX) => {
       const rows = marketingData.map((row) => ({
@@ -263,6 +324,20 @@ export default function ReportsPage() {
           </h1>
           <p className="text-muted-foreground">{t.reportsSubtitle}</p>
         </div>
+        {isManager && (
+          <Button
+            onClick={handleExportPDF}
+            disabled={pdfExporting}
+            data-testid="button-export-pdf"
+          >
+            {pdfExporting ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <FileText className="h-4 w-4 mr-2" />
+            )}
+            {pdfExporting ? t.exportingPDF : t.exportPDF}
+          </Button>
+        )}
       </div>
 
       <Tabs defaultValue="overview">

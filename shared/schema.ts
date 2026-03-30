@@ -385,5 +385,24 @@ export type InsertLeadManagerComment = z.infer<typeof insertLeadManagerCommentSc
 export type UpdateLeadManagerComment = z.infer<typeof updateLeadManagerCommentSchema>;
 export type LeadManagerComment = typeof leadManagerComments.$inferSelect;
 
+// Email Report Settings
+export const emailReportSettings = pgTable("email_report_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull().unique(),
+  toEmail: text("to_email").notNull(),
+  frequency: text("frequency").notNull().default("monthly"),
+  language: text("language").notNull().default("ar"),
+  enabled: boolean("enabled").notNull().default(false),
+  lastSentAt: timestamp("last_sent_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertEmailReportSettingsSchema = createInsertSchema(emailReportSettings).omit({ id: true, createdAt: true, updatedAt: true, lastSentAt: true });
+export const updateEmailReportSettingsSchema = insertEmailReportSettingsSchema.partial().omit({ userId: true });
+export type InsertEmailReportSettings = z.infer<typeof insertEmailReportSettingsSchema>;
+export type UpdateEmailReportSettings = z.infer<typeof updateEmailReportSettingsSchema>;
+export type EmailReportSettings = typeof emailReportSettings.$inferSelect;
+
 // Export auth models (users, teams, sessions, role_permissions)
 export * from "./models/auth";

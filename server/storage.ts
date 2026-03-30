@@ -25,6 +25,7 @@ import {
   whatsappTemplates,
   whatsappMessagesLog,
   leadManagerComments,
+  emailReportSettings,
   type User,
   type InsertUser,
   type UpdateUser,
@@ -71,6 +72,9 @@ import {
   type InsertWhatsappMessagesLog,
   type LeadManagerComment,
   type InsertLeadManagerComment,
+  type EmailReportSettings,
+  type InsertEmailReportSettings,
+  type UpdateEmailReportSettings,
 } from "@shared/schema";
 
 const PostgresSessionStore = connectPg(session);
@@ -273,6 +277,12 @@ export interface IStorage {
   deleteManagerComment(id: string): Promise<boolean>;
   markManagerCommentRead(id: string): Promise<LeadManagerComment | undefined>;
   getUnreadManagerCommentsByAssignee(assignedToUserId: string): Promise<LeadManagerComment[]>;
+
+  // Email Report Settings
+  getEmailReportSettings(userId: string): Promise<EmailReportSettings | undefined>;
+  upsertEmailReportSettings(data: InsertEmailReportSettings): Promise<EmailReportSettings>;
+  getAllEnabledEmailReportSettings(): Promise<EmailReportSettings[]>;
+  updateEmailReportLastSent(userId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1374,10 +1384,40 @@ export class DatabaseStorage implements IStorage {
     // Get all unread comments, then filter by leads assigned to the user
     const unread = await db.select().from(leadManagerComments).where(eq(leadManagerComments.isReadByAgent, false));
     if (unread.length === 0) return [];
-    const leadIds = [...new Set(unread.map(c => c.leadId))];
     const assignedLeads = await db.select().from(leads).where(eq(leads.assignedTo, assignedToUserId));
     const assignedLeadIds = new Set(assignedLeads.map(l => l.id));
     return unread.filter(c => assignedLeadIds.has(c.leadId));
+  }
+
+  // Email Report Settings
+  async getEmailReportSettings(userId: string): Promise<EmailReportSettings | undefined> {
+    const [settings] = await db.select().from(emailReportSettings).where(eq(emailReportSettings.userId, userId));
+    return settings;
+  }
+
+  async upsertEmailReportSettings(data: InsertEmailReportSettings): Promise<EmailReportSettings> {
+    const existing = await this.getEmailReportSettings(data.userId);
+    if (existing) {
+      const [updated] = await db
+        .update(emailReportSettings)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(emailReportSettings.userId, data.userId))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(emailReportSettings).values(data).returning();
+    return created;
+  }
+
+  async getAllEnabledEmailReportSettings(): Promise<EmailReportSettings[]> {
+    return db.select().from(emailReportSettings).where(eq(emailReportSettings.enabled, true));
+  }
+
+  async updateEmailReportLastSent(userId: string): Promise<void> {
+    await db
+      .update(emailReportSettings)
+      .set({ lastSentAt: new Date(), updatedAt: new Date() })
+      .where(eq(emailReportSettings.userId, userId));
   }
 }
 

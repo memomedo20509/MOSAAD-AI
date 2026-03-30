@@ -72,6 +72,23 @@ app.use((req, res, next) => {
     )
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS email_report_settings (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id VARCHAR NOT NULL UNIQUE,
+      to_email VARCHAR NOT NULL,
+      frequency VARCHAR NOT NULL DEFAULT 'monthly',
+      language VARCHAR NOT NULL DEFAULT 'ar',
+      enabled BOOLEAN NOT NULL DEFAULT false,
+      last_sent_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    ALTER TABLE email_report_settings ADD COLUMN IF NOT EXISTS language VARCHAR NOT NULL DEFAULT 'ar'
+  `);
+
   await registerRoutes(httpServer, app);
   
   await seedDefaultAdmin();

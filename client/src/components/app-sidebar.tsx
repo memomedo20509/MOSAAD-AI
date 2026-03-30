@@ -23,6 +23,7 @@ import {
   Shield,
   Sun,
   MessageSquare,
+  Mail,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -48,6 +49,15 @@ import { ROLE_ARABIC_NAMES, type UserRole } from "@shared/models/auth";
 
 const isAdmin = (role: string | null | undefined): boolean => {
   return role === "super_admin" || role === "admin" || role === "sales_admin";
+};
+
+const isManager = (role: string | null | undefined): boolean => {
+  return (
+    role === "super_admin" ||
+    role === "admin" ||
+    role === "sales_manager" ||
+    role === "company_owner"
+  );
 };
 
 const isSuperAdmin = (role: string | null | undefined): boolean => {
@@ -184,22 +194,33 @@ export function AppSidebar() {
       adminOnly: true,
     },
     {
+      title: t.emailReports,
+      url: "/settings/email-reports",
+      icon: Mail,
+      adminOnly: false,
+      managerOnly: true,
+    },
+    {
       title: t.users,
       url: "/settings/users",
       icon: UsersRound,
       adminOnly: true,
+      managerOnly: false,
     },
     {
       title: t.teams,
       url: "/settings/teams",
       icon: Users,
       adminOnly: true,
+      managerOnly: false,
     },
   ];
 
-  const filteredSettingsItems = settingsItems.filter(
-    (item) => !item.adminOnly || isAdmin(userRole)
-  );
+  const filteredSettingsItems = settingsItems.filter((item) => {
+    if (item.adminOnly && !isAdmin(userRole)) return false;
+    if (item.managerOnly && !isManager(userRole)) return false;
+    return true;
+  });
 
   const permissionsLink = isSuperAdmin(userRole) ? {
     title: t.permissionsManagement,
