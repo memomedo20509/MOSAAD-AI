@@ -2927,14 +2927,19 @@ export async function registerRoutes(
           // Resolve the "ليد جديد" state id
           const allStates = await storage.getAllStates();
           const newLeadState = allStates.find(s => s.name === "ليد جديد" || s.order === 0);
+          const leadName = msg.senderName || `واتساب - ${phone}`;
           lead = await storage.createLead({
-            name: `واتساب - ${phone}`,
+            name: leadName,
             phone,
             channel: "واتساب",
             assignedTo: userId,
             stateId: newLeadState?.id ?? null,
           });
-          console.log(`[WhatsApp] Auto-created lead ${lead.id} for phone ${phone}`);
+          console.log(`[WhatsApp] Auto-created lead ${lead.id} for phone ${phone} (name: ${leadName})`);
+        } else if (msg.senderName && lead.name && lead.name.startsWith("واتساب -")) {
+          await storage.updateLead(lead.id, { name: msg.senderName });
+          lead = { ...lead, name: msg.senderName };
+          console.log(`[WhatsApp] Updated lead ${lead.id} name to: ${msg.senderName}`);
         }
 
         // Determine if this is the very first bot interaction BEFORE logging inbound message

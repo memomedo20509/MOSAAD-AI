@@ -44,6 +44,7 @@ export interface IncomingWAMessage {
   messageText: string;
   messageId: string;
   timestamp: Date;
+  senderName?: string;
 }
 
 type IncomingMessageHandler = (msg: IncomingWAMessage) => Promise<void>;
@@ -186,7 +187,9 @@ export async function startConnection(userId: string, freshSession = false, forc
             ? new Date(Number(msg.messageTimestamp) * 1000)
             : new Date();
 
-          await handler({ userId, phone: rawPhone, jid: remoteJid, messageText: text, messageId, timestamp });
+          const senderName = msg.pushName?.trim() || undefined;
+
+          await handler({ userId, phone: rawPhone, jid: remoteJid, messageText: text, messageId, timestamp, senderName });
         } catch (err) {
           console.error("[WhatsApp] Error processing incoming message:", err);
         }

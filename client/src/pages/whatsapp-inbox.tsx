@@ -269,8 +269,8 @@ export default function WhatsAppInboxPage() {
                             {conv.leadName || conv.phone}
                           </span>
                         </div>
-                        {conv.leadName && (
-                          <span className="text-xs text-muted-foreground block truncate">
+                        {conv.leadName && conv.leadName !== conv.phone && (
+                          <span className="text-xs text-muted-foreground block truncate" data-testid={`text-conv-phone-${conv.leadId}`}>
                             {conv.phone}
                           </span>
                         )}
