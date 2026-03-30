@@ -275,6 +275,17 @@ export interface IStorage {
   countAgentMessagesInLastDay(agentId: string): Promise<number>;
   findLeadByPhone(phone: string): Promise<Lead | undefined>;
   findMessageByWhatsAppId(messageId: string): Promise<WhatsappMessagesLog | undefined>;
+  getWhatsappInbox(userId: string, userRole: string, teamId?: string | null): Promise<{
+    leadId: string;
+    leadName: string | null;
+    phone: string;
+    lastMessage: string | null;
+    lastMessageAt: Date | null;
+    unreadCount: number;
+    totalCount: number;
+  }[]>;
+  markWhatsappMessagesRead(leadId: string): Promise<void>;
+  getUnreadWhatsappCount(userId: string, userRole: string, teamId?: string | null): Promise<number>;
 
   // Lead Manager Comments
   getManagerCommentsByLead(leadId: string): Promise<LeadManagerComment[]>;
@@ -1380,6 +1391,73 @@ export class DatabaseStorage implements IStorage {
   async findMessageByWhatsAppId(messageId: string): Promise<WhatsappMessagesLog | undefined> {
     const [msg] = await db.select().from(whatsappMessagesLog).where(eq(whatsappMessagesLog.messageId, messageId));
     return msg;
+  }
+
+  async getWhatsappInbox(userId: string, userRole: string, teamId?: string | null): Promise<{
+    leadId: string;
+    leadName: string | null;
+    phone: string;
+    lastMessage: string | null;
+    lastMessageAt: Date | null;
+    unreadCount: number;
+    totalCount: number;
+  }[]> {
+    // Get leads accessible by this user
+    const accessibleLeads = await this.getLeadsByRole(userId, userRole, teamId ?? null);
+    if (accessibleLeads.length === 0) return [];
+
+    const accessibleLeadIds = accessibleLeads.map(l => l.id);
+    const leadMap = new Map(accessibleLeads.map(l => [l.id, l]));
+
+    // Use SQL aggregation scoped to accessible lead IDs
+    const placeholders = accessibleLeadIds.map((_, i) => `$${i + 1}`).join(", ");
+    const { rows } = await pool.query(`
+      SELECT
+        lead_id AS "leadId",
+        MAX(created_at) AS "lastMessageAt",
+        (ARRAY_AGG(message_text ORDER BY created_at DESC))[1] AS "lastMessage",
+        (ARRAY_AGG(phone ORDER BY created_at DESC))[1] AS "phone",
+        COUNT(*)::int AS "totalCount",
+        COUNT(*) FILTER (WHERE direction = 'inbound' AND is_read = false)::int AS "unreadCount"
+      FROM whatsapp_messages_log
+      WHERE lead_id = ANY(ARRAY[${placeholders}])
+        AND lead_id IS NOT NULL
+      GROUP BY lead_id
+      ORDER BY MAX(created_at) DESC
+    `, accessibleLeadIds);
+
+    return rows.map((row: any) => ({
+      leadId: row.leadId,
+      leadName: leadMap.get(row.leadId)?.name ?? null,
+      phone: row.phone ?? "",
+      lastMessage: row.lastMessage ?? null,
+      lastMessageAt: row.lastMessageAt ? new Date(row.lastMessageAt) : null,
+      unreadCount: Number(row.unreadCount ?? 0),
+      totalCount: Number(row.totalCount ?? 0),
+    }));
+  }
+
+  async markWhatsappMessagesRead(leadId: string): Promise<void> {
+    await db
+      .update(whatsappMessagesLog)
+      .set({ isRead: true })
+      .where(and(eq(whatsappMessagesLog.leadId, leadId), eq(whatsappMessagesLog.direction, "inbound")));
+  }
+
+  async getUnreadWhatsappCount(userId: string, userRole: string, teamId?: string | null): Promise<number> {
+    const accessibleLeads = await this.getLeadsByRole(userId, userRole, teamId ?? null);
+    const accessibleLeadIds = accessibleLeads.map(l => l.id);
+    if (accessibleLeadIds.length === 0) return 0;
+
+    const placeholders = accessibleLeadIds.map((_, i) => `$${i + 1}`).join(", ");
+    const { rows } = await pool.query(
+      `SELECT COUNT(*)::int AS count FROM whatsapp_messages_log
+       WHERE lead_id = ANY(ARRAY[${placeholders}])
+         AND direction = 'inbound'
+         AND is_read = false`,
+      accessibleLeadIds
+    );
+    return Number(rows[0]?.count ?? 0);
   }
 
   async countAgentMessagesInLastHour(agentId: string): Promise<number> {

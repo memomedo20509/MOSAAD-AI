@@ -366,6 +366,7 @@ export const whatsappMessagesLog = pgTable("whatsapp_messages_log", {
   direction: text("direction").default("outbound"),
   messageText: text("message_text"),
   messageId: varchar("message_id"),
+  isRead: boolean("is_read").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

@@ -91,6 +91,12 @@ export function AppSidebar() {
   });
   const unreadCount = unreadData?.count ?? 0;
 
+  const { data: waUnreadData } = useQuery<{ count: number }>({
+    queryKey: ["/api/whatsapp/inbox/unread-count"],
+    refetchInterval: 15000,
+  });
+  const waUnreadCount = waUnreadData?.count ?? 0;
+
   const mainNavItems = [
     {
       title: t.dashboard,
@@ -353,6 +359,27 @@ export function AppSidebar() {
             </Collapsible>
           </SidebarGroup>
         )}
+
+        <SidebarGroup>
+          <SidebarGroupLabel>التواصل</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/whatsapp-inbox"}>
+                  <Link href="/whatsapp-inbox" data-testid="link-nav-whatsapp-inbox">
+                    <MessageSquare className="h-4 w-4" />
+                    <span className="flex-1">صندوق بريد واتساب</span>
+                    {waUnreadCount > 0 && (
+                      <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px] flex items-center justify-center" data-testid="badge-whatsapp-unread-sidebar">
+                        {waUnreadCount > 99 ? "99+" : waUnreadCount}
+                      </Badge>
+                    )}
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
 
         <SidebarGroup>
           <SidebarGroupLabel>{t.clients}</SidebarGroupLabel>

@@ -39,6 +39,7 @@ import MyDayPage from "@/pages/my-day";
 import { NotificationBell } from "@/components/notification-bell";
 import WhatsAppSettingsPage from "@/pages/whatsapp-settings";
 import WhatsAppTemplatesPage from "@/pages/whatsapp-templates";
+import WhatsAppInboxPage from "@/pages/whatsapp-inbox";
 import EmailReportsPage from "@/pages/email-reports";
 import LeaderboardPage from "@/pages/leaderboard";
 
@@ -85,6 +86,7 @@ function Router() {
       <Route path="/my-day" component={MyDayPage} />
       <Route path="/settings/whatsapp" component={WhatsAppSettingsPage} />
       <Route path="/settings/whatsapp/templates" component={WhatsAppTemplatesPage} />
+      <Route path="/whatsapp-inbox" component={WhatsAppInboxPage} />
       <Route path="/settings/email-reports" component={EmailReportsPage} />
       <Route path="/leaderboard" component={LeaderboardPage} />
       <Route component={NotFound} />

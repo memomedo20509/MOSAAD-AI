@@ -2209,6 +2209,49 @@ export async function registerRoutes(
     }
   });
 
+  // GET /api/whatsapp/inbox — get all conversations grouped by lead
+  app.get("/api/whatsapp/inbox", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const userRole = (req.user as any)?.role ?? "sales_agent";
+      const teamId = (req.user as any)?.teamId ?? null;
+      const conversations = await storage.getWhatsappInbox(userId, userRole, teamId);
+      res.json(conversations);
+    } catch (error) {
+      console.error("WhatsApp inbox error:", error);
+      res.status(500).json({ error: "Failed to fetch inbox" });
+    }
+  });
+
+  // POST /api/whatsapp/inbox/:leadId/mark-read — mark all inbound messages as read
+  app.post("/api/whatsapp/inbox/:leadId/mark-read", isAuthenticated, async (req, res) => {
+    try {
+      const leadId = req.params.leadId as string;
+      if (!(await canAccessLead(req.user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      await storage.markWhatsappMessagesRead(leadId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("WhatsApp mark-read error:", error);
+      res.status(500).json({ error: "Failed to mark as read" });
+    }
+  });
+
+  // GET /api/whatsapp/inbox/unread-count — get total unread count for sidebar badge
+  app.get("/api/whatsapp/inbox/unread-count", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const userRole = (req.user as any)?.role ?? "sales_agent";
+      const teamId = (req.user as any)?.teamId ?? null;
+      const count = await storage.getUnreadWhatsappCount(userId, userRole, teamId);
+      res.json({ count });
+    } catch (error) {
+      console.error("WhatsApp unread count error:", error);
+      res.status(500).json({ error: "Failed to get unread count" });
+    }
+  });
+
   // Helper: escape HTML to prevent injection
   function escHtml(s: string): string {
     return String(s)

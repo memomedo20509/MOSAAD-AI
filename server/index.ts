@@ -89,6 +89,11 @@ app.use((req, res, next) => {
     ALTER TABLE email_report_settings ADD COLUMN IF NOT EXISTS language VARCHAR NOT NULL DEFAULT 'ar'
   `);
 
+  // Add is_read column to whatsapp_messages_log if it doesn't exist
+  await pool.query(`
+    ALTER TABLE whatsapp_messages_log ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE
+  `).catch(() => {});
+
   await registerRoutes(httpServer, app);
   
   await seedDefaultAdmin();
