@@ -456,6 +456,7 @@ export type ChatbotSettings = typeof chatbotSettings.$inferSelect;
 export const whatsappCampaigns = pgTable("whatsapp_campaigns", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
+  templateId: varchar("template_id"), // optional: use saved template
   message: text("message").notNull(),
   filterStateId: varchar("filter_state_id"),
   filterChannel: text("filter_channel"),
@@ -487,9 +488,10 @@ export const whatsappCampaignRecipients = pgTable("whatsapp_campaign_recipients"
 
 export type WhatsappCampaignRecipient = typeof whatsappCampaignRecipients.$inferSelect;
 
-// WhatsApp Follow-up Rules (global when leadId is null, lead-specific otherwise)
+// WhatsApp Follow-up Rules (per-lead when leadId is set, global template otherwise)
 export const whatsappFollowupRules = pgTable("whatsapp_followup_rules", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  leadId: varchar("lead_id").references(() => leads.id), // null = global template; set = per-lead rule
   name: text("name").notNull(),
   message: text("message").notNull(),
   daysAfterNoReply: integer("days_after_no_reply").notNull().default(3),
