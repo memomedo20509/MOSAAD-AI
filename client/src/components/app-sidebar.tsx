@@ -104,11 +104,6 @@ export function AppSidebar() {
       badge: pendingActionsCount > 0 ? pendingActionsCount : null,
     },
     {
-      title: t.kanbanBoard,
-      url: "/kanban",
-      icon: Kanban,
-    },
-    {
       title: t.leaderboard,
       url: "/leaderboard",
       icon: Trophy,
@@ -121,6 +116,11 @@ export function AppSidebar() {
   ];
 
   const salesItems = [
+    {
+      title: t.kanbanBoard,
+      url: "/kanban",
+      icon: Kanban,
+    },
     {
       title: t.allLeads,
       url: "/leads",
@@ -280,7 +280,11 @@ export function AppSidebar() {
                 <SidebarMenu>
                   {salesItems.map((item) => (
                     <SidebarMenuItem key={item.url}>
-                      <SidebarMenuButton asChild isActive={location === item.url || (item.url === "/leads" && location.startsWith("/leads") && location !== "/leads/new" && location !== "/leads/upload" && location !== "/leads/duplicated" && location !== "/leads/withdrawn" && location !== "/leads/actions")}>
+                      <SidebarMenuButton asChild isActive={
+                        location === item.url ||
+                        (item.url === "/kanban" && location.startsWith("/kanban")) ||
+                        (item.url === "/leads" && location.startsWith("/leads") && location !== "/leads/new" && location !== "/leads/upload" && location !== "/leads/duplicated" && location !== "/leads/withdrawn" && location !== "/leads/actions")
+                      }>
                         <Link href={item.url} data-testid={`link-nav-${item.url.replace(/\//g, "-").slice(1)}`}>
                           <item.icon className="h-4 w-4" />
                           <span>{item.title}</span>
