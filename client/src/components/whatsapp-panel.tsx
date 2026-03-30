@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   RefreshCw,
   Link as LinkIcon,
+  Loader2,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -94,7 +95,7 @@ export function WhatsAppPanel({ lead, agentName, injectMessage, onInjectConsumed
 
   const { data: statusData, isLoading: statusLoading } = useQuery<WaStatusResponse>({
     queryKey: ["/api/whatsapp/status"],
-    refetchInterval: false,
+    refetchInterval: 10000,
   });
 
   const { data: templates, isLoading: templatesLoading } = useQuery<WhatsappTemplate[]>({
@@ -109,6 +110,7 @@ export function WhatsAppPanel({ lead, agentName, injectMessage, onInjectConsumed
 
   const status = statusData?.status ?? "disconnected";
   const isConnected = status === "connected";
+  const isConnecting = status === "connecting" || status === "qr";
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -141,9 +143,17 @@ export function WhatsAppPanel({ lead, agentName, injectMessage, onInjectConsumed
       toast({ title: "تم إرسال الرسالة بنجاح" });
     },
     onError: (err: any) => {
+      let desc: string = err?.message ?? "خطأ غير معروف";
+      try {
+        const match = desc.match(/^\d+: (.+)$/s);
+        if (match) {
+          const parsed = JSON.parse(match[1]);
+          if (parsed?.error) desc = parsed.error;
+        }
+      } catch {}
       toast({
         title: "فشل في إرسال الرسالة",
-        description: err?.message,
+        description: desc,
         variant: "destructive",
       });
     },
@@ -176,6 +186,8 @@ export function WhatsAppPanel({ lead, agentName, injectMessage, onInjectConsumed
               className={
                 isConnected
                   ? "border-green-200 bg-green-50 text-green-700"
+                  : isConnecting
+                  ? "border-yellow-200 bg-yellow-50 text-yellow-700"
                   : "border-gray-200 bg-gray-50 text-gray-500"
               }
               data-testid="badge-wa-status-actions"
@@ -184,6 +196,11 @@ export function WhatsAppPanel({ lead, agentName, injectMessage, onInjectConsumed
                 <>
                   <CheckCircle2 className="h-3 w-3 mr-1" />
                   متصل
+                </>
+              ) : isConnecting ? (
+                <>
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  جاري الاتصال...
                 </>
               ) : (
                 <>
@@ -225,7 +242,7 @@ export function WhatsAppPanel({ lead, agentName, injectMessage, onInjectConsumed
         ) : null}
 
         {/* Send Panel */}
-        {!isConnected ? (
+        {!isConnected && !isConnecting ? (
           <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
             <WifiOff className="h-6 w-6 mx-auto mb-2 text-muted-foreground/60" />
             <p>الواتساب غير متصل</p>

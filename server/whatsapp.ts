@@ -302,14 +302,35 @@ export function getSessionStatus(userId: string): { status: WaStatus; qrDataUrl:
   return { status: session.status, qrDataUrl: session.qrDataUrl, errorMessage: session.errorMessage };
 }
 
+async function waitForConnected(session: WaSession, timeoutMs = 15000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (session.status === "connected" && session.socket) return true;
+    if (session.status === "disconnected") return false;
+    await new Promise((r) => setTimeout(r, 600));
+  }
+  return false;
+}
+
 export async function sendWhatsAppMessage(
   userId: string,
   phone: string,
   message: string
 ): Promise<{ success: boolean; error?: string }> {
   const session = sessions.get(userId);
-  if (!session || session.status !== "connected" || !session.socket) {
+  if (!session) {
     return { success: false, error: "WhatsApp not connected" };
+  }
+
+  // If connecting, wait up to 15s for the session to be ready
+  if (session.status !== "connected" || !session.socket) {
+    if (session.status === "connecting") {
+      console.log(`[WhatsApp] sendWhatsAppMessage: session is connecting for ${userId}, waiting...`);
+      const ok = await waitForConnected(session, 15000);
+      if (!ok) return { success: false, error: "WhatsApp not connected — يرجى الانتظار قليلاً وإعادة المحاولة" };
+    } else {
+      return { success: false, error: "WhatsApp not connected" };
+    }
   }
 
   const normalized = normalizePhone(phone);
