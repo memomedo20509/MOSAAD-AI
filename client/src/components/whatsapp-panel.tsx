@@ -38,6 +38,8 @@ interface WaStatusResponse {
 interface WhatsAppPanelProps {
   lead: Lead;
   agentName?: string;
+  injectMessage?: string;
+  onInjectConsumed?: () => void;
 }
 
 function interpolateTemplate(body: string, lead: Lead): string {
@@ -76,11 +78,19 @@ function ChatBubble({ msg }: { msg: WhatsappMessagesLog }) {
   );
 }
 
-export function WhatsAppPanel({ lead, agentName }: WhatsAppPanelProps) {
+export function WhatsAppPanel({ lead, agentName, injectMessage, onInjectConsumed }: WhatsAppPanelProps) {
   const { toast } = useToast();
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [messageText, setMessageText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (injectMessage) {
+      setMessageText(injectMessage);
+      setSelectedTemplateId("");
+      onInjectConsumed?.();
+    }
+  }, [injectMessage]);
 
   const { data: statusData, isLoading: statusLoading } = useQuery<WaStatusResponse>({
     queryKey: ["/api/whatsapp/status"],

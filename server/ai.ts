@@ -60,7 +60,6 @@ function buildConversationHistory(messages: WhatsappMessagesLog[]): string {
   if (messages.length === 0) return "لا توجد محادثة واتساب حتى الآن.";
   return messages
     .filter(m => m.messageText)
-    .slice(-20)
     .map(m => {
       const dir = m.direction === "inbound" ? "العميل" : (m.agentName || "المندوب");
       return `${dir}: ${m.messageText}`;

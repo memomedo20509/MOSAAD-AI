@@ -154,6 +154,8 @@ export function LeadDetailPanel({
   const [aiAnalysisError, setAiAnalysisError] = useState<string | null>(null);
   const [aiAnalysisApplied, setAiAnalysisApplied] = useState(false);
   const [copiedReplyIdx, setCopiedReplyIdx] = useState<number | null>(null);
+  const [aiSendingIdx, setAiSendingIdx] = useState<number | null>(null);
+  const [waInjectMessage, setWaInjectMessage] = useState<string | undefined>(undefined);
 
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
@@ -496,6 +498,34 @@ export function LeadDetailPanel({
       setTimeout(() => setCopiedReplyIdx(null), 2000);
     } catch {
       toast({ title: "تعذّر النسخ", variant: "destructive" });
+    }
+  };
+
+  const handleAIEditReply = (text: string) => {
+    setWaInjectMessage(text);
+    toast({ title: "تم نقل الرد إلى صندوق الإرسال" });
+  };
+
+  const handleAISendReply = async (text: string, idx: number) => {
+    if (!lead?.id || !lead.phone) {
+      toast({ title: "لا يوجد رقم هاتف للليد", variant: "destructive" });
+      return;
+    }
+    setAiSendingIdx(idx);
+    try {
+      const res = await apiRequest("POST", "/api/whatsapp/send", {
+        leadId: lead.id,
+        message: text,
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", lead.id, "whatsapp-conversation"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", lead.id, "history"] });
+      toast({ title: "تم إرسال الرد عبر واتساب" });
+    } catch (err: any) {
+      toast({ title: err?.message || "فشل الإرسال", variant: "destructive" });
+    } finally {
+      setAiSendingIdx(null);
     }
   };
 
@@ -1098,7 +1128,12 @@ export function LeadDetailPanel({
 
                 {/* WhatsApp Panel */}
                 {lead.phone && (
-                  <WhatsAppPanel lead={lead} agentName={currentUser?.username} />
+                  <WhatsAppPanel
+                    lead={lead}
+                    agentName={currentUser?.username}
+                    injectMessage={waInjectMessage}
+                    onInjectConsumed={() => setWaInjectMessage(undefined)}
+                  />
                 )}
 
                 {/* AI Assistant Panel */}
@@ -1157,7 +1192,34 @@ export function LeadDetailPanel({
                           {aiReplies.map((reply, idx) => (
                             <div key={idx} className="rounded-lg border border-purple-100 dark:border-purple-900 bg-purple-50/50 dark:bg-purple-950/30 p-2.5 space-y-2">
                               <p className="text-sm leading-relaxed text-right" data-testid={`text-ai-reply-${idx}`}>{reply}</p>
-                              <div className="flex gap-2 justify-end">
+                              <div className="flex gap-1.5 justify-end flex-wrap">
+                                {/* Send directly via WhatsApp */}
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  className="h-6 text-xs gap-1 bg-green-600 hover:bg-green-700 text-white"
+                                  onClick={() => handleAISendReply(reply, idx)}
+                                  disabled={aiSendingIdx === idx || !lead.phone}
+                                  data-testid={`button-ai-send-reply-${idx}`}
+                                >
+                                  {aiSendingIdx === idx ? (
+                                    <><Loader2 className="h-3 w-3 animate-spin" />جاري الإرسال</>
+                                  ) : (
+                                    <><Send className="h-3 w-3" />إرسال</>
+                                  )}
+                                </Button>
+                                {/* Edit: inject into WhatsApp textarea */}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 text-xs gap-1 border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400"
+                                  onClick={() => handleAIEditReply(reply)}
+                                  data-testid={`button-ai-edit-reply-${idx}`}
+                                >
+                                  <Edit2 className="h-3 w-3" />
+                                  تعديل
+                                </Button>
+                                {/* Copy to clipboard */}
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -1166,7 +1228,7 @@ export function LeadDetailPanel({
                                   data-testid={`button-ai-copy-reply-${idx}`}
                                 >
                                   {copiedReplyIdx === idx ? (
-                                    <><CheckCheck className="h-3 w-3 text-green-500" />تم النسخ</>
+                                    <><CheckCheck className="h-3 w-3 text-green-500" />نُسخ</>
                                   ) : (
                                     <><Copy className="h-3 w-3" />نسخ</>
                                   )}
