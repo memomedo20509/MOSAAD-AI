@@ -222,6 +222,16 @@ export default function WhatsAppSettingsPage() {
                         <Wifi className="h-4 w-4 mr-2" />
                         {isConnecting ? "جاري الاتصال..." : "اتصل بالواتساب"}
                       </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => resetMutation.mutate()}
+                        disabled={isResetting}
+                        className="w-full text-amber-700 border-amber-300 hover:bg-amber-50"
+                        data-testid="button-wa-reset-clean"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        {isResetting ? "جاري المسح وإعادة الاتصال..." : "مسح وإعادة الاتصال (في حالة الخطأ)"}
+                      </Button>
                     </>
                   )}
                 </div>
