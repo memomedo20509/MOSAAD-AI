@@ -32,6 +32,7 @@ import {
 import {
   Phone,
   Mail,
+  MapPin,
   User,
   Calendar,
   CheckCircle,
@@ -51,13 +52,32 @@ import {
   Thermometer,
   Snowflake,
   ChevronRight,
-  ChevronLeft,
-  ChevronDown,
-  CalendarClock,
   PhoneCall,
+  PhoneMissed,
   ClipboardList,
+  DollarSign,
+  Building2,
+  Bell,
+  Activity,
+  Home,
+  MessageCircle,
+  Users,
+  Shuffle,
+  Calculator,
+  GitCompare,
 } from "lucide-react";
-import type { Lead, LeadState, Task, LeadHistory, LeadManagerComment, Communication } from "@shared/schema";
+import type {
+  Lead,
+  LeadState,
+  Task,
+  LeadHistory,
+  LeadManagerComment,
+  Communication,
+  Reminder,
+  LeadUnitInterest,
+  Unit,
+  Project,
+} from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -65,6 +85,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/i18n";
 import { DocumentsTab } from "./documents-tab";
 import { WhatsAppPanel } from "./whatsapp-panel";
+import { InstallmentCalculator } from "./installment-calculator";
+import { UnitCompare } from "./unit-compare";
 import { computeLeadScore, SCORE_COLORS } from "@/lib/scoring";
 
 interface LeadDetailPanelProps {
@@ -102,12 +124,20 @@ export function LeadDetailPanel({
   const [callOutcome, setCallOutcome] = useState<string>("answered");
   const [followUpDate, setFollowUpDate] = useState("");
   const [followUpTime, setFollowUpTime] = useState("09:00");
-  const [showAllStates, setShowAllStates] = useState(false);
+  const [commType, setCommType] = useState("");
+  const [commNote, setCommNote] = useState("");
+  const [newReminderTitle, setNewReminderTitle] = useState("");
+  const [newReminderDate, setNewReminderDate] = useState("");
+  const [calcUnitId, setCalcUnitId] = useState<string | null>(null);
+  const [compareUnitIds, setCompareUnitIds] = useState<Set<string>>(new Set());
+  const [isCompareOpen, setIsCompareOpen] = useState(false);
+
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
   const { t } = useLanguage();
 
   const canTransfer = currentUser?.role === "super_admin" || currentUser?.role === "sales_admin" || currentUser?.role === "admin";
+  const canAutoAssign = currentUser?.role === "super_admin" || currentUser?.role === "admin" || currentUser?.role === "sales_manager";
   const isManager = isManagerRole(currentUser?.role);
   const isAssignedAgent = currentUser && lead && lead.assignedTo === currentUser.id;
 
@@ -115,22 +145,6 @@ export function LeadDetailPanel({
     queryKey: ["/api/users"],
     enabled: showTransferDialog && canTransfer,
     select: (users: UserSummary[]) => users.filter((u) => u.role === "sales_agent" || u.role === "sales_admin" || u.role === "team_leader"),
-  });
-
-  const transferMutation = useMutation({
-    mutationFn: async ({ leadId, toUserId }: { leadId: string; toUserId: string }) => {
-      const res = await apiRequest("POST", `/api/leads/${leadId}/transfer`, { toUserId });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
-      setShowTransferDialog(false);
-      setTransferToUserId("");
-      toast({ title: t.transferLeadSuccess });
-    },
-    onError: () => {
-      toast({ title: t.transferLeadError, variant: "destructive" });
-    },
   });
 
   const { data: tasks, isLoading: tasksLoading } = useQuery<Task[]>({
@@ -153,12 +167,80 @@ export function LeadDetailPanel({
     enabled: !!lead,
   });
 
+  const { data: reminders = [] } = useQuery<Reminder[]>({
+    queryKey: ["/api/leads", lead?.id, "reminders"],
+    enabled: !!lead,
+  });
+
+  const { data: interests = [] } = useQuery<LeadUnitInterest[]>({
+    queryKey: ["/api/leads", lead?.id, "unit-interests"],
+    enabled: !!lead,
+  });
+
+  const { data: units = [] } = useQuery<Unit[]>({
+    queryKey: ["/api/units"],
+    enabled: interests.length > 0,
+  });
+
+  const { data: projects = [] } = useQuery<Project[]>({
+    queryKey: ["/api/projects"],
+    enabled: interests.length > 0,
+  });
+
   const unreadManagerComments = managerComments?.filter(c => !c.isReadByAgent) ?? [];
 
-  const createTaskMutation = useMutation({
-    mutationFn: async (task: Partial<Task>) => {
-      return apiRequest("POST", "/api/tasks", { ...task, leadId: lead?.id });
+  const callCommunications = communications.filter(c => c.type === "call" || c.type === "no_answer");
+  const totalCalls = callCommunications.length;
+
+  const latestHistory = history && history.length > 0
+    ? history.reduce((latest, h) => {
+        const tt = new Date(h.createdAt!).getTime();
+        return tt > new Date(latest.createdAt!).getTime() ? h : latest;
+      }, history[0])
+    : null;
+  const lastContactRaw = latestHistory?.createdAt
+    ? new Date(latestHistory.createdAt)
+    : lead?.lastActionDate
+    ? new Date(lead.lastActionDate)
+    : lead?.createdAt
+    ? new Date(lead.createdAt)
+    : null;
+  const lastContactDate = lastContactRaw ? format(lastContactRaw, "dd/MM/yyyy") : "—";
+
+  // ── Mutations ──────────────────────────────────────────────────────────────
+
+  const transferMutation = useMutation({
+    mutationFn: async ({ leadId, toUserId }: { leadId: string; toUserId: string }) => {
+      const res = await apiRequest("POST", `/api/leads/${leadId}/transfer`, { toUserId });
+      return res.json();
     },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      setShowTransferDialog(false);
+      setTransferToUserId("");
+      toast({ title: t.transferLeadSuccess });
+    },
+    onError: () => {
+      toast({ title: t.transferLeadError, variant: "destructive" });
+    },
+  });
+
+  const autoAssignMutation = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/leads/${lead?.id}/auto-assign`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/team-load"] });
+      toast({ title: t.autoAssignSuccess });
+    },
+    onError: () => {
+      toast({ title: t.autoAssignError, variant: "destructive" });
+    },
+  });
+
+  const createTaskMutation = useMutation({
+    mutationFn: async (task: Partial<Task>) =>
+      apiRequest("POST", "/api/tasks", { ...task, leadId: lead?.id }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "tasks"] });
       setNewTask({ title: "", type: "", description: "", dueDate: "" });
@@ -170,22 +252,18 @@ export function LeadDetailPanel({
   });
 
   const deleteTaskMutation = useMutation({
-    mutationFn: async (taskId: string) => {
-      return apiRequest("DELETE", `/api/tasks/${taskId}`);
-    },
+    mutationFn: async (taskId: string) => apiRequest("DELETE", `/api/tasks/${taskId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "tasks"] });
-      toast({ title: "Task deleted successfully" });
     },
     onError: () => {
-      toast({ title: "Failed to delete task", variant: "destructive" });
+      toast({ title: "فشل حذف التاسك", variant: "destructive" });
     },
   });
 
   const toggleTaskMutation = useMutation({
-    mutationFn: async ({ taskId, completed }: { taskId: string; completed: boolean }) => {
-      return apiRequest("PATCH", `/api/tasks/${taskId}`, { completed });
-    },
+    mutationFn: async ({ taskId, completed }: { taskId: string; completed: boolean }) =>
+      apiRequest("PATCH", `/api/tasks/${taskId}`, { completed }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "tasks"] });
     },
@@ -216,7 +294,7 @@ export function LeadDetailPanel({
       queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "manager-comments"] });
       setEditingCommentId(null);
       setEditingCommentContent("");
-      toast({ title: "تم تعديل الملاحظة بنجاح" });
+      toast({ title: "تم تعديل الملاحظة" });
     },
     onError: () => {
       toast({ title: "فشل تعديل الملاحظة", variant: "destructive" });
@@ -224,9 +302,7 @@ export function LeadDetailPanel({
   });
 
   const deleteManagerCommentMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return apiRequest("DELETE", `/api/manager-comments/${id}`);
-    },
+    mutationFn: async (id: string) => apiRequest("DELETE", `/api/manager-comments/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "manager-comments"] });
       toast({ title: "تم حذف الملاحظة" });
@@ -245,14 +321,7 @@ export function LeadDetailPanel({
       queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "manager-comments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/manager-comments/unread-count"] });
     },
-    onError: () => {
-      toast({ title: "فشل تحديد القراءة", variant: "destructive" });
-    },
   });
-
-  const handleMarkAllRead = () => {
-    unreadManagerComments.forEach(c => markReadMutation.mutate(c.id));
-  };
 
   const CALL_OUTCOME_LABELS: Record<string, string> = {
     answered: "رد على المكالمة",
@@ -266,9 +335,7 @@ export function LeadDetailPanel({
   const logCallMutation = useMutation({
     mutationFn: async () => {
       const outcomeLabel = CALL_OUTCOME_LABELS[callOutcome] ?? callOutcome;
-      const noteWithOutcome = callNote
-        ? `[${outcomeLabel}] ${callNote}`
-        : `[${outcomeLabel}]`;
+      const noteWithOutcome = callNote ? `[${outcomeLabel}] ${callNote}` : `[${outcomeLabel}]`;
       const res = await apiRequest("POST", `/api/leads/${lead?.id}/communications`, {
         type: callOutcome === "no_answer" ? "no_answer" : "call",
         note: noteWithOutcome,
@@ -286,6 +353,18 @@ export function LeadDetailPanel({
     },
     onError: () => {
       toast({ title: "فشل تسجيل المكالمة", variant: "destructive" });
+    },
+  });
+
+  const createCommunicationMutation = useMutation({
+    mutationFn: (data: { type: string; note?: string }) =>
+      apiRequest("POST", `/api/leads/${lead?.id}/communications`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "communications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "history"] });
+      setCommType("");
+      setCommNote("");
+      toast({ title: t.communicationLogged });
     },
   });
 
@@ -307,6 +386,7 @@ export function LeadDetailPanel({
       queryClient.invalidateQueries({ queryKey: ["/api/reminders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/my-day"] });
       queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "history"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "reminders"] });
       const formattedDate = followUpDate ? format(new Date(`${followUpDate}T${followUpTime}:00`), "dd/MM/yyyy") : "";
       toast({ title: `تم جدولة المتابعة ليوم ${formattedDate}` });
       setFollowUpDate("");
@@ -317,571 +397,835 @@ export function LeadDetailPanel({
     },
   });
 
+  const createReminderMutation = useMutation({
+    mutationFn: (data: { title: string; dueDate: string; leadId: string }) =>
+      apiRequest("POST", "/api/reminders", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "reminders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/reminders"] });
+      setNewReminderTitle("");
+      setNewReminderDate("");
+      toast({ title: t.reminderCreated });
+    },
+  });
+
+  const completeReminderMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest("PATCH", `/api/reminders/${id}`, { isCompleted: true }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "reminders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/reminders"] });
+      toast({ title: t.reminderCompleted });
+    },
+  });
+
   const handleSave = () => {
     onUpdate(formData);
     setEditMode(false);
     setFormData({});
   };
 
-  const handleEdit = () => {
-    setFormData({ ...lead });
-    setEditMode(true);
+  const handleMarkAllRead = () => {
+    unreadManagerComments.forEach(c => markReadMutation.mutate(c.id));
+  };
+
+  const handleLogCommunication = () => {
+    if (!commType || !lead?.id) return;
+    createCommunicationMutation.mutate({ type: commType, note: commNote || undefined });
+  };
+
+  const handleAddReminder = () => {
+    if (!newReminderTitle || !newReminderDate || !lead?.id) return;
+    createReminderMutation.mutate({ title: newReminderTitle, dueDate: newReminderDate, leadId: lead.id });
+  };
+
+  const getUnitDetails = (unitId: string) => {
+    const unit = units.find((u) => u.id === unitId);
+    const project = unit ? projects.find((p) => p.id === unit.projectId) : null;
+    return { unit, project };
   };
 
   if (!lead) return null;
 
   const currentState = states.find((s) => s.id === lead.stateId);
-  const currentStateIndex = states.findIndex((s) => s.id === lead.stateId);
+  const sortedStates = [...states].sort((a, b) => a.order - b.order);
   const scoreInfo = computeLeadScore(lead);
-  const callCommunications = communications.filter(c => c.type === "call" || c.type === "no_answer");
-  const totalCalls = callCommunications.length;
-  // lastContactDate: from latest lead_history entry (most authoritative source since all actions write there)
-  const latestHistory = history && history.length > 0
-    ? history.reduce((latest, h) => {
-        const t = new Date(h.createdAt!).getTime();
-        return t > new Date(latest.createdAt!).getTime() ? h : latest;
-      }, history[0])
-    : null;
-  const lastContactRaw = latestHistory?.createdAt
-    ? new Date(latestHistory.createdAt)
-    : lead.lastActionDate
-    ? new Date(lead.lastActionDate)
-    : lead.createdAt
-    ? new Date(lead.createdAt)
-    : null;
-  const lastContactDate = lastContactRaw ? format(lastContactRaw, "dd/MM/yyyy") : "—";
+
+  // Communication type config
+  const commTypes = [
+    { type: "call", icon: <PhoneCall className="h-3.5 w-3.5" />, label: t.commTypeCall, cls: "border-blue-200 text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400" },
+    { type: "no_answer", icon: <PhoneMissed className="h-3.5 w-3.5" />, label: t.commTypeNoAnswer, cls: "border-red-200 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400" },
+    { type: "whatsapp", icon: <MessageCircle className="h-3.5 w-3.5" />, label: t.commTypeWhatsapp, cls: "border-green-200 text-green-600 hover:bg-green-50 dark:border-green-800 dark:text-green-400" },
+    { type: "meeting", icon: <Users className="h-3.5 w-3.5" />, label: t.commTypeMeeting, cls: "border-purple-200 text-purple-600 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400" },
+    { type: "note", icon: <FileText className="h-3.5 w-3.5" />, label: t.commTypeNote, cls: "border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400" },
+  ] as const;
+
+  const commIconMap: Record<string, { icon: React.ReactNode; color: string }> = {
+    call: { icon: <PhoneCall className="h-3.5 w-3.5" />, color: "text-blue-500 bg-blue-50 dark:bg-blue-950" },
+    no_answer: { icon: <PhoneMissed className="h-3.5 w-3.5" />, color: "text-red-500 bg-red-50 dark:bg-red-950" },
+    whatsapp: { icon: <MessageCircle className="h-3.5 w-3.5" />, color: "text-green-500 bg-green-50 dark:bg-green-950" },
+    meeting: { icon: <Users className="h-3.5 w-3.5" />, color: "text-purple-500 bg-purple-50 dark:bg-purple-950" },
+    email: { icon: <Mail className="h-3.5 w-3.5" />, color: "text-orange-500 bg-orange-50 dark:bg-orange-950" },
+    note: { icon: <FileText className="h-3.5 w-3.5" />, color: "text-gray-500 bg-gray-50 dark:bg-gray-900" },
+  };
+
+  const commTypeLabel: Record<string, string> = {
+    call: t.commTypeCall,
+    no_answer: t.commTypeNoAnswer,
+    whatsapp: t.commTypeWhatsapp,
+    meeting: t.commTypeMeeting,
+    email: t.commTypeEmail,
+    note: t.commTypeNote,
+  };
 
   return (
     <>
     <Sheet open={!!lead} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="w-full sm:max-w-xl overflow-hidden flex flex-col">
-        <SheetHeader className="pb-4 border-b">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <SheetTitle className="text-xl" data-testid="text-lead-detail-name">
-                {lead.name || "No Name"}
-              </SheetTitle>
-              {currentState && (
-                <Badge
-                  className="mt-2"
-                  style={{
-                    backgroundColor: currentState.color + "20",
-                    color: currentState.color,
-                    borderColor: currentState.color + "40",
-                  }}
-                >
-                  {currentState.name}
-                </Badge>
+      <SheetContent className="w-full sm:max-w-2xl overflow-hidden flex flex-col p-0">
+
+        {/* ── Header ── */}
+        <SheetHeader className="px-6 pt-5 pb-4 border-b space-y-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              {editMode ? (
+                <Input
+                  value={formData.name || ""}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="text-xl font-bold h-9 mb-2"
+                  data-testid="input-edit-name"
+                />
+              ) : (
+                <SheetTitle className="text-xl leading-tight" data-testid="text-lead-detail-name">
+                  {lead.name || "بدون اسم"}
+                </SheetTitle>
               )}
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                {currentState && (
+                  <Badge style={{ backgroundColor: currentState.color + "20", color: currentState.color, borderColor: currentState.color + "40" }}>
+                    {currentState.name}
+                  </Badge>
+                )}
+                <Badge className={`gap-1 border ${SCORE_COLORS[scoreInfo.score]}`} data-testid="badge-score-panel">
+                  {scoreInfo.score === "hot" ? <Flame className="h-3 w-3" /> : scoreInfo.score === "warm" ? <Thermometer className="h-3 w-3" /> : <Snowflake className="h-3 w-3" />}
+                  {scoreInfo.score === "hot" ? t.scoreHot : scoreInfo.score === "warm" ? t.scoreWarm : t.scoreCold}
+                </Badge>
+                {lead.channel && <Badge variant="outline" className="text-xs">{lead.channel}</Badge>}
+              </div>
             </div>
-            <div className="flex gap-2 flex-wrap justify-end">
+            <div className="flex gap-2 flex-wrap justify-end shrink-0">
+              {canAutoAssign && !editMode && (
+                <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={() => autoAssignMutation.mutate()} disabled={autoAssignMutation.isPending} data-testid="button-auto-assign">
+                  <Shuffle className="h-3.5 w-3.5" />
+                  {autoAssignMutation.isPending ? t.autoAssigning : t.autoAssign}
+                </Button>
+              )}
               {canTransfer && !editMode && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setShowTransferDialog(true)}
-                  data-testid="button-transfer-lead"
-                >
-                  <ArrowRightLeft className="h-4 w-4 mr-1 rtl:mr-0 rtl:ml-1" />
+                <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={() => setShowTransferDialog(true)} data-testid="button-transfer-lead">
+                  <ArrowRightLeft className="h-3.5 w-3.5" />
                   {t.transferLead}
                 </Button>
               )}
               {editMode ? (
                 <>
-                  <Button size="sm" variant="outline" onClick={() => setEditMode(false)}>
-                    Cancel
+                  <Button size="sm" variant="outline" className="h-8" onClick={() => { setEditMode(false); setFormData({}); }} data-testid="button-cancel-edit">
+                    {t.cancel || "إلغاء"}
                   </Button>
-                  <Button size="sm" onClick={handleSave} data-testid="button-save-lead">
-                    Save
+                  <Button size="sm" className="h-8" onClick={handleSave} data-testid="button-save-lead">
+                    {t.save || "حفظ"}
                   </Button>
                 </>
               ) : (
-                <Button size="sm" onClick={handleEdit} data-testid="button-edit-lead">
-                  Edit
+                <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={() => { setFormData({ ...lead }); setEditMode(true); }} data-testid="button-edit-lead">
+                  <Edit2 className="h-3.5 w-3.5" />
+                  {t.edit || "تعديل"}
                 </Button>
               )}
             </div>
+          </div>
+
+          {/* State progress bar */}
+          <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+            {sortedStates.map((state, idx) => {
+              const currentIdx = sortedStates.findIndex(s => s.id === lead.stateId);
+              const isPast = idx < currentIdx;
+              const isCurrent = state.id === lead.stateId;
+              return (
+                <button
+                  key={state.id}
+                  onClick={() => onUpdate({ stateId: state.id })}
+                  title={state.name}
+                  className={`h-1.5 flex-1 min-w-[20px] rounded-full transition-all hover:opacity-80 ${
+                    isCurrent ? "opacity-100" : isPast ? "opacity-60" : "opacity-20"
+                  }`}
+                  style={{ backgroundColor: state.color }}
+                  data-testid={`btn-state-${state.id}`}
+                />
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            {t.currentStage || "المرحلة الحالية"}: <span className="font-medium">{currentState?.name || "—"}</span>
+          </p>
+
+          {/* Summary stats bar */}
+          <div className="flex items-center gap-4 pt-1">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Clock className="h-3.5 w-3.5" />
+              <span>آخر تواصل: <span className="font-medium text-foreground">{lastContactDate}</span></span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <PhoneCall className="h-3.5 w-3.5" />
+              <span>المكالمات: <span className="font-medium text-foreground">{totalCalls}</span></span>
+            </div>
+            {lead.budget && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <DollarSign className="h-3.5 w-3.5" />
+                <span className="font-medium text-foreground">{lead.budget}</span>
+              </div>
+            )}
           </div>
         </SheetHeader>
 
         {/* Agent banner: unread manager comments */}
         {isAssignedAgent && unreadManagerComments.length > 0 && (
-          <div className="flex items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 px-3 py-2 mt-2 text-sm" data-testid="banner-unread-manager-comment">
+          <div className="flex items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 px-4 py-2.5 mx-6 mt-3 text-sm" data-testid="banner-unread-manager-comment">
             <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
               <MessageSquare className="h-4 w-4 flex-shrink-0" />
               <span>المانجر ترك ملاحظة على هذا الليد</span>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="border-amber-400 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 h-7 text-xs"
-              onClick={handleMarkAllRead}
-              data-testid="button-mark-comment-read"
-            >
+            <Button size="sm" variant="outline" className="border-amber-400 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 h-7 text-xs" onClick={handleMarkAllRead} data-testid="button-mark-comment-read">
               تم الاطلاع
             </Button>
           </div>
         )}
 
-        <Tabs defaultValue="info" className="flex-1 overflow-hidden flex flex-col">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="info" data-testid="tab-lead-info">
-              <FileText className="h-4 w-4 mr-1" />
-              Info
+        {/* ── Tabs ── */}
+        <Tabs defaultValue="overview" className="flex-1 overflow-hidden flex flex-col">
+          <TabsList className="grid w-full grid-cols-7 rounded-none border-b h-11 bg-transparent px-6 gap-0.5">
+            <TabsTrigger value="overview" className="text-xs gap-1 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-overview">
+              <FileText className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden sm:inline">نظرة عامة</span>
             </TabsTrigger>
-            <TabsTrigger value="tasks" data-testid="tab-lead-tasks">
-              <ListTodo className="h-4 w-4 mr-1" />
-              التاسكس
+            <TabsTrigger value="communications" className="text-xs gap-1 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-communications">
+              <MessageCircle className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden sm:inline">التواصل</span>
             </TabsTrigger>
-            <TabsTrigger value="history" data-testid="tab-lead-history">
-              <History className="h-4 w-4 mr-1" />
-              الهيستوري
+            <TabsTrigger value="tasks" className="text-xs gap-1 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-tasks">
+              <ListTodo className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden sm:inline">التاسكس</span>
             </TabsTrigger>
-            <TabsTrigger value="actions" data-testid="tab-lead-actions">
-              <Phone className="h-4 w-4 mr-1" />
-              الأكشنز
+            <TabsTrigger value="reminders" className="text-xs gap-1 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-reminders">
+              <Bell className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden sm:inline">التذكيرات</span>
             </TabsTrigger>
-            <TabsTrigger value="documents" data-testid="tab-lead-documents">
-              <Paperclip className="h-4 w-4 mr-1" />
-              Docs
+            <TabsTrigger value="timeline" className="text-xs gap-1 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-timeline">
+              <Activity className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden sm:inline">السجل</span>
+            </TabsTrigger>
+            <TabsTrigger value="units" className="text-xs gap-1 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-units">
+              <Home className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden sm:inline">الوحدات</span>
+            </TabsTrigger>
+            <TabsTrigger value="documents" className="text-xs gap-1 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-documents">
+              <Paperclip className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden sm:inline">المستندات</span>
             </TabsTrigger>
           </TabsList>
 
-          <ScrollArea className="flex-1 mt-4">
-            <TabsContent value="info" className="m-0 space-y-4">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Contact Information</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {editMode ? (
-                    <>
-                      <div className="space-y-2">
-                        <Label>Name</Label>
-                        <Input
-                          value={formData.name || ""}
-                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                          data-testid="input-edit-name"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Phone</Label>
-                        <Input
-                          value={formData.phone || ""}
-                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                          data-testid="input-edit-phone"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Secondary Phone</Label>
-                        <Input
-                          value={formData.phone2 || ""}
-                          onChange={(e) => setFormData({ ...formData, phone2: e.target.value })}
-                          data-testid="input-edit-phone2"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Email</Label>
-                        <Input
-                          value={formData.email || ""}
-                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                          data-testid="input-edit-email"
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex items-center gap-3 text-sm">
-                        <User className="h-4 w-4 text-muted-foreground" />
-                        <span>{lead.name || "No name provided"}</span>
-                      </div>
-                      <div className="flex items-center gap-3 text-sm">
-                        <Phone className="h-4 w-4 text-muted-foreground" />
-                        <span>{lead.phone || "No phone provided"}</span>
-                      </div>
-                      {lead.phone2 && (
-                        <div className="flex items-center gap-3 text-sm">
-                          <Phone className="h-4 w-4 text-muted-foreground" />
-                          <span>{lead.phone2}</span>
+          <ScrollArea className="flex-1">
+            <div className="px-6 py-4 space-y-4">
+
+              {/* ═══════════════ TAB: نظرة عامة ═══════════════ */}
+              <TabsContent value="overview" className="m-0 space-y-4">
+
+                {/* Contact Information */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">{t.contactInfo}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {editMode ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">{t.name || "الاسم"}</Label>
+                          <Input value={formData.name || ""} onChange={(e) => setFormData({ ...formData, name: e.target.value })} data-testid="input-edit-name-contact" />
                         </div>
-                      )}
-                      <div className="flex items-center gap-3 text-sm">
-                        <Mail className="h-4 w-4 text-muted-foreground" />
-                        <span>{lead.email || "No email provided"}</span>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">{t.phone || "الهاتف"}</Label>
+                          <Input value={formData.phone || ""} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} data-testid="input-edit-phone" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">{t.phone2 || "هاتف 2"}</Label>
+                          <Input value={formData.phone2 || ""} onChange={(e) => setFormData({ ...formData, phone2: e.target.value })} data-testid="input-edit-phone2" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">{t.email || "الإيميل"}</Label>
+                          <Input value={formData.email || ""} onChange={(e) => setFormData({ ...formData, email: e.target.value })} data-testid="input-edit-email" />
+                        </div>
+                        <div className="space-y-1.5 col-span-2">
+                          <Label className="text-xs">{t.location || "الموقع"}</Label>
+                          <Input value={formData.location || ""} onChange={(e) => setFormData({ ...formData, location: e.target.value })} data-testid="input-edit-location" />
+                        </div>
                       </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Lead Details</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {editMode ? (
-                    <>
-                      <div className="space-y-2">
-                        <Label>Status</Label>
-                        <Select
-                          value={formData.stateId || ""}
-                          onValueChange={(v) => setFormData({ ...formData, stateId: v })}
-                        >
-                          <SelectTrigger data-testid="select-edit-state">
-                            <SelectValue placeholder="Select state" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {states.map((state) => (
-                              <SelectItem key={state.id} value={state.id}>
-                                {state.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Channel</Label>
-                        <Input
-                          value={formData.channel || ""}
-                          onChange={(e) => setFormData({ ...formData, channel: e.target.value })}
-                          data-testid="input-edit-channel"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Campaign</Label>
-                        <Input
-                          value={formData.campaign || ""}
-                          onChange={(e) => setFormData({ ...formData, campaign: e.target.value })}
-                          data-testid="input-edit-campaign"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Assigned To</Label>
-                        <Input
-                          value={formData.assignedTo || ""}
-                          onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
-                          data-testid="input-edit-assigned"
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <p className="text-muted-foreground">Channel</p>
-                        <p className="font-medium">{lead.channel || "-"}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Campaign</p>
-                        <p className="font-medium">{lead.campaign || "-"}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Assigned To</p>
-                        <p className="font-medium">{lead.assignedTo || "-"}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Request Type</p>
-                        <p className="font-medium">{lead.requestType || "-"}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Unit Type</p>
-                        <p className="font-medium">{lead.unitType || "-"}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Area</p>
-                        <p className="font-medium">{lead.area || "-"}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Budget</p>
-                        <p className="font-medium">{lead.budget || "-"}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Location</p>
-                        <p className="font-medium">{lead.location || "-"}</p>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {lead.notes && (
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Notes</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm whitespace-pre-wrap">{lead.notes}</p>
-                  </CardContent>
-                </Card>
-              )}
-
-              {editMode && (
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Notes</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <Textarea
-                      value={formData.notes || ""}
-                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      rows={4}
-                      data-testid="textarea-edit-notes"
-                    />
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-
-            <TabsContent value="tasks" className="m-0 space-y-4">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold">إضافة تاسك جديد</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <Input
-                    placeholder="عنوان التاسك (مثال: إرسال عرض السعر)"
-                    value={newTask.title}
-                    onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                    data-testid="input-new-task-title"
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <Select
-                      value={newTask.type}
-                      onValueChange={(v) => setNewTask({ ...newTask, type: v })}
-                    >
-                      <SelectTrigger data-testid="select-new-task-type">
-                        <SelectValue placeholder="نوع التاسك" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="اتصال">📞 اتصال</SelectItem>
-                        <SelectItem value="ميتنج">🤝 ميتنج</SelectItem>
-                        <SelectItem value="معاينة موقع">🏗️ معاينة موقع</SelectItem>
-                        <SelectItem value="إرسال عرض سعر">📄 إرسال عرض سعر</SelectItem>
-                        <SelectItem value="تحضير عقد">📝 تحضير عقد</SelectItem>
-                        <SelectItem value="متابعة">🔔 متابعة</SelectItem>
-                        <SelectItem value="واتساب">💬 واتساب</SelectItem>
-                        <SelectItem value="أخرى">📌 أخرى</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <div>
-                      <Input
-                        type="date"
-                        value={newTask.dueDate}
-                        onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
-                        data-testid="input-new-task-due-date"
-                        title="تاريخ التنفيذ"
-                      />
-                    </div>
-                  </div>
-                  <Textarea
-                    placeholder="ملاحظات (اختياري)"
-                    value={newTask.description}
-                    onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-                    rows={2}
-                    data-testid="textarea-new-task-description"
-                  />
-                  <Button
-                    className="w-full"
-                    onClick={() => createTaskMutation.mutate(newTask)}
-                    disabled={!newTask.title || createTaskMutation.isPending}
-                    data-testid="button-add-task"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    {createTaskMutation.isPending ? "جاري الإضافة..." : "أضف التاسك"}
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {tasksLoading ? (
-                <div className="space-y-3">
-                  {[1, 2].map((i) => (
-                    <Card key={i}>
-                      <CardContent className="p-4">
-                        <Skeleton className="h-5 w-32 mb-2" />
-                        <Skeleton className="h-4 w-48" />
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : tasks && tasks.length > 0 ? (
-                <div className="space-y-3">
-                  {tasks.map((task) => (
-                    <Card key={task.id} className={task.completed ? "opacity-50" : ""} data-testid={`card-task-${task.id}`}>
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-start gap-3 flex-1 min-w-0">
-                            <button
-                              onClick={() =>
-                                toggleTaskMutation.mutate({
-                                  taskId: task.id,
-                                  completed: !task.completed,
-                                })
-                              }
-                              className="mt-0.5 shrink-0"
-                              data-testid={`button-toggle-task-${task.id}`}
-                            >
-                              {task.completed ? (
-                                <CheckCircle className="h-5 w-5 text-green-500" />
-                              ) : (
-                                <Clock className="h-5 w-5 text-muted-foreground" />
-                              )}
-                            </button>
-                            <div className="flex-1 min-w-0">
-                              <p className={`font-medium text-sm ${task.completed ? "line-through text-muted-foreground" : ""}`}>
-                                {task.title}
-                              </p>
-                              <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                {task.type && (
-                                  <Badge variant="outline" className="text-xs">
-                                    {task.type}
-                                  </Badge>
-                                )}
-                                {(task as any).dueDate && (
-                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                    <Calendar className="h-3 w-3" />
-                                    {format(new Date((task as any).dueDate), "dd/MM/yyyy")}
-                                  </span>
-                                )}
-                                {task.completed && (
-                                  <Badge variant="outline" className="text-xs text-green-600 border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800">
-                                    منجز ✓
-                                  </Badge>
-                                )}
-                              </div>
-                              {task.description && (
-                                <p className="text-sm text-muted-foreground mt-1">
-                                  {task.description}
-                                </p>
-                              )}
-                            </div>
+                    ) : (
+                      <div className="space-y-2.5">
+                        <div className="flex items-center justify-between gap-2 text-sm">
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <span>{lead.name || "—"}</span>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 shrink-0"
-                            onClick={() => deleteTaskMutation.mutate(task.id)}
-                            data-testid={`button-delete-task-${task.id}`}
-                          >
-                            <Trash2 className="h-4 w-4 text-muted-foreground" />
-                          </Button>
                         </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <Card>
-                  <CardContent className="flex flex-col items-center justify-center py-8">
-                    <ListTodo className="h-10 w-10 text-muted-foreground/50 mb-3" />
-                    <p className="text-muted-foreground text-sm">مفيش تاسكس لسه</p>
-                    <p className="text-xs text-muted-foreground mt-1">أضف تاسك عشان تتابع مع الكلاينت</p>
+                        {lead.phone && (
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-4 w-4 text-muted-foreground" />
+                              <span dir="ltr">{lead.phone}</span>
+                            </div>
+                            <a href={`https://wa.me/${lead.phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                              <Button size="sm" variant="outline" className="h-7 gap-1 text-green-600 border-green-200 hover:bg-green-50 text-xs" data-testid="button-whatsapp-primary">
+                                <MessageCircle className="h-3.5 w-3.5" />
+                                واتساب
+                              </Button>
+                            </a>
+                          </div>
+                        )}
+                        {lead.phone2 && (
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-4 w-4 text-muted-foreground" />
+                              <span dir="ltr">{lead.phone2}</span>
+                            </div>
+                            <a href={`https://wa.me/${lead.phone2.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                              <Button size="sm" variant="outline" className="h-7 gap-1 text-green-600 border-green-200 hover:bg-green-50 text-xs" data-testid="button-whatsapp-secondary">
+                                <MessageCircle className="h-3.5 w-3.5" />
+                                واتساب
+                              </Button>
+                            </a>
+                          </div>
+                        )}
+                        {lead.email && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <Mail className="h-4 w-4 text-muted-foreground" />
+                            <span>{lead.email}</span>
+                          </div>
+                        )}
+                        {lead.location && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                            <span>{lead.location}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
-              )}
-            </TabsContent>
 
-            <TabsContent value="history" className="m-0 space-y-4">
-              {/* Manager Note button - only for managers */}
-              {isManager && (
-                <div>
-                  {showManagerNoteInput ? (
-                    <Card className="border-amber-300 dark:border-amber-700">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm text-amber-700 dark:text-amber-300 flex items-center gap-2">
-                          <MessageSquare className="h-4 w-4" />
-                          ملاحظة المانجر
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        <Textarea
-                          placeholder="اكتب ملاحظتك التدريبية هنا..."
-                          value={managerNoteContent}
-                          onChange={(e) => setManagerNoteContent(e.target.value)}
-                          rows={3}
-                          data-testid="textarea-manager-note"
-                          className="border-amber-200 focus:border-amber-400 dark:border-amber-800"
-                        />
-                        <div className="flex gap-2 justify-end">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setShowManagerNoteInput(false);
-                              setManagerNoteContent("");
-                            }}
-                            data-testid="button-cancel-manager-note"
-                          >
-                            إلغاء
-                          </Button>
-                          <Button
-                            size="sm"
-                            className="bg-amber-500 hover:bg-amber-600 text-white"
-                            onClick={() => managerNoteContent.trim() && createManagerCommentMutation.mutate(managerNoteContent.trim())}
-                            disabled={!managerNoteContent.trim() || createManagerCommentMutation.isPending}
-                            data-testid="button-submit-manager-note"
-                          >
-                            إرسال الملاحظة
-                          </Button>
+                {/* Property Information */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">{t.propertyInfo}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {editMode ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">{t.unitType || "نوع الوحدة"}</Label>
+                          <Input value={formData.unitType || ""} onChange={(e) => setFormData({ ...formData, unitType: e.target.value })} data-testid="input-edit-unittype" />
                         </div>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-amber-400 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 w-full"
-                      onClick={() => setShowManagerNoteInput(true)}
-                      data-testid="button-add-manager-note"
-                    >
-                      <MessageSquare className="h-4 w-4 mr-2" />
-                      إضافة ملاحظة المانجر
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">{t.budget || "الميزانية"}</Label>
+                          <Input value={formData.budget || ""} onChange={(e) => setFormData({ ...formData, budget: e.target.value })} data-testid="input-edit-budget" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">{t.bedrooms || "الغرف"}</Label>
+                          <Input value={formData.bedrooms || ""} onChange={(e) => setFormData({ ...formData, bedrooms: e.target.value })} data-testid="input-edit-bedrooms" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">{t.space || "المساحة"}</Label>
+                          <Input value={formData.space || ""} onChange={(e) => setFormData({ ...formData, space: e.target.value })} data-testid="input-edit-space" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">{t.area || "المنطقة"}</Label>
+                          <Input value={formData.area || ""} onChange={(e) => setFormData({ ...formData, area: e.target.value })} data-testid="input-edit-area" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">{t.paymentType || "طريقة الدفع"}</Label>
+                          <Input value={formData.paymentType || ""} onChange={(e) => setFormData({ ...formData, paymentType: e.target.value })} data-testid="input-edit-paymenttype" />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        {[
+                          { label: t.unitType || "نوع الوحدة", value: lead.unitType, icon: <Building2 className="h-3.5 w-3.5" /> },
+                          { label: t.budget || "الميزانية", value: lead.budget, icon: <DollarSign className="h-3.5 w-3.5" /> },
+                          { label: t.bedrooms || "الغرف", value: lead.bedrooms },
+                          { label: `${t.space || "المساحة"} (م²)`, value: lead.space },
+                          { label: t.area || "المنطقة", value: lead.area },
+                          { label: t.paymentType || "طريقة الدفع", value: lead.paymentType },
+                        ].map(({ label, value, icon }) => (
+                          <div key={label}>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">{icon}{label}</p>
+                            <p className="font-medium mt-0.5">{value || "—"}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Additional Info */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">{t.additionalInfo}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {editMode ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">{t.channel || "المصدر"}</Label>
+                          <Input value={formData.channel || ""} onChange={(e) => setFormData({ ...formData, channel: e.target.value })} data-testid="input-edit-channel" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">{t.campaign || "الحملة"}</Label>
+                          <Input value={formData.campaign || ""} onChange={(e) => setFormData({ ...formData, campaign: e.target.value })} data-testid="input-edit-campaign" />
+                        </div>
+                        <div className="space-y-1.5 col-span-2">
+                          <Label className="text-xs">{t.status || "الحالة"}</Label>
+                          <Select value={formData.stateId || ""} onValueChange={(v) => setFormData({ ...formData, stateId: v })}>
+                            <SelectTrigger data-testid="select-edit-state">
+                              <SelectValue placeholder="اختر الحالة" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {states.map((state) => (
+                                <SelectItem key={state.id} value={state.id}>{state.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5 col-span-2">
+                          <Label className="text-xs">{t.notes || "ملاحظات"}</Label>
+                          <Textarea value={formData.notes || ""} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} rows={3} data-testid="textarea-edit-notes" />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-3 gap-3 text-sm">
+                          {lead.channel && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">{t.channel || "المصدر"}</p>
+                              <Badge variant="outline" className="mt-0.5 text-xs">{lead.channel}</Badge>
+                            </div>
+                          )}
+                          {lead.campaign && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">{t.campaign || "الحملة"}</p>
+                              <p className="font-medium mt-0.5">{lead.campaign}</p>
+                            </div>
+                          )}
+                          {lead.campaignName && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">{t.campaignName || "اسم الحملة"}</p>
+                              <p className="font-medium mt-0.5">{lead.campaignName}</p>
+                            </div>
+                          )}
+                          {lead.requestType && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">{t.requestType || "نوع الطلب"}</p>
+                              <p className="font-medium mt-0.5">{lead.requestType}</p>
+                            </div>
+                          )}
+                          {lead.marketingCost && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">{t.marketingCost || "تكلفة التسويق"}</p>
+                              <p className="font-medium mt-0.5">{Number(lead.marketingCost).toLocaleString()} {t.currency || "ج.م"}</p>
+                            </div>
+                          )}
+                          {lead.createdAt && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">{t.createdAt || "تاريخ الإنشاء"}</p>
+                              <p className="font-medium mt-0.5">{format(new Date(lead.createdAt), "dd/MM/yyyy")}</p>
+                            </div>
+                          )}
+                        </div>
+                        {lead.notes && (
+                          <div className="p-3 bg-muted/50 rounded-lg">
+                            <p className="text-xs text-muted-foreground mb-1">{t.notes || "ملاحظات"}</p>
+                            <p className="text-sm whitespace-pre-wrap">{lead.notes}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Pending Tasks Preview */}
+                {tasks && tasks.filter(t => !t.completed).length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <ListTodo className="h-4 w-4" />
+                        {t.tasks || "المهام المعلقة"}
+                        <Badge variant="secondary" className="text-xs">{tasks.filter(tt => !tt.completed).length}</Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {tasks.filter(tt => !tt.completed).slice(0, 3).map((task) => (
+                        <div key={task.id} className="flex items-center justify-between p-2 rounded-md border text-sm">
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => toggleTaskMutation.mutate({ taskId: task.id, completed: true })} data-testid={`button-toggle-overview-task-${task.id}`}>
+                              <Clock className="h-4 w-4 text-muted-foreground hover:text-green-500 transition-colors" />
+                            </button>
+                            <span>{task.title}</span>
+                            {task.type && <Badge variant="outline" className="text-xs h-4">{task.type}</Badge>}
+                          </div>
+                          {(task as any).dueDate && (
+                            <span className="text-xs text-muted-foreground">
+                              {format(new Date((task as any).dueDate), "dd/MM")}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+
+              {/* ═══════════════ TAB: سجل التواصل ═══════════════ */}
+              <TabsContent value="communications" className="m-0 space-y-4">
+
+                {/* Quick actions */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">{t.logCommunication || "تسجيل تواصل"}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {/* Quick type buttons */}
+                    <div className="flex flex-wrap gap-2">
+                      {commTypes.map(({ type, icon, label, cls }) => (
+                        <Button
+                          key={type}
+                          size="sm"
+                          variant="outline"
+                          className={`h-7 gap-1.5 text-xs ${cls}`}
+                          disabled={createCommunicationMutation.isPending}
+                          onClick={() => createCommunicationMutation.mutate({ type, note: undefined })}
+                          data-testid={`button-quick-${type}`}
+                        >
+                          {icon}
+                          {label}
+                        </Button>
+                      ))}
+                    </div>
+
+                    {/* Detailed log form */}
+                    <div className="flex gap-2">
+                      <Select value={commType} onValueChange={setCommType}>
+                        <SelectTrigger className="flex-1" data-testid="select-comm-type">
+                          <SelectValue placeholder={t.selectCommType || "اختر نوع التواصل"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="call"><div className="flex items-center gap-2"><PhoneCall className="h-4 w-4 text-blue-500" />{t.commTypeCall}</div></SelectItem>
+                          <SelectItem value="no_answer"><div className="flex items-center gap-2"><PhoneMissed className="h-4 w-4 text-red-500" />{t.commTypeNoAnswer}</div></SelectItem>
+                          <SelectItem value="whatsapp"><div className="flex items-center gap-2"><MessageCircle className="h-4 w-4 text-green-500" />{t.commTypeWhatsapp}</div></SelectItem>
+                          <SelectItem value="meeting"><div className="flex items-center gap-2"><Users className="h-4 w-4 text-purple-500" />{t.commTypeMeeting}</div></SelectItem>
+                          <SelectItem value="email"><div className="flex items-center gap-2"><Mail className="h-4 w-4 text-orange-500" />{t.commTypeEmail}</div></SelectItem>
+                          <SelectItem value="note"><div className="flex items-center gap-2"><FileText className="h-4 w-4 text-gray-500" />{t.commTypeNote}</div></SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {lead.phone && commType === "whatsapp" && (
+                        <a href={`https://wa.me/${lead.phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer">
+                          <Button variant="outline" className="text-green-600 border-green-200 hover:bg-green-50 shrink-0" data-testid="button-open-whatsapp">
+                            <MessageCircle className="h-4 w-4 mr-1" />
+                            {t.whatsappChat || "محادثة"}
+                          </Button>
+                        </a>
+                      )}
+                    </div>
+                    <Textarea
+                      placeholder={t.communicationNote || "ملاحظة (اختياري)"}
+                      value={commNote}
+                      onChange={(e) => setCommNote(e.target.value)}
+                      className="min-h-[60px] resize-none"
+                      data-testid="input-comm-note"
+                    />
+                    <Button onClick={handleLogCommunication} disabled={!commType || createCommunicationMutation.isPending} className="w-full" data-testid="button-log-communication">
+                      <Plus className="h-4 w-4 mr-1" />
+                      {t.logComm || "سجّل التواصل"}
                     </Button>
-                  )}
-                </div>
-              )}
+                  </CardContent>
+                </Card>
 
-              {/* Manager Comments in timeline */}
-              {commentsLoading ? (
-                <div className="space-y-3">
-                  {[1].map((i) => (
-                    <Card key={i}>
-                      <CardContent className="p-4">
-                        <Skeleton className="h-5 w-32 mb-2" />
-                        <Skeleton className="h-4 w-48" />
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : null}
+                {/* Call log with follow-up */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-green-600" />
+                        اتصل الآن
+                      </CardTitle>
+                      {lead.phone && (
+                        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowLogCallForm(!showLogCallForm)} data-testid="button-toggle-log-call">
+                          <ClipboardList className="h-3.5 w-3.5 mr-1" />
+                          سجّل مكالمة
+                        </Button>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {lead.phone ? (
+                      <Button variant="outline" className="w-full justify-start h-10 text-sm" asChild>
+                        <a href={`tel:${lead.phone}`} data-testid="button-call-phone">
+                          <PhoneCall className="h-4 w-4 mr-2 text-green-600" />
+                          {lead.phone}
+                        </a>
+                      </Button>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-2">لا يوجد رقم هاتف</p>
+                    )}
+                    {showLogCallForm && (
+                      <div className="space-y-3 rounded-md border p-3 bg-muted/30">
+                        <div className="space-y-1">
+                          <label className="text-xs text-muted-foreground font-medium">نتيجة المكالمة</label>
+                          <Select value={callOutcome} onValueChange={setCallOutcome}>
+                            <SelectTrigger data-testid="select-call-outcome"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {Object.entries(CALL_OUTCOME_LABELS).map(([val, label]) => (
+                                <SelectItem key={val} value={val}>{label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Textarea value={callNote} onChange={(e) => setCallNote(e.target.value)} placeholder="ملاحظات عن المكالمة..." rows={2} className="resize-none text-sm" data-testid="textarea-call-note" />
+                        <Button className="w-full" onClick={() => logCallMutation.mutate()} disabled={logCallMutation.isPending} data-testid="button-save-call-log">
+                          {logCallMutation.isPending ? "جاري الحفظ..." : "حفظ المكالمة"}
+                        </Button>
+                      </div>
+                    )}
 
-              {historyLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <Card key={i}>
-                      <CardContent className="p-4">
-                        <Skeleton className="h-5 w-32 mb-2" />
-                        <Skeleton className="h-4 w-48" />
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                (() => {
-                  const historyItems = (history ?? []).map(item => ({
-                    type: "history" as const,
-                    id: item.id,
-                    createdAt: item.createdAt,
-                    data: item,
-                  }));
-                  const commentItems = (managerComments ?? []).map(c => ({
-                    type: "manager_comment" as const,
-                    id: c.id,
-                    createdAt: c.createdAt,
-                    data: c,
-                  }));
-                  const allItems = [...historyItems, ...commentItems].sort((a, b) => {
+                    {/* Schedule follow-up */}
+                    <div className="border-t pt-3">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">جدولة متابعة</p>
+                      <div className="flex gap-2">
+                        <Input type="date" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)} className="flex-1 h-8 text-sm" data-testid="input-followup-date" />
+                        <Input type="time" value={followUpTime} onChange={(e) => setFollowUpTime(e.target.value)} className="w-24 h-8 text-sm" data-testid="input-followup-time" />
+                        <Button size="sm" className="h-8 shrink-0" onClick={() => createFollowUpMutation.mutate()} disabled={!followUpDate || createFollowUpMutation.isPending} data-testid="button-schedule-followup">
+                          <Bell className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* WhatsApp Panel */}
+                {lead.phone && (
+                  <WhatsAppPanel lead={lead} agentName={currentUser?.username} />
+                )}
+
+                {/* Communications timeline */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">سجل التواصل</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {communications.length > 0 ? (
+                      <div className="relative">
+                        <div className="absolute left-4 top-0 bottom-0 w-px bg-border rtl:left-auto rtl:right-4" />
+                        <div className="space-y-3">
+                          {[...communications].sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime()).map((comm) => {
+                            const typeInfo = commIconMap[comm.type] || commIconMap.note;
+                            return (
+                              <div key={comm.id} className="relative pl-10 rtl:pl-0 rtl:pr-10">
+                                <div className={`absolute left-2 top-2 w-5 h-5 rounded-full flex items-center justify-center rtl:left-auto rtl:right-2 ${typeInfo.color}`}>
+                                  {typeInfo.icon}
+                                </div>
+                                <div className="p-3 rounded-md border">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <Badge variant="secondary" className={`text-xs ${typeInfo.color}`}>
+                                      {commTypeLabel[comm.type] || comm.type}
+                                    </Badge>
+                                    <span className="text-xs text-muted-foreground">
+                                      {comm.createdAt && format(new Date(comm.createdAt), "dd/MM, HH:mm")}
+                                    </span>
+                                  </div>
+                                  {comm.note && <p className="text-sm text-muted-foreground mt-1">{comm.note}</p>}
+                                  {comm.userName && <p className="text-xs text-muted-foreground mt-1">بواسطة: {comm.userName}</p>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex h-24 items-center justify-center text-muted-foreground text-sm">
+                        {t.noCommunications || "لا يوجد سجل تواصل بعد"}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* ═══════════════ TAB: التاسكس ═══════════════ */}
+              <TabsContent value="tasks" className="m-0 space-y-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-semibold">إضافة تاسك جديد</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <Input placeholder="عنوان التاسك (مثال: إرسال عرض السعر)" value={newTask.title} onChange={(e) => setNewTask({ ...newTask, title: e.target.value })} data-testid="input-new-task-title" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select value={newTask.type} onValueChange={(v) => setNewTask({ ...newTask, type: v })}>
+                        <SelectTrigger data-testid="select-new-task-type">
+                          <SelectValue placeholder="نوع التاسك" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="اتصال">📞 اتصال</SelectItem>
+                          <SelectItem value="ميتنج">🤝 ميتنج</SelectItem>
+                          <SelectItem value="معاينة موقع">🏗️ معاينة موقع</SelectItem>
+                          <SelectItem value="إرسال عرض سعر">📄 إرسال عرض سعر</SelectItem>
+                          <SelectItem value="تحضير عقد">📝 تحضير عقد</SelectItem>
+                          <SelectItem value="متابعة">🔔 متابعة</SelectItem>
+                          <SelectItem value="واتساب">💬 واتساب</SelectItem>
+                          <SelectItem value="أخرى">📌 أخرى</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input type="date" value={newTask.dueDate} onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })} data-testid="input-new-task-due-date" />
+                    </div>
+                    <Textarea placeholder="ملاحظات (اختياري)" value={newTask.description} onChange={(e) => setNewTask({ ...newTask, description: e.target.value })} rows={2} data-testid="textarea-new-task-description" />
+                    <Button className="w-full" onClick={() => createTaskMutation.mutate(newTask)} disabled={!newTask.title || createTaskMutation.isPending} data-testid="button-add-task">
+                      <Plus className="h-4 w-4 mr-2" />
+                      {createTaskMutation.isPending ? "جاري الإضافة..." : "أضف التاسك"}
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                {tasksLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2].map((i) => (
+                      <Card key={i}><CardContent className="p-4"><Skeleton className="h-5 w-32 mb-2" /><Skeleton className="h-4 w-48" /></CardContent></Card>
+                    ))}
+                  </div>
+                ) : tasks && tasks.length > 0 ? (
+                  <div className="space-y-3">
+                    {tasks.map((task) => (
+                      <Card key={task.id} className={task.completed ? "opacity-50" : ""} data-testid={`card-task-${task.id}`}>
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-3 flex-1 min-w-0">
+                              <button onClick={() => toggleTaskMutation.mutate({ taskId: task.id, completed: !task.completed })} className="mt-0.5 shrink-0" data-testid={`button-toggle-task-${task.id}`}>
+                                {task.completed ? <CheckCircle className="h-5 w-5 text-green-500" /> : <Clock className="h-5 w-5 text-muted-foreground" />}
+                              </button>
+                              <div className="flex-1 min-w-0">
+                                <p className={`font-medium text-sm ${task.completed ? "line-through text-muted-foreground" : ""}`}>{task.title}</p>
+                                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                  {task.type && <Badge variant="outline" className="text-xs">{task.type}</Badge>}
+                                  {(task as any).dueDate && <span className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="h-3 w-3" />{format(new Date((task as any).dueDate), "dd/MM/yyyy")}</span>}
+                                  {task.completed && <Badge variant="outline" className="text-xs text-green-600 border-green-200 bg-green-50 dark:bg-green-950">منجز ✓</Badge>}
+                                </div>
+                                {task.description && <p className="text-sm text-muted-foreground mt-1">{task.description}</p>}
+                              </div>
+                            </div>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => deleteTaskMutation.mutate(task.id)} data-testid={`button-delete-task-${task.id}`}>
+                              <Trash2 className="h-4 w-4 text-muted-foreground" />
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <Card>
+                    <CardContent className="flex flex-col items-center justify-center py-8">
+                      <ListTodo className="h-10 w-10 text-muted-foreground/50 mb-3" />
+                      <p className="text-muted-foreground text-sm">مفيش تاسكس لسه</p>
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+
+              {/* ═══════════════ TAB: التذكيرات ═══════════════ */}
+              <TabsContent value="reminders" className="m-0 space-y-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">{t.addReminder || "إضافة تذكير"}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex gap-2 flex-wrap">
+                      <Input placeholder={t.reminderTitle || "عنوان التذكير"} value={newReminderTitle} onChange={(e) => setNewReminderTitle(e.target.value)} className="flex-1 min-w-[150px]" data-testid="input-reminder-title" />
+                      <Input type="datetime-local" value={newReminderDate} onChange={(e) => setNewReminderDate(e.target.value)} className="w-48" data-testid="input-reminder-date" />
+                      <Button onClick={handleAddReminder} disabled={!newReminderTitle || !newReminderDate} data-testid="button-add-reminder">
+                        <Plus className="h-4 w-4 mr-1" />
+                        {t.addReminder || "إضافة"}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4">
+                    {reminders.length > 0 ? (
+                      <div className="space-y-2">
+                        {reminders.map((reminder) => (
+                          <div key={reminder.id} className={`flex items-center justify-between p-3 rounded-md border ${reminder.isCompleted ? "opacity-50" : ""}`} data-testid={`reminder-${reminder.id}`}>
+                            <div className="flex items-center gap-3">
+                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => completeReminderMutation.mutate(reminder.id)} disabled={reminder.isCompleted ?? false}>
+                                <CheckCircle className={`h-5 w-5 ${reminder.isCompleted ? "text-green-500" : "text-muted-foreground"}`} />
+                              </Button>
+                              <div>
+                                <p className={reminder.isCompleted ? "line-through text-sm" : "font-medium text-sm"}>{reminder.title}</p>
+                                <p className="text-xs text-muted-foreground">{reminder.dueDate && format(new Date(reminder.dueDate), "dd/MM/yyyy, HH:mm")}</p>
+                              </div>
+                            </div>
+                            <Badge variant={reminder.isCompleted ? "secondary" : "default"} className="text-xs">{reminder.priority || "متوسط"}</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex h-24 items-center justify-center text-muted-foreground text-sm">{t.noReminders || "لا يوجد تذكيرات"}</div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* ═══════════════ TAB: السجل / Timeline ═══════════════ */}
+              <TabsContent value="timeline" className="m-0 space-y-4">
+                {/* Manager Note button */}
+                {isManager && (
+                  <div>
+                    {showManagerNoteInput ? (
+                      <Card className="border-amber-300 dark:border-amber-700">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm text-amber-700 dark:text-amber-300 flex items-center gap-2">
+                            <MessageSquare className="h-4 w-4" />
+                            ملاحظة المانجر
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <Textarea placeholder="اكتب ملاحظتك التدريبية هنا..." value={managerNoteContent} onChange={(e) => setManagerNoteContent(e.target.value)} rows={3} data-testid="textarea-manager-note" className="border-amber-200 focus:border-amber-400" />
+                          <div className="flex gap-2 justify-end">
+                            <Button size="sm" variant="outline" onClick={() => { setShowManagerNoteInput(false); setManagerNoteContent(""); }} data-testid="button-cancel-manager-note">إلغاء</Button>
+                            <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => managerNoteContent.trim() && createManagerCommentMutation.mutate(managerNoteContent.trim())} disabled={!managerNoteContent.trim() || createManagerCommentMutation.isPending} data-testid="button-submit-manager-note">إرسال الملاحظة</Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <Button size="sm" variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 w-full" onClick={() => setShowManagerNoteInput(true)} data-testid="button-add-manager-note">
+                        <MessageSquare className="h-4 w-4 mr-2" />
+                        إضافة ملاحظة المانجر
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                {/* Merged timeline: history + manager comments + communications */}
+                {(historyLoading || commentsLoading) ? (
+                  <div className="space-y-3">{[1, 2, 3].map((i) => <Card key={i}><CardContent className="p-4"><Skeleton className="h-5 w-32 mb-2" /><Skeleton className="h-4 w-48" /></CardContent></Card>)}</div>
+                ) : (() => {
+                  const historyItems = (history ?? []).map(item => ({ type: "history" as const, id: item.id, createdAt: item.createdAt, data: item }));
+                  const commentItems = (managerComments ?? []).map(c => ({ type: "manager_comment" as const, id: c.id, createdAt: c.createdAt, data: c }));
+                  const commItems = communications.map(c => ({ type: "communication" as const, id: c.id, createdAt: c.createdAt, data: c }));
+                  const allItems = [...historyItems, ...commentItems, ...commItems].sort((a, b) => {
                     const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
                     const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-                    return aTime - bTime;
+                    return bTime - aTime;
                   });
 
                   if (allItems.length === 0) {
@@ -889,7 +1233,7 @@ export function LeadDetailPanel({
                       <Card>
                         <CardContent className="flex flex-col items-center justify-center py-8">
                           <History className="h-10 w-10 text-muted-foreground/50 mb-3" />
-                          <p className="text-muted-foreground text-sm">No history yet</p>
+                          <p className="text-muted-foreground text-sm">لا يوجد سجل بعد</p>
                         </CardContent>
                       </Card>
                     );
@@ -897,416 +1241,171 @@ export function LeadDetailPanel({
 
                   return (
                     <div className="relative">
-                      <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-border" />
-                      <div className="space-y-4">
+                      <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-border rtl:left-auto rtl:right-4" />
+                      <div className="space-y-3">
                         {allItems.map((item) => {
                           if (item.type === "manager_comment") {
                             const comment = item.data as LeadManagerComment;
                             const isMyComment = currentUser?.id === comment.managerId;
                             const isBeingEdited = editingCommentId === comment.id;
                             return (
-                              <div key={`mc-${comment.id}`} className="relative pl-10" data-testid={`manager-comment-${comment.id}`}>
-                                <div className="absolute left-2.5 top-2 h-3 w-3 rounded-full bg-amber-500" />
+                              <div key={`mc-${comment.id}`} className="relative pl-10 rtl:pl-0 rtl:pr-10" data-testid={`manager-comment-${comment.id}`}>
+                                <div className="absolute left-2.5 top-2 h-3 w-3 rounded-full bg-amber-500 rtl:left-auto rtl:right-2.5" />
                                 <Card className="border-l-4 border-l-amber-400 dark:border-l-amber-600 bg-amber-50/50 dark:bg-amber-950/20">
-                                  <CardContent className="p-4">
+                                  <CardContent className="p-3">
                                     <div className="flex items-start justify-between gap-2">
                                       <div className="flex items-center gap-2">
-                                        <MessageSquare className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                                        <MessageSquare className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
                                         <span className="font-semibold text-sm text-amber-700 dark:text-amber-300">ملاحظة المانجر</span>
-                                        {!comment.isReadByAgent && isAssignedAgent && (
-                                          <Badge className="bg-amber-500 text-white text-xs px-1.5 py-0">جديد</Badge>
-                                        )}
-                                        {comment.isReadByAgent && isManager && (
-                                          <Badge variant="outline" className="text-xs px-1.5 py-0 border-green-400 text-green-600">
-                                            <Check className="h-3 w-3 mr-1" />
-                                            تمت القراءة
-                                          </Badge>
-                                        )}
+                                        {!comment.isReadByAgent && isAssignedAgent && <Badge className="bg-amber-500 text-white text-xs px-1.5 py-0">جديد</Badge>}
+                                        {comment.isReadByAgent && isManager && <Badge variant="outline" className="text-xs px-1.5 py-0 border-green-400 text-green-600"><Check className="h-3 w-3 mr-1" />تمت القراءة</Badge>}
                                       </div>
                                       <div className="flex items-center gap-1">
-                                        <span className="text-xs text-muted-foreground">
-                                          {comment.createdAt ? format(new Date(comment.createdAt), "MMM d, yyyy h:mm a") : ""}
-                                        </span>
+                                        <span className="text-xs text-muted-foreground">{comment.createdAt ? format(new Date(comment.createdAt), "dd/MM HH:mm") : ""}</span>
                                         {isMyComment && !isBeingEdited && (
                                           <>
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              className="h-7 w-7 text-muted-foreground hover:text-amber-600"
-                                              onClick={() => {
-                                                setEditingCommentId(comment.id);
-                                                setEditingCommentContent(comment.content);
-                                              }}
-                                              data-testid={`button-edit-manager-comment-${comment.id}`}
-                                            >
-                                              <Edit2 className="h-3.5 w-3.5" />
-                                            </Button>
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                              onClick={() => deleteManagerCommentMutation.mutate(comment.id)}
-                                              data-testid={`button-delete-manager-comment-${comment.id}`}
-                                            >
-                                              <Trash2 className="h-3.5 w-3.5" />
-                                            </Button>
+                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditingCommentId(comment.id); setEditingCommentContent(comment.content); }} data-testid={`button-edit-manager-comment-${comment.id}`}><Edit2 className="h-3 w-3" /></Button>
+                                            <Button variant="ghost" size="icon" className="h-6 w-6 hover:text-destructive" onClick={() => deleteManagerCommentMutation.mutate(comment.id)} data-testid={`button-delete-manager-comment-${comment.id}`}><Trash2 className="h-3 w-3" /></Button>
                                           </>
                                         )}
                                         {isBeingEdited && (
                                           <>
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              className="h-7 w-7 text-green-600"
-                                              onClick={() => editManagerCommentMutation.mutate({ id: comment.id, content: editingCommentContent })}
-                                              disabled={!editingCommentContent.trim() || editManagerCommentMutation.isPending}
-                                              data-testid={`button-save-manager-comment-${comment.id}`}
-                                            >
-                                              <Check className="h-3.5 w-3.5" />
-                                            </Button>
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              className="h-7 w-7 text-muted-foreground"
-                                              onClick={() => {
-                                                setEditingCommentId(null);
-                                                setEditingCommentContent("");
-                                              }}
-                                              data-testid={`button-cancel-edit-manager-comment-${comment.id}`}
-                                            >
-                                              <X className="h-3.5 w-3.5" />
-                                            </Button>
+                                            <Button variant="ghost" size="icon" className="h-6 w-6 text-green-600" onClick={() => editManagerCommentMutation.mutate({ id: comment.id, content: editingCommentContent })} disabled={!editingCommentContent.trim()} data-testid={`button-save-manager-comment-${comment.id}`}><Check className="h-3 w-3" /></Button>
+                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditingCommentId(null); setEditingCommentContent(""); }} data-testid={`button-cancel-edit-manager-comment-${comment.id}`}><X className="h-3 w-3" /></Button>
                                           </>
                                         )}
                                       </div>
                                     </div>
                                     {isBeingEdited ? (
-                                      <Textarea
-                                        value={editingCommentContent}
-                                        onChange={(e) => setEditingCommentContent(e.target.value)}
-                                        rows={3}
-                                        className="mt-2 border-amber-200 focus:border-amber-400"
-                                        data-testid={`textarea-edit-manager-comment-${comment.id}`}
-                                      />
+                                      <Textarea value={editingCommentContent} onChange={(e) => setEditingCommentContent(e.target.value)} rows={3} className="mt-2 border-amber-200 focus:border-amber-400" data-testid={`textarea-edit-manager-comment-${comment.id}`} />
                                     ) : (
                                       <p className="text-sm mt-2 whitespace-pre-wrap">{comment.content}</p>
                                     )}
-                                    <p className="text-xs text-muted-foreground mt-2">
-                                      {comment.managerName}
-                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-1">{comment.managerName}</p>
                                   </CardContent>
                                 </Card>
                               </div>
                             );
                           }
 
+                          if (item.type === "communication") {
+                            const comm = item.data as Communication;
+                            const typeInfo = commIconMap[comm.type] || commIconMap.note;
+                            return (
+                              <div key={`comm-${comm.id}`} className="relative pl-10 rtl:pl-0 rtl:pr-10">
+                                <div className={`absolute left-2 top-2 w-4 h-4 rounded-full flex items-center justify-center rtl:left-auto rtl:right-2 ${typeInfo.color}`}>{typeInfo.icon}</div>
+                                <div className="p-3 rounded-md border text-sm">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <Badge variant="secondary" className={`text-xs ${typeInfo.color}`}>{commTypeLabel[comm.type] || comm.type}</Badge>
+                                    <span className="text-xs text-muted-foreground">{comm.createdAt && format(new Date(comm.createdAt), "dd/MM, HH:mm")}</span>
+                                  </div>
+                                  {comm.note && <p className="text-muted-foreground mt-1">{comm.note}</p>}
+                                  {comm.userName && <p className="text-xs text-muted-foreground mt-1">بواسطة: {comm.userName}</p>}
+                                </div>
+                              </div>
+                            );
+                          }
+
                           const historyItem = item.data as LeadHistory;
                           return (
-                            <div key={`h-${historyItem.id}`} className="relative pl-10">
-                              <div className="absolute left-2.5 top-2 h-3 w-3 rounded-full bg-primary" />
-                              <Card>
-                                <CardContent className="p-4">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <p className="font-medium">{historyItem.action}</p>
-                                    <span className="text-xs text-muted-foreground">
-                                      {historyItem.createdAt
-                                        ? format(new Date(historyItem.createdAt), "MMM d, yyyy h:mm a")
-                                        : ""}
-                                    </span>
-                                  </div>
-                                  {historyItem.description && (
-                                    <p className="text-sm text-muted-foreground mt-1">
-                                      {historyItem.description}
-                                    </p>
-                                  )}
-                                  {historyItem.performedBy && (
-                                    <p className="text-xs text-muted-foreground mt-2">
-                                      بواسطة {historyItem.performedBy}
-                                    </p>
-                                  )}
-                                </CardContent>
-                              </Card>
+                            <div key={`h-${historyItem.id}`} className="relative pl-10 rtl:pl-0 rtl:pr-10">
+                              <div className="absolute left-2.5 top-2 h-3 w-3 rounded-full bg-primary rtl:left-auto rtl:right-2.5" />
+                              <div className="p-3 rounded-md border text-sm">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="font-medium">{historyItem.action}</p>
+                                  <span className="text-xs text-muted-foreground">{historyItem.createdAt ? format(new Date(historyItem.createdAt), "dd/MM, HH:mm") : ""}</span>
+                                </div>
+                                {historyItem.description && <p className="text-muted-foreground mt-1">{historyItem.description}</p>}
+                                {historyItem.performedBy && <p className="text-xs text-muted-foreground mt-1">بواسطة {historyItem.performedBy}</p>}
+                              </div>
                             </div>
                           );
                         })}
                       </div>
                     </div>
                   );
-                })()
-              )}
-            </TabsContent>
+                })()}
+              </TabsContent>
 
-            <TabsContent value="actions" className="m-0 space-y-4">
-              {/* Lead Summary Bar */}
-              <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/40 px-4 py-3">
-                <div className="flex items-center gap-4 flex-wrap">
-                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <Clock className="h-3.5 w-3.5" />
-                    <span>آخر تواصل:</span>
-                    <span className="font-medium text-foreground">{lastContactDate}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <ClipboardList className="h-3.5 w-3.5" />
-                    <span>المكالمات:</span>
-                    <span className="font-medium text-foreground">{totalCalls}</span>
-                  </div>
-                </div>
-                <Badge
-                  variant="outline"
-                  className={`shrink-0 ${SCORE_COLORS[scoreInfo.score]}`}
-                  data-testid="badge-lead-score-actions"
-                >
-                  {scoreInfo.score === "hot" ? (
-                    <><Flame className="h-3 w-3 mr-1" />هوت</>
-                  ) : scoreInfo.score === "warm" ? (
-                    <><Thermometer className="h-3 w-3 mr-1" />وورم</>
-                  ) : (
-                    <><Snowflake className="h-3 w-3 mr-1" />كولد</>
-                  )}
-                </Badge>
-              </div>
-
-              {/* Call Section */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <Phone className="h-4 w-4 text-green-600" />
-                    اتصل الآن
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {lead.phone ? (
-                    <div className="flex gap-2">
-                      <Button variant="outline" className="flex-1 justify-start h-12 text-base" asChild>
-                        <a href={`tel:${lead.phone}`} data-testid="button-call-phone">
-                          <PhoneCall className="h-5 w-5 mr-2 text-green-600" />
-                          {lead.phone}
-                        </a>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="h-12 px-4 whitespace-nowrap"
-                        onClick={() => setShowLogCallForm(!showLogCallForm)}
-                        data-testid="button-toggle-log-call"
-                      >
-                        <ClipboardList className="h-4 w-4 mr-1" />
-                        سجّل مكالمة
-                      </Button>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-2">لا يوجد رقم هاتف</p>
-                  )}
-
-                  {showLogCallForm && (
-                    <div className="space-y-3 rounded-md border p-3 bg-muted/30">
-                      <div className="space-y-1">
-                        <label className="text-xs text-muted-foreground font-medium">نتيجة المكالمة</label>
-                        <Select value={callOutcome} onValueChange={setCallOutcome}>
-                          <SelectTrigger data-testid="select-call-outcome">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="answered">رد على المكالمة</SelectItem>
-                            <SelectItem value="no_answer">لم يرد</SelectItem>
-                            <SelectItem value="interested">مهتم</SelectItem>
-                            <SelectItem value="not_interested">غير مهتم</SelectItem>
-                            <SelectItem value="needs_time">يحتاج وقت</SelectItem>
-                            <SelectItem value="requested_visit">طلب زيارة</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-xs text-muted-foreground font-medium">ملاحظات (اختياري)</label>
-                        <Textarea
-                          value={callNote}
-                          onChange={(e) => setCallNote(e.target.value)}
-                          placeholder="أضف ملاحظات عن المكالمة..."
-                          rows={2}
-                          className="text-sm resize-none"
-                          data-testid="textarea-call-note"
-                        />
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          className="flex-1"
-                          onClick={() => logCallMutation.mutate()}
-                          disabled={logCallMutation.isPending}
-                          data-testid="button-save-call-log"
-                        >
-                          {logCallMutation.isPending ? "جاري الحفظ..." : "حفظ المكالمة"}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => setShowLogCallForm(false)}
-                          data-testid="button-cancel-log-call"
-                        >
-                          إلغاء
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* WhatsApp Section */}
-              <WhatsAppPanel lead={lead} agentName={currentUser ? `${currentUser.firstName ?? ""} ${currentUser.lastName ?? ""}`.trim() || currentUser.username : undefined} />
-
-              {/* Follow-up Scheduler */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <CalendarClock className="h-4 w-4 text-blue-600" />
-                    جدول متابعة
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <label className="text-xs text-muted-foreground mb-1 block">التاريخ</label>
-                      <Input
-                        type="date"
-                        value={followUpDate}
-                        onChange={(e) => setFollowUpDate(e.target.value)}
-                        min={format(new Date(), "yyyy-MM-dd")}
-                        className="h-11"
-                        data-testid="input-followup-date"
-                      />
-                    </div>
-                    <div className="w-28">
-                      <label className="text-xs text-muted-foreground mb-1 block">الوقت</label>
-                      <Input
-                        type="time"
-                        value={followUpTime}
-                        onChange={(e) => setFollowUpTime(e.target.value)}
-                        className="h-11"
-                        data-testid="input-followup-time"
-                      />
-                    </div>
-                  </div>
-                  <Button
-                    className="w-full h-11"
-                    onClick={() => createFollowUpMutation.mutate()}
-                    disabled={!followUpDate || createFollowUpMutation.isPending}
-                    data-testid="button-schedule-followup"
-                  >
-                    <CalendarClock className="h-4 w-4 mr-2" />
-                    {createFollowUpMutation.isPending ? "جاري الجدولة..." : "جدولة المتابعة"}
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Status Stepper */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm">تغيير الحالة</CardTitle>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs gap-1"
-                      onClick={() => setShowAllStates(!showAllStates)}
-                      data-testid="button-toggle-all-states"
-                    >
-                      {showAllStates ? "إخفاء" : "عرض كل الحالات"}
-                      <ChevronDown className={`h-3 w-3 transition-transform ${showAllStates ? "rotate-180" : ""}`} />
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {showAllStates ? (
-                    <div className="grid grid-cols-2 gap-2">
-                      {states.map((state) => (
-                        <Button
-                          key={state.id}
-                          variant={lead.stateId === state.id ? "default" : "outline"}
-                          size="sm"
-                          className="justify-start h-10"
-                          onClick={() => onUpdate({ stateId: state.id })}
-                          style={
-                            lead.stateId === state.id
-                              ? { backgroundColor: state.color, borderColor: state.color }
-                              : {}
-                          }
-                          data-testid={`button-state-${state.name.toLowerCase().replace(/\s+/g, "-")}`}
-                        >
-                          {state.name}
-                        </Button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {/* Horizontal stepper: show current + neighbors */}
-                      <div className="flex items-center gap-1 overflow-x-auto pb-1">
-                        {states.map((state, idx) => {
-                          const isCurrent = state.id === lead.stateId;
-                          const isNear = Math.abs(idx - currentStateIndex) <= 1;
-                          if (!isNear) return null;
-                          return (
-                            <div key={state.id} className="flex items-center gap-1 shrink-0">
-                              {idx > 0 && idx === currentStateIndex - 1 && (
-                                <ChevronLeft className="h-3 w-3 text-muted-foreground shrink-0" />
-                              )}
-                              <Button
-                                variant={isCurrent ? "default" : "outline"}
-                                size="sm"
-                                className={`h-9 px-3 text-xs whitespace-nowrap ${isCurrent ? "font-semibold shadow-sm" : "opacity-70"}`}
-                                onClick={() => !isCurrent && onUpdate({ stateId: state.id })}
-                                style={isCurrent ? { backgroundColor: state.color, borderColor: state.color } : {}}
-                                data-testid={`button-stepper-state-${state.id}`}
-                              >
-                                {isCurrent && <Check className="h-3 w-3 mr-1" />}
-                                {state.name}
-                              </Button>
-                              {idx < states.length - 1 && idx === currentStateIndex + 1 && (
-                                <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {/* Progress indicator — read-only visualization only */}
-                      {states.length > 0 && (
-                        <div className="flex gap-1" title="شريط تقدم الحالة">
-                          {states.map((state, idx) => (
-                            <div
-                              key={state.id}
-                              className="h-1 flex-1 rounded-full transition-all"
-                              style={{
-                                backgroundColor: idx <= currentStateIndex ? (currentState?.color || "#6366f1") : undefined,
-                                opacity: idx <= currentStateIndex ? 1 : 0.15,
-                              }}
-                              data-testid={`progress-state-${state.id}`}
-                            />
-                          ))}
+              {/* ═══════════════ TAB: الوحدات المهتم بها ═══════════════ */}
+              <TabsContent value="units" className="m-0">
+                <Card>
+                  <CardContent className="pt-4">
+                    {interests.length > 0 ? (
+                      <>
+                        {compareUnitIds.size >= 2 && (
+                          <div className="flex items-center gap-3 mb-4 p-3 bg-primary/5 border border-primary/20 rounded-lg" data-testid="lead-compare-bar">
+                            <span className="text-sm font-medium text-primary">{compareUnitIds.size} {t.unitsSelected || "وحدات"}</span>
+                            <Button size="sm" onClick={() => setIsCompareOpen(true)} className="gap-2" data-testid="button-lead-compare-units">
+                              <GitCompare className="h-4 w-4" />
+                              {t.compareUnits || "مقارنة"}
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setCompareUnitIds(new Set())} data-testid="button-lead-clear-compare">{t.clearSelection || "مسح"}</Button>
+                          </div>
+                        )}
+                        <div className="space-y-3">
+                          {interests.map((interest) => {
+                            const { unit, project } = getUnitDetails(interest.unitId);
+                            if (!unit) return null;
+                            const isSelected = compareUnitIds.has(unit.id);
+                            return (
+                              <div key={interest.id} className={`flex items-center justify-between p-3 rounded-md border ${isSelected ? "border-primary/40 bg-primary/5" : ""}`} data-testid={`unit-interest-${interest.id}`}>
+                                <div className="flex items-center gap-3">
+                                  <input type="checkbox" checked={isSelected} onChange={() => { setCompareUnitIds((prev) => { const next = new Set(prev); if (next.has(unit.id)) next.delete(unit.id); else if (next.size < 4) next.add(unit.id); return next; }); }} disabled={!isSelected && compareUnitIds.size >= 4} className="w-4 h-4 accent-primary cursor-pointer" data-testid={`checkbox-interest-${interest.id}`} />
+                                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10">
+                                    <Home className="h-4 w-4 text-primary" />
+                                  </div>
+                                  <div>
+                                    <p className="font-medium text-sm">{project?.name || "—"}</p>
+                                    <p className="text-xs text-muted-foreground">{t.unit || "وحدة"} {unit.unitNumber} - {unit.area}م² - {unit.bedrooms} {t.bedrooms || "غرف"}</p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div className="text-end">
+                                    <p className="font-bold text-sm">{unit.price?.toLocaleString()} {t.currency || "ج.م"}</p>
+                                    <Badge variant={interest.interestLevel === "high" ? "default" : "secondary"} className="text-xs">{interest.interestLevel}</Badge>
+                                  </div>
+                                  <Button size="sm" variant="outline" className="gap-1 h-8" onClick={() => setCalcUnitId(unit.id)} data-testid={`button-calc-interest-${interest.id}`}>
+                                    <Calculator className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
+                      </>
+                    ) : (
+                      <div className="flex h-32 items-center justify-center text-muted-foreground text-sm">{t.noDataToDisplay || "لا يوجد وحدات مهتم بها"}</div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
-            <TabsContent value="documents" className="m-0">
-              <DocumentsTab entityType="lead" entityId={lead.id} />
-            </TabsContent>
+              {/* ═══════════════ TAB: المستندات ═══════════════ */}
+              <TabsContent value="documents" className="m-0">
+                <DocumentsTab entityType="lead" entityId={lead.id} />
+              </TabsContent>
+
+            </div>
           </ScrollArea>
         </Tabs>
       </SheetContent>
     </Sheet>
 
+    {/* Transfer Dialog */}
     <Dialog open={showTransferDialog} onOpenChange={setShowTransferDialog}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t.transferLeadTo}</DialogTitle>
+          <DialogTitle>{t.transferLead || "تحويل الليد"}</DialogTitle>
         </DialogHeader>
-        <div className="py-4">
+        <div className="space-y-3 py-2">
           <Select value={transferToUserId} onValueChange={setTransferToUserId}>
             <SelectTrigger data-testid="select-transfer-agent">
-              <SelectValue placeholder={t.transferLeadTo} />
+              <SelectValue placeholder="اختر المندوب" />
             </SelectTrigger>
             <SelectContent>
               {(salesAgents || []).map((agent) => (
-                <SelectItem key={agent.id} value={agent.id} data-testid={`option-agent-${agent.id}`}>
+                <SelectItem key={agent.id} value={agent.id}>
                   {agent.fullName || agent.username}
                 </SelectItem>
               ))}
@@ -1314,19 +1413,29 @@ export function LeadDetailPanel({
           </Select>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setShowTransferDialog(false)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => lead && transferToUserId && transferMutation.mutate({ leadId: lead.id, toUserId: transferToUserId })}
-            disabled={!transferToUserId || transferMutation.isPending}
-            data-testid="button-confirm-transfer"
-          >
-            {t.transferLead}
+          <Button variant="outline" onClick={() => setShowTransferDialog(false)}>{t.cancel || "إلغاء"}</Button>
+          <Button onClick={() => lead && transferToUserId && transferMutation.mutate({ leadId: lead.id, toUserId: transferToUserId })} disabled={!transferToUserId || transferMutation.isPending} data-testid="button-confirm-transfer">
+            {transferMutation.isPending ? "جاري التحويل..." : t.transferLead || "تحويل"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Installment Calculator */}
+    {calcUnitId && (() => {
+      const { unit, project } = getUnitDetails(calcUnitId);
+      return unit ? (
+        <InstallmentCalculator unit={unit} projectName={project?.name} isOpen={!!calcUnitId} onClose={() => setCalcUnitId(null)} />
+      ) : null;
+    })()}
+
+    {/* Unit Compare */}
+    {isCompareOpen && compareUnitIds.size >= 2 && (() => {
+      const compareUnits = units.filter((u) => compareUnitIds.has(u.id));
+      return (
+        <UnitCompare units={compareUnits} projects={projects} isOpen={isCompareOpen} onClose={() => setIsCompareOpen(false)} />
+      );
+    })()}
     </>
   );
 }
