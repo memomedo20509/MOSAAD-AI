@@ -72,6 +72,9 @@ import {
   Copy,
   CheckCheck,
   Loader2,
+  Bot,
+  UserCheck,
+  RotateCcw,
 } from "lucide-react";
 import type {
   Lead,
@@ -441,6 +444,36 @@ export function LeadDetailPanel({
       queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "reminders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/reminders"] });
       toast({ title: t.reminderCompleted });
+    },
+  });
+
+  const botTakeoverMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/leads/${lead?.id}/bot/takeover`, {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      toast({ title: "تم تسلّم المحادثة — البوت تم إيقافه لهذا الليد" });
+    },
+    onError: () => {
+      toast({ title: "فشل في تسلّم المحادثة", variant: "destructive" });
+    },
+  });
+
+  const botReactivateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/leads/${lead?.id}/bot/reactivate`, {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      toast({ title: "تم إعادة تفعيل البوت لهذا الليد" });
+    },
+    onError: () => {
+      toast({ title: "فشل في إعادة تفعيل البوت", variant: "destructive" });
     },
   });
 
@@ -1139,6 +1172,62 @@ export function LeadDetailPanel({
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* Bot Status & Takeover */}
+                {lead.phone && (
+                  <div className={`rounded-lg border p-3 flex items-center justify-between gap-3 ${
+                    lead.botStage === "handed_off" || lead.botActive === false
+                      ? "border-gray-200 bg-gray-50 dark:bg-gray-900/20"
+                      : "border-blue-200 bg-blue-50 dark:bg-blue-900/20"
+                  }`} data-testid="card-bot-status">
+                    <div className="flex items-center gap-2">
+                      <Bot className={`h-4 w-4 shrink-0 ${
+                        lead.botStage === "handed_off" || lead.botActive === false
+                          ? "text-gray-400"
+                          : "text-blue-500"
+                      }`} />
+                      <div>
+                        <p className="text-xs font-medium">
+                          {lead.botStage === "handed_off" || lead.botActive === false
+                            ? "البوت متوقف — تحت إشراف المندوب"
+                            : "البوت يدير المحادثة"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {lead.botStage === "handed_off" || lead.botActive === false
+                            ? "المندوب تسلّم المحادثة يدوياً"
+                            : `المرحلة: ${lead.botStage ?? "greeting"}`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      {lead.botStage !== "handed_off" && lead.botActive !== false ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1 border-blue-300 text-blue-700 hover:bg-blue-100"
+                          onClick={() => botTakeoverMutation.mutate()}
+                          disabled={botTakeoverMutation.isPending}
+                          data-testid="button-bot-takeover"
+                        >
+                          <UserCheck className="h-3.5 w-3.5" />
+                          {botTakeoverMutation.isPending ? "جاري..." : "تسلّم المحادثة"}
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1"
+                          onClick={() => botReactivateMutation.mutate()}
+                          disabled={botReactivateMutation.isPending}
+                          data-testid="button-bot-reactivate"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          {botReactivateMutation.isPending ? "جاري..." : "إعادة البوت"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* WhatsApp Panel */}
                 {lead.phone && (

@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import type { BotStage } from "./ai";
 import { createServer, type Server } from "http";
 import path from "path";
 import fs from "fs";
@@ -48,6 +49,7 @@ import {
   updateLeadManagerCommentSchema,
   insertEmailReportSettingsSchema,
   insertMonthlyTargetSchema,
+  type Lead,
 } from "@shared/schema";
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
@@ -2812,6 +2814,88 @@ export async function registerRoutes(
     }
   });
 
+  // GET /api/chatbot/settings — get chatbot settings for current user
+  app.get("/api/chatbot/settings", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const settings = await storage.getChatbotSettings(userId);
+      res.json(settings ?? {
+        userId,
+        isActive: false,
+        workingHoursStart: 9,
+        workingHoursEnd: 18,
+        welcomeMessage: "أهلاً! 👋 أنا المساعد الذكي لشركتنا العقارية. يسعدني مساعدتك. ممكن تعرفني باسمك الكريم؟",
+      });
+    } catch (error) {
+      console.error("Error fetching chatbot settings:", error);
+      res.status(500).json({ error: "Failed to fetch chatbot settings" });
+    }
+  });
+
+  // PUT /api/chatbot/settings — upsert chatbot settings for current user
+  app.put("/api/chatbot/settings", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const { isActive, workingHoursStart, workingHoursEnd, welcomeMessage } = req.body;
+      const settings = await storage.upsertChatbotSettings({
+        userId,
+        isActive: isActive ?? false,
+        workingHoursStart: workingHoursStart ?? 9,
+        workingHoursEnd: workingHoursEnd ?? 18,
+        welcomeMessage: welcomeMessage ?? "أهلاً! 👋 أنا المساعد الذكي لشركتنا العقارية.",
+      });
+      res.json(settings);
+    } catch (error) {
+      console.error("Error saving chatbot settings:", error);
+      res.status(500).json({ error: "Failed to save chatbot settings" });
+    }
+  });
+
+  // POST /api/leads/:leadId/bot/takeover — agent takes over from bot
+  app.post("/api/leads/:leadId/bot/takeover", isAuthenticated, async (req, res) => {
+    try {
+      const leadId = req.params.leadId as string;
+      if (!(await canAccessLead(req.user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const lead = await storage.updateLead(leadId, { botActive: false, botStage: "handed_off" });
+      if (!lead) return res.status(404).json({ error: "Lead not found" });
+      await storage.createHistory({
+        leadId,
+        action: "تسلّم المحادثة",
+        description: `تسلّم المندوب ${req.user?.username || ""} المحادثة من البوت`,
+        performedBy: req.user?.username || "النظام",
+      });
+      res.json(lead);
+    } catch (error) {
+      console.error("Error taking over bot conversation:", error);
+      res.status(500).json({ error: "Failed to take over" });
+    }
+  });
+
+  // POST /api/leads/:leadId/bot/reactivate — reactivate bot for lead
+  app.post("/api/leads/:leadId/bot/reactivate", isAuthenticated, async (req, res) => {
+    try {
+      const leadId = req.params.leadId as string;
+      if (!(await canAccessLead(req.user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const lead = await storage.updateLead(leadId, { botActive: true, botStage: "greeting" });
+      if (!lead) return res.status(404).json({ error: "Lead not found" });
+      res.json(lead);
+    } catch (error) {
+      console.error("Error reactivating bot:", error);
+      res.status(500).json({ error: "Failed to reactivate bot" });
+    }
+  });
+
+  // Helper: check if current time is outside working hours for chatbot
+  function isOutsideWorkingHours(startHour: number, endHour: number): boolean {
+    const now = new Date();
+    const currentHour = now.getHours();
+    return currentHour < startHour || currentHour >= endHour;
+  }
+
   // Helper: register incoming WhatsApp message handler for a user
   function registerWAIncomingHandler(userId: string): void {
     setIncomingMessageHandler(userId, async (msg: IncomingWAMessage) => {
@@ -2849,6 +2933,11 @@ export async function registerRoutes(
           console.log(`[WhatsApp] Auto-created lead ${lead.id} for phone ${phone}`);
         }
 
+        // Determine if this is the very first bot interaction BEFORE logging inbound message
+        // A first interaction means: no prior outbound bot messages exist for this lead
+        const priorMessages = await storage.getWhatsappConversation(lead.id);
+        const isFirstBotInteraction = priorMessages.filter(m => m.direction === "outbound" && m.agentName === "البوت").length === 0;
+
         // Save inbound message (use WhatsApp message timestamp as createdAt for accurate ordering)
         await storage.logWhatsappMessage({
           leadId: lead.id,
@@ -2861,7 +2950,8 @@ export async function registerRoutes(
           messageText: msg.messageText,
           messageId: msg.messageId || null,
           createdAt: msg.timestamp,
-        } as any);
+          isRead: false,
+        });
 
         // Add to lead history
         await storage.createHistory({
@@ -2870,6 +2960,118 @@ export async function registerRoutes(
           description: `رسالة من ${phone}: ${msg.messageText.substring(0, 100)}${msg.messageText.length > 100 ? "..." : ""}`,
           performedBy: "واتساب",
         });
+
+        // ── Chatbot Logic ───────────────────────────────────────────────────
+        try {
+          const botSettings = await storage.getChatbotSettings(userId);
+          const botEnabled = botSettings?.isActive === true;
+          const leadBotActive = lead.botActive !== false; // default true
+
+          if (botEnabled && leadBotActive && lead.botStage !== "handed_off") {
+            // Bot only responds outside working hours (after-hours auto-reply)
+            const outsideHours = isOutsideWorkingHours(
+              botSettings?.workingHoursStart ?? 9,
+              botSettings?.workingHoursEnd ?? 18
+            );
+
+            if (outsideHours) {
+              const { generateBotReply } = await import("./ai");
+              const currentStage: BotStage = (lead.botStage as BotStage) ?? "greeting";
+
+              // Use priorMessages (fetched before inbound was logged) for context
+              // Get active projects for context
+              const allProjects = await storage.getAllProjects();
+              const activeProjects = allProjects.filter(p => p.isActive !== false);
+
+              const botResult = await generateBotReply(
+                msg.messageText,
+                currentStage,
+                lead,
+                priorMessages,
+                activeProjects,
+                botSettings?.welcomeMessage ?? undefined,
+                isFirstBotInteraction
+              );
+
+              // Build typed lead updates
+              const leadUpdates: Partial<Lead> = {
+                botStage: botResult.nextStage,
+              };
+              if (botResult.extractedName && (!lead.name || lead.name.startsWith("واتساب -"))) {
+                leadUpdates.name = botResult.extractedName;
+              }
+              if (botResult.extractedBudget && !lead.budget) {
+                leadUpdates.budget = botResult.extractedBudget;
+              }
+              if (botResult.extractedUnitType && !lead.unitType) {
+                leadUpdates.unitType = botResult.extractedUnitType;
+              }
+              if (botResult.extractedBedrooms && !lead.bedrooms) {
+                leadUpdates.bedrooms = botResult.extractedBedrooms;
+              }
+
+              // Server-side enforcement: handoff only when ALL 4 fields are collected
+              const resolvedName = leadUpdates.name || lead.name;
+              const resolvedBudget = leadUpdates.budget || lead.budget;
+              const resolvedUnit = leadUpdates.unitType || lead.unitType;
+              const resolvedBedrooms = leadUpdates.bedrooms || lead.bedrooms;
+              const allFieldsCollected = !!(resolvedName && !resolvedName.startsWith("واتساب -") && resolvedBudget && resolvedUnit && resolvedBedrooms);
+
+              if (botResult.shouldHandoff && allFieldsCollected) {
+                leadUpdates.botActive = false;
+                leadUpdates.botStage = "handed_off";
+
+                // Send handoff message to client
+                const handoffMsg = "شكراً جزيلاً على وقتك! 🙏 سيتواصل معك أحد مستشارينا في أقرب وقت ممكن.";
+                await sendWhatsAppMessage(userId, phone, handoffMsg);
+                await storage.logWhatsappMessage({
+                  leadId: lead.id,
+                  agentId: null,
+                  agentName: "البوت",
+                  templateId: null,
+                  templateName: null,
+                  phone,
+                  direction: "outbound",
+                  messageText: handoffMsg,
+                  messageId: null,
+                  isRead: false,
+                });
+
+                // Notify assigned agent about handoff
+                const handoffSummary = `بيانات العميل: ${resolvedName || phone} | الميزانية: ${resolvedBudget || "لم تُحدد"} | نوع الوحدة: ${resolvedUnit || "لم تُحدد"} | الغرف: ${resolvedBedrooms || "لم تُحدد"}`;
+                const notifTarget = lead.assignedTo || userId;
+                await storage.createNotification({
+                  userId: notifTarget,
+                  type: "bot_handoff",
+                  message: `🤖 البوت أحال عميلاً للمتابعة — ${resolvedName || phone}: ${handoffSummary}`,
+                  leadId: lead.id,
+                  isRead: false,
+                });
+              } else {
+                // Send bot reply
+                await sendWhatsAppMessage(userId, phone, botResult.reply);
+                await storage.logWhatsappMessage({
+                  leadId: lead.id,
+                  agentId: null,
+                  agentName: "البوت",
+                  templateId: null,
+                  templateName: null,
+                  phone,
+                  direction: "outbound",
+                  messageText: botResult.reply,
+                  messageId: null,
+                  isRead: false,
+                });
+              }
+
+              // Apply updates to lead
+              await storage.updateLead(lead.id, leadUpdates);
+            }
+          }
+        } catch (botErr) {
+          console.error("[Chatbot] Bot reply error:", botErr);
+        }
+        // ── End Chatbot Logic ────────────────────────────────────────────────
 
         // Create notification for the assigned agent
         const notifUserId = lead.assignedTo || userId;

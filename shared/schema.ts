@@ -51,6 +51,8 @@ export const leads = pgTable("leads", {
   responseTimeMinutes: integer("response_time_minutes"),
   score: varchar("score", { length: 10 }).default("warm"),
   aiAnalyzedAt: timestamp("ai_analyzed_at"),
+  botActive: boolean("bot_active").default(true),
+  botStage: text("bot_stage").default("greeting"),
 });
 
 export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true, firstContactAt: true, responseTimeMinutes: true, aiAnalyzedAt: true }).extend({
@@ -370,7 +372,9 @@ export const whatsappMessagesLog = pgTable("whatsapp_messages_log", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertWhatsappMessagesLogSchema = createInsertSchema(whatsappMessagesLog).omit({ id: true, createdAt: true });
+export const insertWhatsappMessagesLogSchema = createInsertSchema(whatsappMessagesLog).omit({ id: true }).extend({
+  createdAt: z.coerce.date().optional(),
+});
 export type InsertWhatsappMessagesLog = z.infer<typeof insertWhatsappMessagesLogSchema>;
 export type WhatsappMessagesLog = typeof whatsappMessagesLog.$inferSelect;
 
@@ -430,6 +434,23 @@ export const updateMonthlyTargetSchema = insertMonthlyTargetSchema.partial();
 export type InsertMonthlyTarget = z.infer<typeof insertMonthlyTargetSchema>;
 export type UpdateMonthlyTarget = z.infer<typeof updateMonthlyTargetSchema>;
 export type MonthlyTarget = typeof monthlyTargets.$inferSelect;
+
+// Chatbot Settings (per user/manager)
+export const chatbotSettings = pgTable("chatbot_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().unique(),
+  isActive: boolean("is_active").default(false),
+  workingHoursStart: integer("working_hours_start").default(9),
+  workingHoursEnd: integer("working_hours_end").default(18),
+  welcomeMessage: text("welcome_message").default("أهلاً! 👋 أنا المساعد الذكي لشركتنا العقارية. يسعدني مساعدتك. ممكن تعرفني باسمك الكريم؟"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertChatbotSettingsSchema = createInsertSchema(chatbotSettings).omit({ id: true, updatedAt: true });
+export const updateChatbotSettingsSchema = insertChatbotSettingsSchema.partial().omit({ userId: true });
+export type InsertChatbotSettings = z.infer<typeof insertChatbotSettingsSchema>;
+export type UpdateChatbotSettings = z.infer<typeof updateChatbotSettingsSchema>;
+export type ChatbotSettings = typeof chatbotSettings.$inferSelect;
 
 // Export auth models (users, teams, sessions, role_permissions)
 export * from "./models/auth";

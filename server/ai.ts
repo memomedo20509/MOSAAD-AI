@@ -1,4 +1,4 @@
-import type { Lead, WhatsappMessagesLog } from "@shared/schema";
+import type { Lead, WhatsappMessagesLog, Project } from "@shared/schema";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
@@ -190,6 +190,130 @@ interface ParsedAnalysis {
   bedrooms?: unknown;
   interestLevel?: unknown;
   summary?: unknown;
+}
+
+export type BotStage =
+  | "greeting"
+  | "collecting_name"
+  | "collecting_budget"
+  | "collecting_unit"
+  | "collecting_rooms"
+  | "qualified"
+  | "handed_off";
+
+export interface BotReplyResult {
+  reply: string;
+  nextStage: BotStage;
+  extractedName?: string | null;
+  extractedBudget?: string | null;
+  extractedUnitType?: string | null;
+  extractedBedrooms?: number | null;
+  shouldHandoff: boolean;
+}
+
+interface ParsedBotReply {
+  reply?: unknown;
+  nextStage?: unknown;
+  extractedName?: unknown;
+  extractedBudget?: unknown;
+  extractedUnitType?: unknown;
+  extractedBedrooms?: unknown;
+  shouldHandoff?: unknown;
+}
+
+export async function generateBotReply(
+  currentMessage: string,
+  currentStage: BotStage,
+  lead: Lead,
+  recentMessages: WhatsappMessagesLog[],
+  projects: Project[],
+  welcomeMessage?: string,
+  isFirstInteraction?: boolean
+): Promise<BotReplyResult> {
+  const projectsInfo = projects.length > 0
+    ? projects.map(p => `- ${p.name}: ${p.type ?? ""} في ${p.location ?? ""}, السعر من ${p.minPrice?.toLocaleString() ?? "?"} إلى ${p.maxPrice?.toLocaleString() ?? "?"} جنيه, ${p.description ?? ""}`).join("\n")
+    : "لا توجد مشاريع مسجّلة حالياً.";
+
+  const conversationHistory = recentMessages
+    .slice(-6)
+    .map(m => `${m.direction === "inbound" ? "العميل" : "البوت"}: ${m.messageText}`)
+    .join("\n");
+
+  const leadInfo = buildLeadContext(lead);
+
+  // Use the explicitly passed isFirstInteraction flag (computed before inbound is logged)
+  const greetingInstruction = (isFirstInteraction && welcomeMessage && currentStage === "greeting")
+    ? `للتحية الأولى استخدم هذه الرسالة تحديداً: "${welcomeMessage}"`
+    : "ابدأ بتحية ودية واسأل عن الاسم";
+
+  const systemPrompt = `أنت بوت مبيعات عقارية ذكي يرد على العملاء عبر واتساب بالعربية المصرية الودية.
+مهمتك جمع بيانات العميل (الاسم، الميزانية، نوع الوحدة، عدد الغرف) قبل تحويله للمندوب.
+
+المشاريع المتاحة في الشركة:
+${projectsInfo}
+
+البيانات المجمّعة للعميل حتى الآن: ${leadInfo}
+
+مراحل المحادثة:
+- greeting: ${greetingInstruction}
+- collecting_name: اسأل عن الميزانية بعد معرفة الاسم
+- collecting_budget: اسأل عن نوع الوحدة بعد الميزانية
+- collecting_unit: اسأل عن عدد الغرف
+- collecting_rooms: أكمل البيانات وانتقل لـ qualified
+- qualified: البيانات اكتملت (اسم + ميزانية + نوع وحدة + غرف)، جهّز للتحويل للمندوب
+
+القواعد:
+- ردود قصيرة ومودبة (3-5 جمل)
+- اللهجة المصرية الودية
+- لو العميل سأل عن مشروع معين، أجب بمعلوماته من القائمة أعلاه
+- shouldHandoff = true فقط لو اكتملت البيانات الأربعة: الاسم والميزانية ونوع الوحدة وعدد الغرف
+- استخرج البيانات من رسالة العميل إذا وُجدت
+
+أرجع JSON فقط بهذا الشكل:
+{
+  "reply": "نص الرد بالعربية",
+  "nextStage": "اسم المرحلة التالية",
+  "extractedName": "الاسم أو null",
+  "extractedBudget": "الميزانية أو null",
+  "extractedUnitType": "نوع الوحدة أو null",
+  "extractedBedrooms": عدد الغرف كرقم أو null,
+  "shouldHandoff": true أو false
+}`;
+
+  const userPrompt = `المرحلة الحالية: ${currentStage}
+سجل المحادثة:
+${conversationHistory}
+
+آخر رسالة من العميل: ${currentMessage}
+
+رد على العميل وانتقل للمرحلة المناسبة.`;
+
+  const raw = await callGemini(systemPrompt, userPrompt);
+
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    return {
+      reply: "شكراً على تواصلك! سيتواصل معك أحد مستشارينا قريباً.",
+      nextStage: currentStage,
+      shouldHandoff: false,
+    };
+  }
+
+  const parsed = JSON.parse(jsonMatch[0]) as ParsedBotReply;
+  const validStages: BotStage[] = ["greeting", "collecting_name", "collecting_budget", "collecting_unit", "collecting_rooms", "qualified", "handed_off"];
+  const nextStage = validStages.includes(parsed.nextStage as BotStage)
+    ? (parsed.nextStage as BotStage)
+    : currentStage;
+
+  return {
+    reply: typeof parsed.reply === "string" ? parsed.reply : "شكراً على تواصلك!",
+    nextStage,
+    extractedName: typeof parsed.extractedName === "string" ? parsed.extractedName : null,
+    extractedBudget: typeof parsed.extractedBudget === "string" ? parsed.extractedBudget : null,
+    extractedUnitType: typeof parsed.extractedUnitType === "string" ? parsed.extractedUnitType : null,
+    extractedBedrooms: typeof parsed.extractedBedrooms === "number" ? parsed.extractedBedrooms : null,
+    shouldHandoff: parsed.shouldHandoff === true,
+  };
 }
 
 export async function analyzeLead(

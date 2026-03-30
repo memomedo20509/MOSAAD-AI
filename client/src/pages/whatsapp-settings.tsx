@@ -5,7 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Wifi, WifiOff, RefreshCw, SmartphoneNfc, CheckCircle2, AlertCircle, XCircle, Trash2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { ArrowLeft, Wifi, WifiOff, RefreshCw, SmartphoneNfc, CheckCircle2, AlertCircle, XCircle, Trash2, Bot, Clock, MessageSquare, Save } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -17,14 +21,44 @@ interface WaStatusResponse {
   errorMessage: string | null;
 }
 
+interface ChatbotSettings {
+  userId?: string;
+  isActive: boolean;
+  workingHoursStart: number;
+  workingHoursEnd: number;
+  welcomeMessage: string;
+}
+
 export default function WhatsAppSettingsPage() {
   const { toast } = useToast();
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const [botForm, setBotForm] = useState<ChatbotSettings>({
+    isActive: false,
+    workingHoursStart: 9,
+    workingHoursEnd: 18,
+    welcomeMessage: "أهلاً! 👋 أنا المساعد الذكي لشركتنا العقارية. يسعدني مساعدتك. ممكن تعرفني باسمك الكريم؟",
+  });
 
   const { data, isLoading, refetch } = useQuery<WaStatusResponse>({
     queryKey: ["/api/whatsapp/status"],
     refetchInterval: false,
   });
+
+  const { data: botSettings, isLoading: botLoading } = useQuery<ChatbotSettings>({
+    queryKey: ["/api/chatbot/settings"],
+  });
+
+  useEffect(() => {
+    if (botSettings) {
+      setBotForm({
+        isActive: botSettings.isActive ?? false,
+        workingHoursStart: botSettings.workingHoursStart ?? 9,
+        workingHoursEnd: botSettings.workingHoursEnd ?? 18,
+        welcomeMessage: botSettings.welcomeMessage ?? "أهلاً! 👋 أنا المساعد الذكي لشركتنا العقارية. يسعدني مساعدتك. ممكن تعرفني باسمك الكريم؟",
+      });
+    }
+  }, [botSettings]);
 
   const status = data?.status ?? "disconnected";
   const qrDataUrl = data?.qrDataUrl ?? null;
@@ -90,6 +124,20 @@ export default function WhatsAppSettingsPage() {
     },
   });
 
+  const saveBotSettingsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PUT", "/api/chatbot/settings", botForm);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/chatbot/settings"] });
+      toast({ title: "تم حفظ إعدادات الشات بوت بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "فشل في حفظ الإعدادات", variant: "destructive" });
+    },
+  });
+
   const statusConfig: Record<WaStatus, { label: string; color: string; icon: JSX.Element }> = {
     connected: {
       label: "متصل",
@@ -116,6 +164,12 @@ export default function WhatsAppSettingsPage() {
   const cfg = statusConfig[status];
   const isResetting = resetMutation.isPending;
   const isConnecting = connectMutation.isPending;
+
+  const formatHour = (h: number) => {
+    const period = h < 12 ? "ص" : "م";
+    const display = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    return `${display} ${period}`;
+  };
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -161,7 +215,6 @@ export default function WhatsAppSettingsPage() {
                 <div className="space-y-3">
                   {errorMessage ? (
                     <>
-                      {/* Error state: show clear explanation + reset button */}
                       <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/10 p-4 flex items-start gap-3">
                         <XCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
                         <div>
@@ -170,7 +223,6 @@ export default function WhatsAppSettingsPage() {
                         </div>
                       </div>
 
-                      {/* Primary fix: clear old data and reconnect */}
                       <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/10 p-4 space-y-3">
                         <div className="flex items-start gap-3">
                           <Trash2 className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
@@ -194,7 +246,6 @@ export default function WhatsAppSettingsPage() {
                         </Button>
                       </div>
 
-                      {/* Secondary: simple retry without clearing */}
                       <Button
                         variant="outline"
                         onClick={() => connectMutation.mutate()}
@@ -306,6 +357,136 @@ export default function WhatsAppSettingsPage() {
                   </Button>
                 </div>
               )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Chatbot Settings Section ── */}
+      <Card data-testid="card-chatbot-settings">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Bot className="h-5 w-5 text-primary" />
+              <div>
+                <CardTitle className="text-base">الشات بوت الذكي</CardTitle>
+                <CardDescription>ردود تلقائية ذكية على العملاء بعد ساعات الدوام</CardDescription>
+              </div>
+            </div>
+            <Badge
+              variant="outline"
+              className={botForm.isActive
+                ? "bg-green-100 text-green-700 border-green-200"
+                : "bg-gray-100 text-gray-600 border-gray-200"
+              }
+              data-testid="badge-bot-status"
+            >
+              {botForm.isActive ? "مفعّل" : "معطّل"}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {botLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+            </div>
+          ) : (
+            <>
+              {/* Toggle */}
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <Label className="text-sm font-medium" htmlFor="bot-toggle">تفعيل الشات بوت</Label>
+                  <p className="text-xs text-muted-foreground">عند التفعيل، البوت يرد تلقائياً على الليدز الجدد</p>
+                </div>
+                <Switch
+                  id="bot-toggle"
+                  checked={botForm.isActive}
+                  onCheckedChange={(v) => setBotForm(f => ({ ...f, isActive: v }))}
+                  data-testid="switch-bot-active"
+                />
+              </div>
+
+              {/* Working Hours */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <span>ساعات الدوام</span>
+                </div>
+                <p className="text-xs text-muted-foreground">البوت يرد تلقائياً خارج ساعات الدوام هذه</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">بداية الدوام</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={23}
+                        value={botForm.workingHoursStart}
+                        onChange={(e) => setBotForm(f => ({ ...f, workingHoursStart: parseInt(e.target.value) || 0 }))}
+                        className="w-20 text-center"
+                        data-testid="input-bot-hours-start"
+                      />
+                      <span className="text-sm text-muted-foreground">{formatHour(botForm.workingHoursStart)}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">نهاية الدوام</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={23}
+                        value={botForm.workingHoursEnd}
+                        onChange={(e) => setBotForm(f => ({ ...f, workingHoursEnd: parseInt(e.target.value) || 18 }))}
+                        className="w-20 text-center"
+                        data-testid="input-bot-hours-end"
+                      />
+                      <span className="text-sm text-muted-foreground">{formatHour(botForm.workingHoursEnd)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Welcome Message */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                  <span>رسالة الترحيب</span>
+                </div>
+                <Textarea
+                  value={botForm.welcomeMessage}
+                  onChange={(e) => setBotForm(f => ({ ...f, welcomeMessage: e.target.value }))}
+                  rows={3}
+                  placeholder="أهلاً! أنا المساعد الذكي..."
+                  className="resize-none text-sm"
+                  dir="rtl"
+                  data-testid="textarea-bot-welcome"
+                />
+                <p className="text-xs text-muted-foreground">هذه الرسالة ستُرسل تلقائياً كأول رد للعميل الجديد</p>
+              </div>
+
+              {/* Info Box */}
+              <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-900/10 p-3 space-y-1.5">
+                <p className="text-xs font-medium text-blue-700 dark:text-blue-400">كيف يعمل البوت؟</p>
+                <ul className="text-xs text-blue-600 dark:text-blue-500 space-y-1 list-disc list-inside">
+                  <li>يرد تلقائياً على الرسائل الواردة بعد ساعات الدوام</li>
+                  <li>يجمع بيانات العميل: الاسم، الميزانية، نوع الوحدة، عدد الغرف</li>
+                  <li>يجيب على أسئلة المشاريع من قاعدة البيانات</li>
+                  <li>بعد جمع البيانات، يحيل العميل للمندوب المعيّن</li>
+                  <li>المندوب يمكنه تعطيل البوت لأي ليد من بانيل الليد</li>
+                </ul>
+              </div>
+
+              <Button
+                className="w-full"
+                onClick={() => saveBotSettingsMutation.mutate()}
+                disabled={saveBotSettingsMutation.isPending}
+                data-testid="button-save-bot-settings"
+              >
+                <Save className="h-4 w-4 mr-2" />
+                {saveBotSettingsMutation.isPending ? "جاري الحفظ..." : "حفظ إعدادات الشات بوت"}
+              </Button>
             </>
           )}
         </CardContent>

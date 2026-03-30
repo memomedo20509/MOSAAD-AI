@@ -27,6 +27,7 @@ import {
   leadManagerComments,
   emailReportSettings,
   monthlyTargets,
+  chatbotSettings,
   type User,
   type InsertUser,
   type UpdateUser,
@@ -79,6 +80,9 @@ import {
   type MonthlyTarget,
   type InsertMonthlyTarget,
   type UpdateMonthlyTarget,
+  type ChatbotSettings,
+  type InsertChatbotSettings,
+  type UpdateChatbotSettings,
 } from "@shared/schema";
 
 const PostgresSessionStore = connectPg(session);
@@ -315,6 +319,11 @@ export interface IStorage {
     leadsCount: number;
     commissionTotal: number;
   }[]>;
+
+  // Chatbot Settings
+  getChatbotSettings(userId: string): Promise<ChatbotSettings | undefined>;
+  upsertChatbotSettings(data: InsertChatbotSettings): Promise<ChatbotSettings>;
+  updateChatbotSettings(userId: string, data: UpdateChatbotSettings): Promise<ChatbotSettings | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1670,6 +1679,33 @@ export class DatabaseStorage implements IStorage {
         commissionTotal,
       };
     });
+  }
+
+  // Chatbot Settings
+  async getChatbotSettings(userId: string): Promise<ChatbotSettings | undefined> {
+    const [settings] = await db.select().from(chatbotSettings).where(eq(chatbotSettings.userId, userId));
+    return settings;
+  }
+
+  async upsertChatbotSettings(data: InsertChatbotSettings): Promise<ChatbotSettings> {
+    const existing = await this.getChatbotSettings(data.userId);
+    if (existing) {
+      const [updated] = await db.update(chatbotSettings)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(chatbotSettings.userId, data.userId))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(chatbotSettings).values(data).returning();
+    return created;
+  }
+
+  async updateChatbotSettings(userId: string, data: UpdateChatbotSettings): Promise<ChatbotSettings | undefined> {
+    const [updated] = await db.update(chatbotSettings)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(chatbotSettings.userId, userId))
+      .returning();
+    return updated;
   }
 }
 
