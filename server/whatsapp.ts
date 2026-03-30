@@ -77,10 +77,13 @@ export async function startConnection(userId: string): Promise<WaSession> {
   }, 45000);
 
   try {
-    // Clean up potentially corrupted auth state before retrying
-    if (!fs.existsSync(sessionDir)) {
-      fs.mkdirSync(sessionDir, { recursive: true });
-    }
+    // Always start fresh — delete any previously corrupted auth state
+    try {
+      if (fs.existsSync(sessionDir)) {
+        fs.rmSync(sessionDir, { recursive: true, force: true });
+      }
+    } catch {}
+    fs.mkdirSync(sessionDir, { recursive: true });
 
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
 
