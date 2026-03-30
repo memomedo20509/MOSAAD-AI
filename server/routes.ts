@@ -1894,15 +1894,15 @@ export async function registerRoutes(
               user?.teamId
             );
             imported++;
-          } catch (err: any) {
-            errors.push({ row: i + 2, reason: err.message ?? "خطأ غير معروف" });
+          } catch (err) {
+            errors.push({ row: i + 2, reason: err instanceof Error ? err.message : "خطأ غير معروف" });
           }
         }
 
         res.json({ imported, errors, total: rows.length });
-      } catch (error: any) {
+      } catch (error) {
         console.error("Import error:", error);
-        res.status(400).json({ error: error.message ?? "Failed to import leads" });
+        res.status(400).json({ error: error instanceof Error ? error.message : "Failed to import leads" });
       }
     }
   );
@@ -2741,9 +2741,10 @@ export async function registerRoutes(
       const { suggestReplies } = await import("./ai");
       const result = await suggestReplies(messages, lead);
       res.json(result);
-    } catch (error: any) {
+    } catch (error) {
       console.error("[AI] suggest-replies error:", error);
-      res.status(500).json({ error: error?.message || "AI request failed" });
+      const msg = error instanceof Error ? error.message : "AI request failed";
+      res.status(500).json({ error: msg });
     }
   });
 
@@ -2761,9 +2762,10 @@ export async function registerRoutes(
       const { analyzeLead } = await import("./ai");
       const result = await analyzeLead(messages, lead);
       res.json(result);
-    } catch (error: any) {
+    } catch (error) {
       console.error("[AI] analyze error:", error);
-      res.status(500).json({ error: error?.message || "AI request failed" });
+      const msg = error instanceof Error ? error.message : "AI request failed";
+      res.status(500).json({ error: msg });
     }
   });
 

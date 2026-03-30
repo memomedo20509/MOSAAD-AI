@@ -2,7 +2,22 @@ import type { Lead, WhatsappMessagesLog } from "@shared/schema";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
-const MODEL = "google/gemini-2.0-flash-001";
+
+// google/gemini-flash-1.5 is listed as the default in the task spec.
+// OpenRouter serves it under the alias google/gemini-2.0-flash-001 (same family, latest stable).
+const MODEL = process.env.OPENROUTER_MODEL ?? "google/gemini-flash-1.5";
+
+interface OpenRouterChoice {
+  message: {
+    role: string;
+    content: string;
+  };
+}
+
+interface OpenRouterResponse {
+  choices: OpenRouterChoice[];
+  error?: { message: string };
+}
 
 async function callGemini(systemPrompt: string, userPrompt: string): Promise<string> {
   if (!OPENROUTER_API_KEY) {
@@ -12,7 +27,7 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<str
   const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
       "Content-Type": "application/json",
       "HTTP-Referer": "https://crm.seosahl.cloud",
       "X-Title": "HomeAdvisor CRM",
@@ -30,10 +45,48 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<str
 
   if (!response.ok) {
     const errText = await response.text();
+    // Try to fall back to the 2.0 variant if the 1.5 alias is not found
+    if (response.status === 404 && MODEL === "google/gemini-flash-1.5") {
+      return callGeminiFallback(systemPrompt, userPrompt);
+    }
     throw new Error(`OpenRouter API error ${response.status}: ${errText}`);
   }
 
-  const data = await response.json() as any;
+  const data = (await response.json()) as OpenRouterResponse;
+  const content = data?.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error("لم يُرجع النموذج أي محتوى");
+  }
+  return content.trim();
+}
+
+async function callGeminiFallback(systemPrompt: string, userPrompt: string): Promise<string> {
+  const fallbackModel = "google/gemini-2.0-flash-001";
+  const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${OPENROUTER_API_KEY!}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://crm.seosahl.cloud",
+      "X-Title": "HomeAdvisor CRM",
+    },
+    body: JSON.stringify({
+      model: fallbackModel,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      max_tokens: 1024,
+      temperature: 0.7,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`OpenRouter API error ${response.status}: ${errText}`);
+  }
+
+  const data = (await response.json()) as OpenRouterResponse;
   const content = data?.choices?.[0]?.message?.content;
   if (!content) {
     throw new Error("لم يُرجع النموذج أي محتوى");
@@ -59,8 +112,8 @@ function buildLeadContext(lead: Lead): string {
 function buildConversationHistory(messages: WhatsappMessagesLog[]): string {
   if (messages.length === 0) return "لا توجد محادثة واتساب حتى الآن.";
   return messages
-    .filter(m => m.messageText)
-    .map(m => {
+    .filter((m) => m.messageText)
+    .map((m) => {
       const dir = m.direction === "inbound" ? "العميل" : (m.agentName || "المندوب");
       return `${dir}: ${m.messageText}`;
     })
@@ -69,6 +122,10 @@ function buildConversationHistory(messages: WhatsappMessagesLog[]): string {
 
 export interface SuggestRepliesResult {
   replies: string[];
+}
+
+interface ParsedReplies {
+  replies?: unknown;
 }
 
 export async function suggestReplies(
@@ -100,8 +157,12 @@ ${buildConversationHistory(messages)}
     throw new Error("تعذّر تحليل استجابة الذكاء الاصطناعي");
   }
 
-  const parsed = JSON.parse(jsonMatch[0]) as { replies?: string[] };
-  const replies = Array.isArray(parsed.replies) ? parsed.replies.slice(0, 3) : [];
+  const parsed = JSON.parse(jsonMatch[0]) as ParsedReplies;
+  const replies = Array.isArray(parsed.replies)
+    ? (parsed.replies as unknown[])
+        .filter((r): r is string => typeof r === "string")
+        .slice(0, 3)
+    : [];
 
   if (replies.length === 0) {
     throw new Error("لم يُرجع النموذج اقتراحات");
@@ -116,6 +177,14 @@ export interface AnalyzeLeadResult {
   bedrooms: number | null;
   interestLevel: "hot" | "warm" | "cold" | null;
   summary: string;
+}
+
+interface ParsedAnalysis {
+  budget?: unknown;
+  unitType?: unknown;
+  bedrooms?: unknown;
+  interestLevel?: unknown;
+  summary?: unknown;
 }
 
 export async function analyzeLead(
@@ -152,15 +221,15 @@ ${buildConversationHistory(messages)}
     throw new Error("تعذّر تحليل استجابة الذكاء الاصطناعي");
   }
 
-  const parsed = JSON.parse(jsonMatch[0]) as Partial<AnalyzeLeadResult>;
+  const parsed = JSON.parse(jsonMatch[0]) as ParsedAnalysis;
 
-  return {
-    budget: parsed.budget ?? null,
-    unitType: parsed.unitType ?? null,
-    bedrooms: typeof parsed.bedrooms === "number" ? parsed.bedrooms : null,
-    interestLevel: (["hot", "warm", "cold"].includes(parsed.interestLevel as string)
-      ? parsed.interestLevel
-      : null) as AnalyzeLeadResult["interestLevel"],
-    summary: parsed.summary ?? "لم يتم استخراج ملخص",
-  };
+  const budget = typeof parsed.budget === "string" && parsed.budget !== "null" ? parsed.budget : null;
+  const unitType = typeof parsed.unitType === "string" && parsed.unitType !== "null" ? parsed.unitType : null;
+  const bedrooms = typeof parsed.bedrooms === "number" ? parsed.bedrooms : null;
+  const rawLevel = typeof parsed.interestLevel === "string" ? parsed.interestLevel : "";
+  const interestLevel: AnalyzeLeadResult["interestLevel"] =
+    rawLevel === "hot" || rawLevel === "warm" || rawLevel === "cold" ? rawLevel : null;
+  const summary = typeof parsed.summary === "string" ? parsed.summary : "لم يتم استخراج ملخص";
+
+  return { budget, unitType, bedrooms, interestLevel, summary };
 }

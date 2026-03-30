@@ -451,11 +451,11 @@ export function LeadDetailPanel({
     setAiReplies([]);
     try {
       const res = await apiRequest("POST", `/api/leads/${lead.id}/ai/suggest-replies`, {});
-      const data = await res.json();
+      const data = await res.json() as { replies?: string[]; error?: string };
       if (data.error) throw new Error(data.error);
-      setAiReplies(data.replies || []);
-    } catch (err: any) {
-      setAiRepliesError(err?.message || "فشل في الحصول على اقتراحات");
+      setAiReplies(data.replies ?? []);
+    } catch (err) {
+      setAiRepliesError(err instanceof Error ? err.message : "فشل في الحصول على اقتراحات");
     } finally {
       setAiRepliesLoading(false);
     }
@@ -469,11 +469,24 @@ export function LeadDetailPanel({
     setAiAnalysisApplied(false);
     try {
       const res = await apiRequest("POST", `/api/leads/${lead.id}/ai/analyze`, {});
-      const data = await res.json();
+      const data = await res.json() as {
+        budget?: string | null;
+        unitType?: string | null;
+        bedrooms?: number | null;
+        interestLevel?: "hot" | "warm" | "cold" | null;
+        summary?: string;
+        error?: string;
+      };
       if (data.error) throw new Error(data.error);
-      setAiAnalysis(data);
-    } catch (err: any) {
-      setAiAnalysisError(err?.message || "فشل في تحليل الليد");
+      setAiAnalysis({
+        budget: data.budget ?? null,
+        unitType: data.unitType ?? null,
+        bedrooms: data.bedrooms ?? null,
+        interestLevel: data.interestLevel ?? null,
+        summary: data.summary ?? "",
+      });
+    } catch (err) {
+      setAiAnalysisError(err instanceof Error ? err.message : "فشل في تحليل الليد");
     } finally {
       setAiAnalysisLoading(false);
     }
@@ -517,13 +530,13 @@ export function LeadDetailPanel({
         leadId: lead.id,
         message: text,
       });
-      const data = await res.json();
+      const data = await res.json() as { error?: string };
       if (data.error) throw new Error(data.error);
       queryClient.invalidateQueries({ queryKey: ["/api/leads", lead.id, "whatsapp-conversation"] });
       queryClient.invalidateQueries({ queryKey: ["/api/leads", lead.id, "history"] });
       toast({ title: "تم إرسال الرد عبر واتساب" });
-    } catch (err: any) {
-      toast({ title: err?.message || "فشل الإرسال", variant: "destructive" });
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "فشل الإرسال", variant: "destructive" });
     } finally {
       setAiSendingIdx(null);
     }
