@@ -3039,6 +3039,21 @@ export async function registerRoutes(
         let lead = await storage.findLeadByPhone(phone);
         let isNewLead = false;
 
+        // If not found by real phone, check if there's an existing lead stored with the LID number
+        // (e.g. leads created before this fix when WhatsApp LID was used)
+        if (!lead && msg.jid && msg.jid.endsWith("@lid")) {
+          const lidPhone = msg.jid.split("@")[0];
+          if (lidPhone && lidPhone !== phone) {
+            const lidLead = await storage.findLeadByPhone(lidPhone);
+            if (lidLead) {
+              // Migrate: update the lead's phone from LID to real phone number
+              await storage.updateLead(lidLead.id, { phone });
+              lead = { ...lidLead, phone };
+              console.log(`[WhatsApp] Migrated LID lead ${lidLead.id}: ${lidPhone} → ${phone}`);
+            }
+          }
+        }
+
         if (!lead) {
           isNewLead = true;
           // Resolve the "ليد جديد" state id

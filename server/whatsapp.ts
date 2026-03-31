@@ -33,6 +33,9 @@ const sessions = new Map<string, WaSession>();
 
 const phoneToJid = new Map<string, string>();
 
+// Maps LID JID (e.g. "143013904912429@lid") → real phone (e.g. "201020076679")
+const lidToPhone = new Map<string, string>();
+
 export function getStoredJid(phone: string): string | undefined {
   return phoneToJid.get(phone);
 }
@@ -152,6 +155,30 @@ export async function startConnection(userId: string, freshSession = false, forc
     session.socket = sock;
     sock.ev.on("creds.update", saveCreds);
 
+    // Build LID → real phone mapping from contact sync
+    const upsertContacts = (contacts: { id?: string; lid?: string }[]) => {
+      for (const c of contacts) {
+        if (c.id && c.lid) {
+          // c.id = "201020076679@s.whatsapp.net", c.lid = "143013904912429@lid"
+          const phone = c.id.split("@")[0];
+          if (phone && /^\d{7,}$/.test(phone)) {
+            lidToPhone.set(c.lid, phone);
+          }
+        }
+        // Also handle when id is the LID and the phone is in another field
+        if (c.id && c.id.endsWith("@lid") && c.lid) {
+          const phone = c.lid.split("@")[0];
+          if (phone && /^\d{7,}$/.test(phone) && !phone.startsWith("1430")) {
+            lidToPhone.set(c.id, phone);
+          }
+        }
+      }
+    };
+    sock.ev.on("contacts.upsert", upsertContacts);
+    sock.ev.on("contacts.update", (updates) => {
+      upsertContacts(updates as { id?: string; lid?: string }[]);
+    });
+
     sock.ev.on("messages.upsert", async ({ messages, type }) => {
       if (type !== "notify") return;
       const handler = incomingMessageHandlers.get(userId);
@@ -167,8 +194,20 @@ export async function startConnection(userId: string, freshSession = false, forc
           if (remoteJid === "status@broadcast") continue;
           if (remoteJid.endsWith("@g.us")) continue;
 
-          const rawPhone = remoteJid.split("@")[0];
+          let rawPhone = remoteJid.split("@")[0];
           if (!rawPhone) continue;
+
+          // Resolve LID (@lid) JIDs to real phone numbers
+          if (remoteJid.endsWith("@lid")) {
+            const resolvedPhone = lidToPhone.get(remoteJid);
+            if (resolvedPhone) {
+              console.log(`[WhatsApp] Resolved LID ${remoteJid} → phone ${resolvedPhone}`);
+              rawPhone = resolvedPhone;
+            } else {
+              // LID not yet resolved — process with LID as phone (migration in routes.ts will fix later)
+              console.warn(`[WhatsApp] Unresolved LID ${remoteJid}, using LID as phone temporarily`);
+            }
+          }
 
           phoneToJid.set(rawPhone, remoteJid);
           console.log(`[WhatsApp] Incoming message: remoteJid=${remoteJid}, rawPhone=${rawPhone}`);
