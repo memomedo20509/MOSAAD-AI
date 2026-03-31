@@ -16,6 +16,7 @@ import {
   sendWhatsAppMessage,
   restoreSessionsOnStartup,
   setIncomingMessageHandler,
+  onLidResolved,
   type IncomingWAMessage,
 } from "./whatsapp";
 import { 
@@ -3518,6 +3519,20 @@ export async function registerRoutes(
       cronRunning = false;
     }
   }, 60_000);
+
+  // When a WhatsApp LID is resolved to a real phone, update any existing lead in DB
+  onLidResolved(async (lidJid: string, realPhone: string) => {
+    try {
+      const lidPhone = lidJid.split("@")[0]; // e.g. "143013904912429"
+      const existingLead = await storage.findLeadByPhone(lidPhone);
+      if (existingLead) {
+        await storage.updateLead(existingLead.id, { phone: realPhone });
+        console.log(`[WhatsApp] Updated lead ${existingLead.id} phone: ${lidPhone} → ${realPhone}`);
+      }
+    } catch (err) {
+      console.error("[WhatsApp] Error updating lead phone from LID resolution:", err);
+    }
+  });
 
   // Restore WhatsApp sessions on startup and register incoming message handlers
   restoreSessionsOnStartup()

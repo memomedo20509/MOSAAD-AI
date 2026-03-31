@@ -36,6 +36,18 @@ const phoneToJid = new Map<string, string>();
 // Maps LID JID (e.g. "143013904912429@lid") → real phone (e.g. "201020076679")
 const lidToPhone = new Map<string, string>();
 
+// Callback called whenever a new LID→phone mapping is resolved
+type LidResolvedCallback = (lidJid: string, realPhone: string) => Promise<void>;
+const lidResolvedCallbacks: LidResolvedCallback[] = [];
+
+export function onLidResolved(cb: LidResolvedCallback): void {
+  lidResolvedCallbacks.push(cb);
+}
+
+export function getLidToPhoneMap(): ReadonlyMap<string, string> {
+  return lidToPhone;
+}
+
 export function getStoredJid(phone: string): string | undefined {
   return phoneToJid.get(phone);
 }
@@ -60,6 +72,50 @@ export function setIncomingMessageHandler(userId: string, handler: IncomingMessa
 
 function getSessionDir(userId: string): string {
   return path.join(SESSIONS_DIR, userId);
+}
+
+/**
+ * Reads LID→phone mappings from Baileys session files (lid-mapping_*_reverse.json)
+ * and populates the lidToPhone map so existing leads with LID phones can be resolved
+ * immediately on server startup without waiting for a new WhatsApp contact sync.
+ */
+function loadLidMappingsFromSession(sessionDir: string): void {
+  try {
+    if (!fs.existsSync(sessionDir)) return;
+    const files = fs.readdirSync(sessionDir);
+    let resolved = 0;
+    for (const file of files) {
+      // Reverse mapping files: lid-mapping_{lidUser}_reverse.json
+      if (!file.startsWith("lid-mapping_") || !file.endsWith("_reverse.json")) continue;
+      try {
+        const content = fs.readFileSync(path.join(sessionDir, file), "utf-8");
+        const pnUser = JSON.parse(content); // value is just the phone user string
+        if (typeof pnUser !== "string" || !/^\d{7,15}$/.test(pnUser)) continue;
+        // Extract lidUser from filename: "lid-mapping_143013904912429_reverse.json"
+        const lidUser = file.slice("lid-mapping_".length, -"_reverse.json".length);
+        if (!lidUser || !/^\d{7,15}$/.test(lidUser)) continue;
+        const lidJid = `${lidUser}@lid`;
+        if (!lidToPhone.has(lidJid)) {
+          lidToPhone.set(lidJid, pnUser);
+          phoneToJid.set(pnUser, lidJid);
+          resolved++;
+          // Fire callbacks for any existing lead with this LID
+          for (const cb of lidResolvedCallbacks) {
+            cb(lidJid, pnUser).catch((err) =>
+              console.error("[WhatsApp] loadLidMappings callback error:", err)
+            );
+          }
+        }
+      } catch {
+        // skip malformed files
+      }
+    }
+    if (resolved > 0) {
+      console.log(`[WhatsApp] Loaded ${resolved} LID→phone mapping(s) from session files`);
+    }
+  } catch (err) {
+    console.error("[WhatsApp] Error loading LID mappings from session files:", err);
+  }
 }
 
 export async function getOrCreateSession(userId: string): Promise<WaSession> {
@@ -155,28 +211,51 @@ export async function startConnection(userId: string, freshSession = false, forc
     session.socket = sock;
     sock.ev.on("creds.update", saveCreds);
 
+    // Load any previously stored LID→phone mappings from session files on startup
+    loadLidMappingsFromSession(sessionDir);
+
     // Build LID → real phone mapping from contact sync
-    const upsertContacts = (contacts: { id?: string; lid?: string }[]) => {
+    const upsertContacts = (contacts: { id?: string; lid?: string; phone?: string }[]) => {
       for (const c of contacts) {
+        let lidJid: string | null = null;
+        let realPhone: string | null = null;
+
         if (c.id && c.lid) {
-          // c.id = "201020076679@s.whatsapp.net", c.lid = "143013904912429@lid"
-          const phone = c.id.split("@")[0];
-          if (phone && /^\d{7,}$/.test(phone)) {
-            lidToPhone.set(c.lid, phone);
+          // Standard Baileys format: id = "201020076679@s.whatsapp.net", lid = "143013904912429@lid"
+          if (!c.id.endsWith("@lid") && c.lid.endsWith("@lid")) {
+            const phone = c.id.split("@")[0];
+            if (phone && /^\d{7,15}$/.test(phone)) {
+              lidJid = c.lid;
+              realPhone = phone;
+            }
+          }
+          // Reverse format: id is LID, lid is phone JID
+          if (c.id.endsWith("@lid") && !c.lid.endsWith("@lid")) {
+            const phone = c.lid.split("@")[0];
+            if (phone && /^\d{7,15}$/.test(phone)) {
+              lidJid = c.id;
+              realPhone = phone;
+            }
           }
         }
-        // Also handle when id is the LID and the phone is in another field
-        if (c.id && c.id.endsWith("@lid") && c.lid) {
-          const phone = c.lid.split("@")[0];
-          if (phone && /^\d{7,}$/.test(phone) && !phone.startsWith("1430")) {
-            lidToPhone.set(c.id, phone);
+
+        if (lidJid && realPhone && !lidToPhone.has(lidJid)) {
+          lidToPhone.set(lidJid, realPhone);
+          // Also map the real phone JID to the LID in phoneToJid for sending
+          phoneToJid.set(realPhone, lidJid);
+          console.log(`[WhatsApp] Contact resolved: LID ${lidJid} → phone ${realPhone}`);
+          // Fire callbacks to update existing DB leads
+          for (const cb of lidResolvedCallbacks) {
+            cb(lidJid, realPhone).catch((err) =>
+              console.error("[WhatsApp] lidResolved callback error:", err)
+            );
           }
         }
       }
     };
     sock.ev.on("contacts.upsert", upsertContacts);
     sock.ev.on("contacts.update", (updates) => {
-      upsertContacts(updates as { id?: string; lid?: string }[]);
+      upsertContacts(updates as { id?: string; lid?: string; phone?: string }[]);
     });
 
     sock.ev.on("messages.upsert", async ({ messages, type }) => {
