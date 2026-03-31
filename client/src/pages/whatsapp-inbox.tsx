@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MessageSquare, PhoneCall, ExternalLink, Clock, Inbox, Send, Sparkles, Loader2, Pencil, Check, X } from "lucide-react";
+import { MessageSquare, PhoneCall, ExternalLink, Clock, Inbox, Send, Sparkles, Loader2, Pencil, Check, X, Bot, CalendarClock, Tag, Flame, Thermometer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -455,12 +455,16 @@ export default function WhatsAppInboxPage() {
                   ) : (
                     messages.map((msg) => {
                       const isInbound = msg.direction === "inbound";
+                      const isBot = msg.agentName === "البوت";
+                      const botActions = msg.botActionsSummary
+                        ? msg.botActionsSummary.split(" | ").filter(Boolean)
+                        : [];
                       return (
                         <div
                           key={msg.id}
                           className={cn(
-                            "flex",
-                            isInbound ? "justify-start" : "justify-end"
+                            "flex flex-col",
+                            isInbound ? "items-start" : "items-end"
                           )}
                           data-testid={`msg-bubble-${msg.id}`}
                         >
@@ -469,9 +473,17 @@ export default function WhatsAppInboxPage() {
                               "max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-sm",
                               isInbound
                                 ? "bg-muted text-foreground rounded-tr-sm"
+                                : isBot
+                                ? "bg-blue-600 text-white rounded-tl-sm"
                                 : "bg-green-600 text-white rounded-tl-sm"
                             )}
                           >
+                            {isBot && (
+                              <div className="flex items-center gap-1 mb-1 opacity-80">
+                                <Bot className="h-2.5 w-2.5" />
+                                <span className="text-[10px]">البوت</span>
+                              </div>
+                            )}
                             <p className="whitespace-pre-wrap break-words">
                               {msg.messageText || "—"}
                             </p>
@@ -490,13 +502,39 @@ export default function WhatsAppInboxPage() {
                                     )
                                   : ""}
                               </span>
-                              {!isInbound && msg.agentName && (
+                              {!isInbound && msg.agentName && !isBot && (
                                 <span className="text-[10px] opacity-60">
                                   · {msg.agentName}
                                 </span>
                               )}
                             </div>
                           </div>
+                          {botActions.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1 max-w-[75%]" data-testid={`bot-actions-${msg.id}`}>
+                              {botActions.map((action, i) => {
+                                const isStateChange = action.startsWith("تغيير الحالة");
+                                const isReminder = action.startsWith("تذكير");
+                                const isScore = action.startsWith("تقييم");
+                                return (
+                                  <span
+                                    key={i}
+                                    className={cn(
+                                      "inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium",
+                                      isStateChange && "bg-orange-100 text-orange-700",
+                                      isReminder && "bg-purple-100 text-purple-700",
+                                      isScore && "bg-amber-100 text-amber-700",
+                                      !isStateChange && !isReminder && !isScore && "bg-blue-100 text-blue-700"
+                                    )}
+                                  >
+                                    {isStateChange && <Tag className="h-2.5 w-2.5" />}
+                                    {isReminder && <CalendarClock className="h-2.5 w-2.5" />}
+                                    {isScore && <Flame className="h-2.5 w-2.5" />}
+                                    {action}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       );
                     })

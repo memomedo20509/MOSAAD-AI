@@ -204,6 +204,16 @@ export type BotStage =
   | "qualified"
   | "handed_off";
 
+export type BotActionType = "change_state" | "create_reminder" | "update_score";
+
+export interface BotAction {
+  type: BotActionType;
+  stateName?: string;
+  isoDate?: string;
+  note?: string;
+  score?: "hot" | "warm" | "cold";
+}
+
 export interface BotReplyResult {
   reply: string;
   nextStage: BotStage;
@@ -220,6 +230,7 @@ export interface BotReplyResult {
   extractedTimeline?: string | null;
   extractedPhone?: string | null;
   shouldHandoff: boolean;
+  botActions: BotAction[];
 }
 
 interface ParsedBotReply {
@@ -238,6 +249,7 @@ interface ParsedBotReply {
   extractedTimeline?: unknown;
   extractedPhone?: unknown;
   shouldHandoff?: unknown;
+  botActions?: unknown;
 }
 
 export interface BotConfig {
@@ -328,6 +340,7 @@ export async function generateBotReply(
   const resolvedPersonality = config.botPersonality ?? "أنت مستشار عقاري مصري محترف وودود. بتتكلم بالمصري بشكل طبيعي. بتساعد العملاء يلاقوا الوحدة المناسبة ليهم وبتجمع بياناتهم بطريقة محترمة.";
   const resolvedMission = config.botMission ?? "جمع بيانات العميل الكاملة وترشيح وحدات مناسبة من المشاريع المتاحة قبل تحويله للمندوب.";
   const resolvedKnowledge = config.companyKnowledge ?? "";
+  const nowISO = new Date().toISOString();
 
   const systemPrompt = `أنت "${resolvedName}" — ${resolvedRole} في شركة "${resolvedCompany}".
 ${resolvedPersonality}
@@ -360,6 +373,29 @@ ${leadInfo}
 - shouldHandoff = true بس لما يبقى عندك على الأقل: الاسم + (الميزانية أو اهتمام واضح بمشروع) + نوع الوحدة
 - لو العميل طلب يتكلم مع حد أو طلب مندوب، حط shouldHandoff = true على طول
 
+🤖 إجراءات CRM تلقائية (botActions):
+الوقت الحالي هو: ${nowISO}
+بناءً على رسالة العميل، ممكن تضيف إجراءات CRM في مصفوفة botActions:
+
+1. change_state — غيّر حالة الليد لو:
+   - العميل قال مش مهتم / غير مهتم / لا شكراً / مش محتاج → stateName: "غير مهتم"
+   - رقم غلط / مش أنا / مش صح → stateName: "ملغي"
+
+2. create_reminder — أنشئ تذكير متابعة لو:
+   - العميل طلب تأجيل: "كلمني بكرة"، "الساعة X"، "بعد X أيام"، "مشغول دلوقتي"
+   - احسب التاريخ الفعلي من الوقت الحالي:
+     * "بكرة الساعة 3" = تاريخ الغد بوقت 15:00
+     * "بعد يومين" = بعد يومين من الآن
+     * "الأسبوع الجاي" = بعد 7 أيام
+     * "مشغول / بعدين / امشي" = بعد ساعتين من الآن
+   - أرجع: { "type": "create_reminder", "isoDate": "ISO datetime string", "note": "سبب التذكير" }
+
+3. update_score — حدّث تقييم الاهتمام لو:
+   - اهتمام عالي: طلب زيارة، سأل عن التعاقد، جاهز للشراء → score: "hot"
+   - اهتمام متوسط: استفسار جدي، أسئلة تفصيلية → score: "warm"
+
+لو مافيش إجراءات مطلوبة، ارجع مصفوفة فارغة: "botActions": []
+
 🔄 أرجع JSON فقط بهذا الشكل:
 {
   "reply": "نص الرد بالمصري",
@@ -376,7 +412,8 @@ ${leadInfo}
   "extractedProject": "اسم المشروع اللي العميل مهتم بيه أو null",
   "extractedTimeline": "الجدول الزمني للشراء (مثال: خلال شهر، 3 أشهر، نهاية السنة) أو null",
   "extractedPhone": "رقم الموبايل المصري إذا ذكره العميل (مثال: 01020076679) أو null",
-  "shouldHandoff": true أو false
+  "shouldHandoff": true أو false,
+  "botActions": []
 }`;
 
   const userPrompt = `المرحلة الحالية: ${currentStage}
@@ -395,6 +432,7 @@ ${conversationHistory}
       reply: "شكراً على تواصلك! سيتواصل معك أحد مستشارينا قريباً.",
       nextStage: currentStage,
       shouldHandoff: false,
+      botActions: [],
     };
   }
 
@@ -420,7 +458,31 @@ ${conversationHistory}
     extractedTimeline: typeof parsed.extractedTimeline === "string" ? parsed.extractedTimeline : null,
     extractedPhone: typeof parsed.extractedPhone === "string" ? parsed.extractedPhone : null,
     shouldHandoff: parsed.shouldHandoff === true,
+    botActions: parseBotActions(parsed.botActions),
   };
+}
+
+function parseBotActions(raw: unknown): BotAction[] {
+  if (!Array.isArray(raw)) return [];
+  const result: BotAction[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const obj = item as Record<string, unknown>;
+    const type = obj["type"];
+    if (type === "change_state" && typeof obj["stateName"] === "string") {
+      result.push({ type: "change_state", stateName: obj["stateName"] });
+    } else if (type === "create_reminder") {
+      const isoDate = typeof obj["isoDate"] === "string" ? obj["isoDate"] : undefined;
+      const note = typeof obj["note"] === "string" ? obj["note"] : undefined;
+      if (isoDate) result.push({ type: "create_reminder", isoDate, note });
+    } else if (type === "update_score") {
+      const score = obj["score"];
+      if (score === "hot" || score === "warm" || score === "cold") {
+        result.push({ type: "update_score", score });
+      }
+    }
+  }
+  return result;
 }
 
 export async function analyzeLead(

@@ -3204,7 +3204,71 @@ export async function registerRoutes(
                 }
               }
 
-              const resolvedName = leadUpdates.name || lead.name;
+
+                // ── Execute Bot Actions (CRM automation) ──────────────────────
+                const botActionsSummaryParts: string[] = [];
+                if (botResult.botActions && botResult.botActions.length > 0) {
+                  const allStates = await storage.getAllStates();
+                  const notifTargetForActions = lead.assignedTo || userId;
+                  const leadDisplayNameForActions = leadUpdates.name || lead.name || phone;
+
+                  for (const action of botResult.botActions) {
+                    try {
+                      if (action.type === "change_state" && action.stateName) {
+                        const targetState = allStates.find(s =>
+                          s.name === action.stateName ||
+                          s.name.includes(action.stateName!)
+                        );
+                        if (targetState) {
+                          leadUpdates.stateId = targetState.id;
+                          botActionsSummaryParts.push(`تغيير الحالة: ${targetState.name}`);
+                          await storage.createNotification({
+                            userId: notifTargetForActions,
+                            type: "bot_action",
+                            message: `🤖 البوت غيّر حالة الليد لـ "${targetState.name}" — ${leadDisplayNameForActions}`,
+                            leadId: lead.id,
+                            isRead: false,
+                          });
+                          console.log(`[BotAction] change_state: ${targetState.name} for lead ${lead.id}`);
+                        }
+                      } else if (action.type === "create_reminder" && action.isoDate) {
+                        const reminderDate = new Date(action.isoDate);
+                        if (!isNaN(reminderDate.getTime())) {
+                          const reminderNote = action.note || `متابعة بوت واتساب — ${leadDisplayNameForActions}`;
+                          await storage.createReminder({
+                            leadId: lead.id,
+                            userId: notifTargetForActions,
+                            title: reminderNote,
+                            dueDate: reminderDate,
+                            priority: "medium",
+                            isCompleted: false,
+                          });
+                          const formattedDate = reminderDate.toLocaleString("ar-EG", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+                          botActionsSummaryParts.push(`تذكير متابعة: ${formattedDate}`);
+                          await storage.createNotification({
+                            userId: notifTargetForActions,
+                            type: "bot_action",
+                            message: `🤖 البوت حدّد موعد متابعة — ${leadDisplayNameForActions}: ${reminderNote} (${formattedDate})`,
+                            leadId: lead.id,
+                            isRead: false,
+                          });
+                          console.log(`[BotAction] create_reminder: ${action.isoDate} for lead ${lead.id}`);
+                        }
+                      } else if (action.type === "update_score" && action.score) {
+                        leadUpdates.score = action.score;
+                        const scoreLabels: Record<string, string> = { hot: "ساخن", warm: "دافئ", cold: "بارد" };
+                        botActionsSummaryParts.push(`تقييم: ${scoreLabels[action.score] || action.score}`);
+                        console.log(`[BotAction] update_score: ${action.score} for lead ${lead.id}`);
+                      }
+                    } catch (actionErr) {
+                      console.error(`[BotAction] Error executing action ${action.type}:`, actionErr);
+                    }
+                  }
+                }
+                const botActionsSummary = botActionsSummaryParts.length > 0 ? botActionsSummaryParts.join(" | ") : null;
+                // ── End Bot Actions ───────────────────────────────────────────
+
+                const resolvedName = leadUpdates.name || lead.name;
               const resolvedBudget = leadUpdates.budget || lead.budget;
               const resolvedUnit = leadUpdates.unitType || lead.unitType;
               const allFieldsCollected = !!(resolvedName && !resolvedName.startsWith("واتساب -") && (resolvedBudget || resolvedUnit));
@@ -3264,6 +3328,7 @@ export async function registerRoutes(
                   messageText: botSendResult.success ? botResult.reply : `[فشل الإرسال] ${botResult.reply}`,
                   messageId: null,
                   isRead: false,
+                  botActionsSummary: botActionsSummary ?? undefined,
                 });
               }
 
