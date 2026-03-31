@@ -593,10 +593,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteLead(id: string): Promise<boolean> {
-    // Delete related records first to avoid FK constraint errors
+    // Nullify optional FK references (preserve these records but detach from lead)
+    await db.update(clients).set({ leadId: null }).where(eq(clients.leadId, id));
+    await db.update(commissions).set({ leadId: null }).where(eq(commissions.leadId, id));
+    await db.update(whatsappCampaignRecipients).set({ leadId: null }).where(eq(whatsappCampaignRecipients.leadId, id));
+    await db.update(whatsappFollowupRules).set({ leadId: null }).where(eq(whatsappFollowupRules.leadId, id));
+
+    // Delete child records (cascade delete)
+    await db.delete(leadUnitInterests).where(eq(leadUnitInterests.leadId, id));
+    await db.delete(callLogs).where(eq(callLogs.leadId, id));
+    await db.delete(leadManagerComments).where(eq(leadManagerComments.leadId, id));
+    await db.delete(whatsappMessagesLog).where(eq(whatsappMessagesLog.leadId, id));
+    await db.delete(notifications).where(eq(notifications.leadId, id));
+    await db.delete(reminders).where(eq(reminders.leadId, id));
+    await db.delete(documents).where(eq(documents.leadId, id));
     await db.delete(tasks).where(eq(tasks.leadId, id));
     await db.delete(leadHistory).where(eq(leadHistory.leadId, id));
     await db.delete(communications).where(eq(communications.leadId, id));
+
     const result = await db.delete(leads).where(eq(leads.id, id)).returning();
     return result.length > 0;
   }
