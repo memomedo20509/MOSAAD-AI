@@ -117,13 +117,6 @@ export function AppSidebar() {
       show: true,
     },
     {
-      title: t.myDay,
-      url: "/my-day",
-      icon: Sun,
-      badge: pendingActionsCount > 0 ? pendingActionsCount : null,
-      show: canAccessMyDay,
-    },
-    {
       title: t.leaderboard,
       url: "/leaderboard",
       icon: Trophy,
@@ -149,6 +142,13 @@ export function AppSidebar() {
       url: "/leads",
       icon: Users,
       show: true,
+    },
+    {
+      title: t.myDay,
+      url: "/my-day",
+      icon: Sun,
+      badge: pendingActionsCount > 0 ? pendingActionsCount : null,
+      show: canAccessMyDay,
     },
   ].filter(item => item.show);
 
