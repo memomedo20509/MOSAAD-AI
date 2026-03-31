@@ -516,5 +516,43 @@ export const insertWhatsappFollowupRuleSchema = createInsertSchema(whatsappFollo
 export type InsertWhatsappFollowupRule = z.infer<typeof insertWhatsappFollowupRuleSchema>;
 export type WhatsappFollowupRule = typeof whatsappFollowupRules.$inferSelect;
 
+// Meta Page Connections (Facebook/Instagram)
+export const metaPageConnections = pgTable("meta_page_connections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  pageId: text("page_id").notNull().unique(),
+  pageName: text("page_name").notNull(),
+  pageAccessToken: text("page_access_token").notNull(),
+  instagramAccountId: text("instagram_account_id"),
+  connectedBy: varchar("connected_by"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertMetaPageConnectionSchema = createInsertSchema(metaPageConnections).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertMetaPageConnection = z.infer<typeof insertMetaPageConnectionSchema>;
+export type MetaPageConnection = typeof metaPageConnections.$inferSelect;
+
+// Social Messages Log (Messenger / Instagram DM)
+export const socialMessagesLog = pgTable("social_messages_log", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  leadId: varchar("lead_id").references(() => leads.id),
+  platform: text("platform").notNull(), // "messenger" | "instagram"
+  senderId: text("sender_id").notNull(), // PSID / Instagram-scoped user ID
+  direction: text("direction").notNull().default("inbound"), // "inbound" | "outbound"
+  messageText: text("message_text"),
+  messageId: text("message_id"),
+  agentName: text("agent_name"),
+  isRead: boolean("is_read").default(false),
+  botActionsSummary: text("bot_actions_summary"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertSocialMessagesLogSchema = createInsertSchema(socialMessagesLog).omit({ id: true }).extend({
+  createdAt: z.coerce.date().optional(),
+});
+export type InsertSocialMessagesLog = z.infer<typeof insertSocialMessagesLogSchema>;
+export type SocialMessagesLog = typeof socialMessagesLog.$inferSelect;
+
 // Export auth models (users, teams, sessions, role_permissions)
 export * from "./models/auth";

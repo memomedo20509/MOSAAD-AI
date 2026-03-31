@@ -98,6 +98,7 @@ import { WhatsAppPanel } from "./whatsapp-panel";
 import { InstallmentCalculator } from "./installment-calculator";
 import { UnitCompare } from "./unit-compare";
 import { computeLeadScore, SCORE_COLORS } from "@/lib/scoring";
+import { SocialMessagesPanel } from "./social-messages-panel";
 
 interface LeadDetailPanelProps {
   lead: Lead | null;
@@ -758,35 +759,47 @@ export function LeadDetailPanel({
 
         {/* ── Tabs ── */}
         <Tabs defaultValue="overview" className="flex-1 overflow-hidden flex flex-col">
-          <TabsList className="grid w-full grid-cols-7 rounded-none border-b h-11 bg-transparent px-6 gap-0.5">
-            <TabsTrigger value="overview" className="text-xs gap-1 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-overview">
+          <TabsList className="flex w-full overflow-x-auto rounded-none border-b h-11 bg-transparent px-2 gap-0.5 justify-start">
+            <TabsTrigger value="overview" className="text-xs gap-1 shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-overview">
               <FileText className="h-3.5 w-3.5 shrink-0" />
               <span className="hidden sm:inline">نظرة عامة</span>
             </TabsTrigger>
-            <TabsTrigger value="communications" className="text-xs gap-1 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-communications">
+            <TabsTrigger value="communications" className="text-xs gap-1 shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-communications">
               <MessageCircle className="h-3.5 w-3.5 shrink-0" />
               <span className="hidden sm:inline">التواصل</span>
             </TabsTrigger>
-            <TabsTrigger value="tasks" className="text-xs gap-1 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-tasks">
+            <TabsTrigger value="tasks" className="text-xs gap-1 shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-tasks">
               <ListTodo className="h-3.5 w-3.5 shrink-0" />
               <span className="hidden sm:inline">التاسكس</span>
             </TabsTrigger>
-            <TabsTrigger value="reminders" className="text-xs gap-1 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-reminders">
+            <TabsTrigger value="reminders" className="text-xs gap-1 shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-reminders">
               <Bell className="h-3.5 w-3.5 shrink-0" />
               <span className="hidden sm:inline">التذكيرات</span>
             </TabsTrigger>
-            <TabsTrigger value="timeline" className="text-xs gap-1 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-timeline">
+            <TabsTrigger value="timeline" className="text-xs gap-1 shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-timeline">
               <Activity className="h-3.5 w-3.5 shrink-0" />
               <span className="hidden sm:inline">السجل</span>
             </TabsTrigger>
-            <TabsTrigger value="units" className="text-xs gap-1 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-units">
+            <TabsTrigger value="units" className="text-xs gap-1 shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-units">
               <Home className="h-3.5 w-3.5 shrink-0" />
               <span className="hidden sm:inline">الوحدات</span>
             </TabsTrigger>
-            <TabsTrigger value="documents" className="text-xs gap-1 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-documents">
+            <TabsTrigger value="documents" className="text-xs gap-1 shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-documents">
               <Paperclip className="h-3.5 w-3.5 shrink-0" />
               <span className="hidden sm:inline">المستندات</span>
             </TabsTrigger>
+            {lead.channel === "ماسنجر" && (
+              <TabsTrigger value="messenger" className="text-xs gap-1 shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none text-blue-600" data-testid="tab-lead-messenger">
+                <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                <span>ماسنجر</span>
+              </TabsTrigger>
+            )}
+            {lead.channel === "إنستجرام" && (
+              <TabsTrigger value="instagram" className="text-xs gap-1 shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none text-pink-500" data-testid="tab-lead-instagram">
+                <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                <span>إنستجرام</span>
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <ScrollArea className="flex-1">
@@ -1827,6 +1840,20 @@ export function LeadDetailPanel({
               <TabsContent value="documents" className="m-0">
                 <DocumentsTab entityType="lead" entityId={lead.id} />
               </TabsContent>
+
+              {/* ═══════════════ TAB: ماسنجر ═══════════════ */}
+              {lead.channel === "ماسنجر" && (
+                <TabsContent value="messenger" className="m-0">
+                  <SocialMessagesPanel lead={lead} platform="messenger" />
+                </TabsContent>
+              )}
+
+              {/* ═══════════════ TAB: إنستجرام ═══════════════ */}
+              {lead.channel === "إنستجرام" && (
+                <TabsContent value="instagram" className="m-0">
+                  <SocialMessagesPanel lead={lead} platform="instagram" />
+                </TabsContent>
+              )}
 
             </div>
           </ScrollArea>

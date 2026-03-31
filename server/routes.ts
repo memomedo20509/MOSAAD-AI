@@ -3650,5 +3650,521 @@ export async function registerRoutes(
     })
     .catch(console.error);
 
+  // ── Meta (Messenger / Instagram) Integration ──────────────────────────────
+
+  const META_VERIFY_TOKEN = process.env.META_VERIFY_TOKEN ?? "crm_meta_verify_token";
+
+  // GET /api/meta/webhook — Meta webhook verification challenge
+  app.get("/api/meta/webhook", (req, res) => {
+    const mode = req.query["hub.mode"];
+    const token = req.query["hub.verify_token"];
+    const challenge = req.query["hub.challenge"];
+    if (mode === "subscribe" && token === META_VERIFY_TOKEN) {
+      console.log("[Meta] Webhook verified");
+      return res.status(200).send(challenge);
+    }
+    return res.status(403).json({ error: "Verification failed" });
+  });
+
+  // POST /api/meta/webhook — receive Messenger and Instagram messages
+  app.post("/api/meta/webhook", async (req, res) => {
+    // Verify Meta webhook signature — fail-closed for security
+    const META_APP_SECRET = process.env.META_APP_SECRET;
+    if (!META_APP_SECRET) {
+      // No secret configured: reject all inbound webhook events to prevent forged payload abuse
+      console.warn("[Meta] META_APP_SECRET not set — rejecting webhook. Configure META_APP_SECRET to enable inbound message processing.");
+      return res.status(200).send("EVENT_RECEIVED"); // Acknowledge to Meta but do not process
+    }
+
+    // Verify X-Hub-Signature-256 using raw body bytes
+    const signature = req.headers["x-hub-signature-256"] as string | undefined;
+    if (!signature) {
+      console.warn("[Meta] Missing X-Hub-Signature-256 header — rejecting webhook");
+      return res.status(403).json({ error: "Missing signature" });
+    }
+    const crypto = await import("crypto");
+    const rawBodyBuffer = (req as unknown as { rawBody?: Buffer }).rawBody;
+    const rawBytes = rawBodyBuffer ?? Buffer.from(JSON.stringify(req.body));
+    const expected = `sha256=${crypto.createHmac("sha256", META_APP_SECRET).update(rawBytes).digest("hex")}`;
+    const signatureHash = signature.startsWith("sha256=") ? signature.slice(7) : signature;
+    const expectedHash = expected.slice(7);
+    let sigValid = true;
+    try {
+      sigValid = crypto.timingSafeEqual(Buffer.from(signatureHash, "hex"), Buffer.from(expectedHash, "hex"));
+    } catch {
+      sigValid = false;
+    }
+    if (!sigValid) {
+      console.warn("[Meta] Invalid webhook signature — rejecting");
+      return res.status(403).json({ error: "Invalid signature" });
+    }
+
+    res.status(200).send("EVENT_RECEIVED");
+    try {
+      const { parseMetaWebhookPayload, sendMetaMessage } = await import("./meta");
+      const messages = parseMetaWebhookPayload(req.body as Record<string, unknown>);
+      if (messages.length === 0) return;
+
+      const pageConn = await storage.getMetaPageConnection();
+      if (!pageConn) return;
+
+      for (const msg of messages) {
+        try {
+          // Skip if it's the page itself messaging (echo)
+          if (msg.senderId === pageConn.pageId) continue;
+          if (msg.platform === "instagram" && msg.senderId === pageConn.instagramAccountId) continue;
+
+          // Deduplicate
+          if (msg.messageId) {
+            const existing = await storage.findSocialMessageById(msg.messageId);
+            if (existing) continue;
+          }
+
+          const platform = msg.platform;
+          const channelLabel = platform === "instagram" ? "إنستجرام" : "ماسنجر";
+
+          // Find or create lead by sender ID
+          let lead = await storage.findLeadBySenderId(msg.senderId, platform);
+          let isNewLead = false;
+
+          if (!lead) {
+            isNewLead = true;
+            const allStates = await storage.getAllStates();
+            const newLeadState = allStates.find((s) => s.name === "ليد جديد" || s.order === 0);
+            const senderName = msg.senderName || `${channelLabel} - ${msg.senderId}`;
+            lead = await storage.createLead({
+              name: senderName,
+              phone: msg.senderId,
+              channel: channelLabel,
+              stateId: newLeadState?.id ?? null,
+            });
+            console.log(`[Meta] Auto-created lead ${lead.id} for ${platform} sender ${msg.senderId}`);
+          }
+
+          // Get prior messages for bot context
+          const priorMessages = await storage.getSocialMessagesByLead(lead.id, platform);
+          const isFirstBotInteraction = priorMessages.filter((m) => m.direction === "outbound" && m.agentName === "البوت").length === 0;
+
+          // Log inbound message
+          await storage.logSocialMessage({
+            leadId: lead.id,
+            platform,
+            senderId: msg.senderId,
+            direction: "inbound",
+            messageText: msg.messageText,
+            messageId: msg.messageId || null,
+            isRead: false,
+            createdAt: msg.timestamp,
+          });
+
+          await storage.createHistory({
+            leadId: lead.id,
+            action: `رسالة ${channelLabel} واردة`,
+            description: `رسالة من ${msg.senderId}: ${msg.messageText.substring(0, 100)}${msg.messageText.length > 100 ? "..." : ""}`,
+            performedBy: channelLabel,
+          });
+
+          // Notification for assigned agent
+          const notifUserId = lead.assignedTo || pageConn.connectedBy || "";
+          if (notifUserId) {
+            await storage.createNotification({
+              userId: notifUserId,
+              type: "social_message",
+              message: isNewLead
+                ? `رسالة ${channelLabel} جديدة — ليد جديد: ${msg.messageText.substring(0, 80)}`
+                : `رسالة ${channelLabel} من ${lead.name || msg.senderId}: ${msg.messageText.substring(0, 80)}`,
+              leadId: lead.id,
+              isRead: false,
+            });
+          }
+
+          // ── Bot Logic ──────────────────────────────────────────────────
+          try {
+            const assignedUserId = lead.assignedTo || pageConn.connectedBy || "";
+            if (!assignedUserId) continue;
+
+            const botSettings = await storage.getChatbotSettings(assignedUserId);
+            const botEnabled = botSettings?.isActive === true;
+            const leadBotActive = lead.botActive !== false;
+
+            if (botEnabled && leadBotActive && lead.botStage !== "handed_off") {
+              const respondAlways = botSettings?.respondAlways === true;
+              const outsideHours = isOutsideWorkingHours(
+                botSettings?.workingHoursStart ?? 9,
+                botSettings?.workingHoursEnd ?? 18
+              );
+
+              if (respondAlways || outsideHours) {
+                const { generateBotReply } = await import("./ai");
+                const stageMap: Record<string, BotStage> = {
+                  collecting_budget: "collecting_needs",
+                  collecting_unit: "collecting_needs",
+                  collecting_rooms: "collecting_needs",
+                };
+                const rawStage = lead.botStage ?? "greeting";
+                const currentStage: BotStage = (stageMap[rawStage] ?? rawStage) as BotStage;
+
+                const allProjects = await storage.getAllProjects();
+                const activeProjects = allProjects.filter((p) => p.isActive !== false);
+                const allUnits = await storage.getAllUnits();
+
+                // Map social messages to WhatsappMessagesLog shape for AI
+                const priorForBot = priorMessages.map((m) => ({
+                  ...m,
+                  agentId: null,
+                  templateId: null,
+                  templateName: null,
+                  phone: msg.senderId,
+                  messageId: m.messageId,
+                  botActionsSummary: m.botActionsSummary,
+                })) as unknown as import("@shared/schema").WhatsappMessagesLog[];
+
+                const botResult = await generateBotReply(
+                  msg.messageText,
+                  currentStage,
+                  lead,
+                  priorForBot,
+                  activeProjects,
+                  allUnits,
+                  {
+                    botName: botSettings?.botName ?? undefined,
+                    companyName: botSettings?.companyName ?? undefined,
+                    botRole: (botSettings as Record<string, unknown>)?.botRole as string | undefined,
+                    botPersonality: botSettings?.botPersonality ?? undefined,
+                    botMission: (botSettings as Record<string, unknown>)?.botMission as string | undefined,
+                    companyKnowledge: (botSettings as Record<string, unknown>)?.companyKnowledge as string | undefined,
+                    welcomeMessage: botSettings?.welcomeMessage ?? undefined,
+                    enabledProjectIds: (botSettings as Record<string, unknown>)?.enabledProjectIds as string[] | null | undefined,
+                  },
+                  isFirstBotInteraction
+                );
+
+                const leadUpdates: Partial<Lead> = { botStage: botResult.nextStage };
+                if (botResult.extractedName && (!lead.name || lead.name.startsWith(`${channelLabel} -`))) {
+                  leadUpdates.name = botResult.extractedName;
+                }
+                if (botResult.extractedBudget && !lead.budget) leadUpdates.budget = botResult.extractedBudget;
+                if (botResult.extractedUnitType && !lead.unitType) leadUpdates.unitType = botResult.extractedUnitType;
+                if (botResult.extractedBedrooms && !lead.bedrooms) leadUpdates.bedrooms = botResult.extractedBedrooms;
+                if (botResult.extractedBathrooms && !lead.bathrooms) leadUpdates.bathrooms = botResult.extractedBathrooms;
+                if (botResult.extractedLocation && !lead.location) leadUpdates.location = botResult.extractedLocation;
+                if (botResult.extractedArea && !lead.area) leadUpdates.area = botResult.extractedArea;
+                if (botResult.extractedPaymentType && !lead.paymentType) leadUpdates.paymentType = botResult.extractedPaymentType;
+                if (botResult.extractedDownPayment && !lead.downPayment) leadUpdates.downPayment = botResult.extractedDownPayment;
+                if (botResult.extractedProject && !lead.preferredProject) leadUpdates.preferredProject = botResult.extractedProject;
+                if (botResult.extractedTimeline && !lead.timeline) leadUpdates.timeline = botResult.extractedTimeline;
+
+                // Bot CRM actions
+                const botActionsSummaryParts: string[] = [];
+                if (botResult.botActions && botResult.botActions.length > 0) {
+                  const allStates = await storage.getAllStates();
+                  const notifTarget = lead.assignedTo || assignedUserId;
+                  const leadDisplayName = leadUpdates.name || lead.name || msg.senderId;
+                  for (const action of botResult.botActions) {
+                    try {
+                      if (action.type === "change_state" && action.stateName) {
+                        const targetState = allStates.find((s) => s.name === action.stateName || s.name.includes(action.stateName!));
+                        if (targetState) {
+                          leadUpdates.stateId = targetState.id;
+                          const terminalStateNames = ["غير مهتم", "ملغي", "cancelled", "not_interested"];
+                          const isTerminal = terminalStateNames.some((n) => targetState.name.includes(n) || (action.stateName && action.stateName.includes(n)));
+                          if (isTerminal) {
+                            leadUpdates.botActive = false;
+                            leadUpdates.botStage = "handed_off";
+                          }
+                          botActionsSummaryParts.push(`تغيير الحالة: ${targetState.name}`);
+                          await storage.createNotification({ userId: notifTarget, type: "bot_action", message: `🤖 البوت غيّر حالة الليد لـ "${targetState.name}" — ${leadDisplayName}`, leadId: lead.id, isRead: false });
+                        }
+                      } else if (action.type === "create_reminder" && action.isoDate) {
+                        const reminderDate = new Date(action.isoDate);
+                        if (!isNaN(reminderDate.getTime())) {
+                          const note = action.note || `متابعة بوت ${channelLabel} — ${leadDisplayName}`;
+                          await storage.createReminder({ leadId: lead.id, userId: notifTarget, title: note, dueDate: reminderDate, priority: "medium", isCompleted: false });
+                          botActionsSummaryParts.push(`تذكير: ${reminderDate.toLocaleString("ar-EG")}`);
+                          await storage.createNotification({ userId: notifTarget, type: "bot_action", message: `🤖 البوت حدّد موعد متابعة — ${leadDisplayName}`, leadId: lead.id, isRead: false });
+                        }
+                      } else if (action.type === "update_score" && action.score) {
+                        leadUpdates.score = action.score;
+                        botActionsSummaryParts.push(`تقييم: ${action.score}`);
+                      }
+                    } catch (actionErr) {
+                      console.error(`[MetaBot] Action ${action.type} error:`, actionErr);
+                    }
+                  }
+                }
+
+                const botActionsSummary = botActionsSummaryParts.length > 0 ? botActionsSummaryParts.join(" | ") : null;
+
+                const resolvedName = leadUpdates.name || lead.name;
+                const resolvedBudget = leadUpdates.budget || lead.budget;
+                const resolvedUnit = leadUpdates.unitType || lead.unitType;
+                const allFieldsCollected = !!(resolvedName && !resolvedName.startsWith(`${channelLabel} -`) && (resolvedBudget || resolvedUnit));
+
+                if (botResult.shouldHandoff && allFieldsCollected) {
+                  leadUpdates.botActive = false;
+                  leadUpdates.botStage = "handed_off";
+                  const handoffMsg = "شكراً جزيلاً على وقتك! 🙏 سيتواصل معك أحد مستشارينا في أقرب وقت ممكن.";
+                  await sendMetaMessage(platform, msg.senderId, handoffMsg, pageConn.pageAccessToken);
+                  await storage.logSocialMessage({ leadId: lead.id, platform, senderId: msg.senderId, direction: "outbound", messageText: handoffMsg, agentName: "البوت", isRead: false });
+                  const notifTarget = lead.assignedTo || assignedUserId;
+                  await storage.createNotification({ userId: notifTarget, type: "bot_handoff", message: `🤖 البوت أحال عميل ${channelLabel} للمتابعة — ${resolvedName || msg.senderId}`, leadId: lead.id, isRead: false });
+                } else {
+                  const sendResult = await sendMetaMessage(platform, msg.senderId, botResult.reply, pageConn.pageAccessToken);
+                  await storage.logSocialMessage({
+                    leadId: lead.id,
+                    platform,
+                    senderId: msg.senderId,
+                    direction: "outbound",
+                    messageText: sendResult.success ? botResult.reply : `[فشل الإرسال] ${botResult.reply}`,
+                    agentName: "البوت",
+                    isRead: false,
+                    botActionsSummary: botActionsSummary ?? undefined,
+                  });
+                }
+
+                await storage.updateLead(lead.id, leadUpdates);
+              }
+            }
+          } catch (botErr) {
+            console.error("[MetaBot] Bot reply error:", botErr);
+          }
+        } catch (msgErr) {
+          console.error("[Meta] Error processing message:", msgErr);
+        }
+      }
+    } catch (err) {
+      console.error("[Meta] Webhook POST error:", err);
+    }
+  });
+
+  // POST /api/meta/list-pages — list accessible Facebook pages for a user access token (OAuth flow support)
+  app.post("/api/meta/list-pages", isAuthenticated, async (req, res) => {
+    try {
+      if (!canManageMeta(req.user?.role)) {
+        return res.status(403).json({ error: "Only admins can manage page connections" });
+      }
+      const { userAccessToken } = req.body as { userAccessToken: string };
+      if (!userAccessToken) {
+        return res.status(400).json({ error: "userAccessToken is required" });
+      }
+      const { fetchPageDetails } = await import("./meta");
+      const META_GRAPH_BASE = "https://graph.facebook.com/v19.0";
+      const pagesRes = await fetch(`${META_GRAPH_BASE}/me/accounts?access_token=${userAccessToken}`);
+      if (!pagesRes.ok) {
+        return res.status(400).json({ error: "Failed to fetch pages from Facebook" });
+      }
+      const pagesData = (await pagesRes.json()) as { data: { id: string; name: string; access_token: string }[] };
+      // Return only page metadata to the client — never expose access tokens
+      const pages = await Promise.all(
+        pagesData.data.map(async (p) => {
+          const details = await fetchPageDetails(userAccessToken, p.id);
+          return {
+            id: p.id,
+            name: p.name,
+            instagramAccountId: details?.instagramAccountId,
+          };
+        })
+      );
+      res.json({ pages });
+    } catch (err) {
+      console.error("[Meta] List pages error:", err);
+      res.status(500).json({ error: "Failed to list pages" });
+    }
+  });
+
+  // GET /api/meta/connection — get current page connection status
+  app.get("/api/meta/connection", isAuthenticated, async (_req, res) => {
+    try {
+      const conn = await storage.getMetaPageConnection();
+      if (!conn) return res.json({ connected: false });
+      const { pageAccessToken: _t, ...safeConn } = conn;
+      res.json({ connected: true, ...safeConn });
+    } catch (err) {
+      console.error("[Meta] Get connection error:", err);
+      res.status(500).json({ error: "Failed to get connection" });
+    }
+  });
+
+  // Helper to check if user can manage Meta connections (admin-level only)
+  const canManageMeta = (role: string | undefined) =>
+    role === "super_admin" || role === "admin" || role === "sales_admin" || role === "company_owner";
+
+  // POST /api/meta/connect — save page connection from OAuth callback
+  app.post("/api/meta/connect", isAuthenticated, async (req, res) => {
+    try {
+      if (!canManageMeta(req.user?.role)) {
+        return res.status(403).json({ error: "Only admins can manage page connections" });
+      }
+      const { userAccessToken, pageId } = req.body as { userAccessToken: string; pageId: string };
+      if (!userAccessToken || !pageId) {
+        return res.status(400).json({ error: "userAccessToken and pageId are required" });
+      }
+      const { fetchPageDetails } = await import("./meta");
+      const details = await fetchPageDetails(userAccessToken, pageId);
+      if (!details) {
+        return res.status(400).json({ error: "لم يتم العثور على الصفحة أو لا يوجد صلاحية" });
+      }
+      const conn = await storage.upsertMetaPageConnection({
+        pageId: details.pageId,
+        pageName: details.pageName,
+        pageAccessToken: details.pageAccessToken,
+        instagramAccountId: details.instagramAccountId ?? null,
+        connectedBy: req.user!.id,
+        isActive: true,
+      });
+      const { pageAccessToken: _t, ...safeConn } = conn;
+      res.json({ connected: true, ...safeConn });
+    } catch (err) {
+      console.error("[Meta] Connect error:", err);
+      res.status(500).json({ error: "Failed to connect page" });
+    }
+  });
+
+  // POST /api/meta/connect-manual — manually save page connection (for environments without full OAuth flow)
+  app.post("/api/meta/connect-manual", isAuthenticated, async (req, res) => {
+    try {
+      if (!canManageMeta(req.user?.role)) {
+        return res.status(403).json({ error: "Only admins can manage page connections" });
+      }
+      const { pageId, pageName, pageAccessToken, instagramAccountId } = req.body as {
+        pageId: string;
+        pageName: string;
+        pageAccessToken: string;
+        instagramAccountId?: string;
+      };
+      if (!pageId || !pageName || !pageAccessToken) {
+        return res.status(400).json({ error: "pageId, pageName, and pageAccessToken are required" });
+      }
+      const conn = await storage.upsertMetaPageConnection({
+        pageId,
+        pageName,
+        pageAccessToken,
+        instagramAccountId: instagramAccountId ?? null,
+        connectedBy: req.user!.id,
+        isActive: true,
+      });
+      const { pageAccessToken: _t, ...safeConn } = conn;
+      res.json({ connected: true, ...safeConn });
+    } catch (err) {
+      console.error("[Meta] Manual connect error:", err);
+      res.status(500).json({ error: "Failed to save connection" });
+    }
+  });
+
+  // DELETE /api/meta/connection — disconnect page
+  app.delete("/api/meta/connection", isAuthenticated, async (req, res) => {
+    try {
+      if (!canManageMeta(req.user?.role)) {
+        return res.status(403).json({ error: "Only admins can manage page connections" });
+      }
+      const conn = await storage.getMetaPageConnection();
+      if (!conn) return res.json({ success: true });
+      await storage.deleteMetaPageConnection(conn.pageId);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("[Meta] Disconnect error:", err);
+      res.status(500).json({ error: "Failed to disconnect" });
+    }
+  });
+
+  // GET /api/leads/:leadId/social-messages — get Messenger/Instagram messages for lead
+  app.get("/api/leads/:leadId/social-messages", isAuthenticated, async (req, res) => {
+    try {
+      const leadId = req.params.leadId as string;
+      if (!(await canAccessLead(req.user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const platform = req.query.platform as string | undefined;
+      const messages = await storage.getSocialMessagesByLead(leadId, platform);
+      res.json(messages);
+    } catch (err) {
+      console.error("[Meta] Get social messages error:", err);
+      res.status(500).json({ error: "Failed to fetch social messages" });
+    }
+  });
+
+  // POST /api/leads/:leadId/social-messages/send — send manual reply via Messenger/Instagram
+  app.post("/api/leads/:leadId/social-messages/send", isAuthenticated, async (req, res) => {
+    try {
+      const leadId = req.params.leadId as string;
+      if (!(await canAccessLead(req.user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const lead = await storage.getLead(leadId);
+      if (!lead) return res.status(404).json({ error: "Lead not found" });
+
+      const { messageText, platform } = req.body as { messageText: string; platform: string };
+      if (!messageText || !platform) {
+        return res.status(400).json({ error: "messageText and platform are required" });
+      }
+
+      // Validate recipient: always use the lead's phone (which stores the sender PSID) — never trust client-supplied senderId
+      const senderId = lead.phone;
+      if (!senderId) return res.status(400).json({ error: "Lead has no sender ID (phone) on record" });
+
+      // Verify the lead is actually a Meta channel lead
+      const channelLabel = platform === "instagram" ? "إنستجرام" : "ماسنجر";
+      if (lead.channel !== channelLabel) {
+        return res.status(400).json({ error: "Platform mismatch: lead channel does not match requested platform" });
+      }
+
+      const pageConn = await storage.getMetaPageConnection();
+      if (!pageConn) return res.status(400).json({ error: "لا يوجد صفحة مرتبطة" });
+
+      const { sendMetaMessage } = await import("./meta");
+      const sendResult = await sendMetaMessage(platform as "messenger" | "instagram", senderId, messageText, pageConn.pageAccessToken);
+
+      const user = req.user!;
+      const agentName = user.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : user.username;
+
+      const logged = await storage.logSocialMessage({
+        leadId,
+        platform,
+        senderId,
+        direction: "outbound",
+        messageText: sendResult.success ? messageText : `[فشل] ${messageText}`,
+        agentName,
+        isRead: false,
+      });
+
+      if (sendResult.success) {
+        await storage.createHistory({
+          leadId,
+          action: `رد ${platform === "instagram" ? "إنستجرام" : "ماسنجر"} يدوي`,
+          description: `${agentName}: ${messageText.substring(0, 100)}`,
+          performedBy: agentName,
+        });
+      }
+
+      res.json(logged);
+    } catch (err) {
+      console.error("[Meta] Send social message error:", err);
+      res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
+  // POST /api/leads/:leadId/social-messages/read — mark messages as read
+  app.post("/api/leads/:leadId/social-messages/read", isAuthenticated, async (req, res) => {
+    try {
+      const leadId = req.params.leadId as string;
+      if (!(await canAccessLead(req.user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const { platform } = req.body as { platform: string };
+      if (platform) {
+        await storage.markSocialMessagesRead(leadId, platform);
+      }
+      res.json({ success: true });
+    } catch (err) {
+      console.error("[Meta] Mark read error:", err);
+      res.status(500).json({ error: "Failed to mark read" });
+    }
+  });
+
+  // GET /api/meta/verify-token — return verify token for webhook setup guidance
+  app.get("/api/meta/verify-token", isAuthenticated, async (_req, res) => {
+    res.json({ verifyToken: META_VERIFY_TOKEN });
+  });
+
   return httpServer;
 }

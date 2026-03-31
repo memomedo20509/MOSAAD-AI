@@ -139,6 +139,37 @@ app.use((req, res, next) => {
     )
   `).catch(() => {});
 
+  // Meta (Messenger/Instagram) integration tables (Task #9)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS meta_page_connections (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      page_id TEXT NOT NULL UNIQUE,
+      page_name TEXT NOT NULL,
+      page_access_token TEXT NOT NULL,
+      instagram_account_id TEXT,
+      connected_by VARCHAR,
+      is_active BOOLEAN DEFAULT true,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `).catch(() => {});
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS social_messages_log (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      lead_id VARCHAR REFERENCES leads(id),
+      platform TEXT NOT NULL,
+      sender_id TEXT NOT NULL,
+      direction TEXT NOT NULL DEFAULT 'inbound',
+      message_text TEXT,
+      message_id TEXT UNIQUE,
+      agent_name TEXT,
+      is_read BOOLEAN DEFAULT false,
+      bot_actions_summary TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `).catch(() => {});
+
   await registerRoutes(httpServer, app);
   
   await seedDefaultAdmin();

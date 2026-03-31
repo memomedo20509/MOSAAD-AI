@@ -86,11 +86,17 @@ import {
   whatsappCampaigns,
   whatsappCampaignRecipients,
   whatsappFollowupRules,
+  metaPageConnections,
+  socialMessagesLog,
   type WhatsappCampaign,
   type InsertWhatsappCampaign,
   type WhatsappCampaignRecipient,
   type WhatsappFollowupRule,
   type InsertWhatsappFollowupRule,
+  type MetaPageConnection,
+  type InsertMetaPageConnection,
+  type SocialMessagesLog,
+  type InsertSocialMessagesLog,
 } from "@shared/schema";
 import {
   customRoles,
@@ -366,6 +372,19 @@ export interface IStorage {
   getCustomRoleByName(name: string): Promise<CustomRole | undefined>;
   createCustomRole(data: InsertCustomRole): Promise<CustomRole>;
   deleteCustomRole(id: string): Promise<boolean>;
+
+  // Meta Page Connections
+  getMetaPageConnection(): Promise<MetaPageConnection | undefined>;
+  upsertMetaPageConnection(data: InsertMetaPageConnection): Promise<MetaPageConnection>;
+  deleteMetaPageConnection(pageId: string): Promise<boolean>;
+
+  // Social Messages Log
+  logSocialMessage(data: InsertSocialMessagesLog): Promise<SocialMessagesLog>;
+  getSocialMessagesByLead(leadId: string, platform?: string): Promise<SocialMessagesLog[]>;
+  findLeadBySenderId(senderId: string, platform: string): Promise<Lead | undefined>;
+  findSocialMessageById(messageId: string): Promise<SocialMessagesLog | undefined>;
+  markSocialMessagesRead(leadId: string, platform: string): Promise<void>;
+  getUnreadSocialCount(userId: string, userRole: string, teamId?: string | null): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1898,6 +1917,131 @@ export class DatabaseStorage implements IStorage {
   async deleteCustomRole(id: string): Promise<boolean> {
     const result = await db.delete(customRoles).where(eq(customRoles.id, id)).returning();
     return result.length > 0;
+  }
+
+  // Meta Page Connections
+  async getMetaPageConnection(): Promise<MetaPageConnection | undefined> {
+    const [conn] = await db.select().from(metaPageConnections).where(eq(metaPageConnections.isActive, true)).limit(1);
+    return conn;
+  }
+
+  async upsertMetaPageConnection(data: InsertMetaPageConnection): Promise<MetaPageConnection> {
+    // Enforce single active connection: deactivate all others before upserting
+    await db
+      .update(metaPageConnections)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(sql`${metaPageConnections.pageId} != ${data.pageId}`);
+
+    const existing = await db.select().from(metaPageConnections).where(eq(metaPageConnections.pageId, data.pageId)).limit(1);
+    if (existing.length > 0) {
+      const [updated] = await db
+        .update(metaPageConnections)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(metaPageConnections.pageId, data.pageId))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(metaPageConnections).values(data).returning();
+    return created;
+  }
+
+  async deleteMetaPageConnection(pageId: string): Promise<boolean> {
+    const result = await db.delete(metaPageConnections).where(eq(metaPageConnections.pageId, pageId)).returning();
+    return result.length > 0;
+  }
+
+  // Social Messages Log
+  async logSocialMessage(data: InsertSocialMessagesLog): Promise<SocialMessagesLog> {
+    const [msg] = await db.insert(socialMessagesLog).values(data).returning();
+    return msg;
+  }
+
+  async getSocialMessagesByLead(leadId: string, platform?: string): Promise<SocialMessagesLog[]> {
+    if (platform) {
+      return db
+        .select()
+        .from(socialMessagesLog)
+        .where(and(eq(socialMessagesLog.leadId, leadId), eq(socialMessagesLog.platform, platform)))
+        .orderBy(socialMessagesLog.createdAt);
+    }
+    return db
+      .select()
+      .from(socialMessagesLog)
+      .where(eq(socialMessagesLog.leadId, leadId))
+      .orderBy(socialMessagesLog.createdAt);
+  }
+
+  async findLeadBySenderId(senderId: string, platform: string): Promise<Lead | undefined> {
+    const channelLabel = platform === "instagram" ? "إنستجرام" : "ماسنجر";
+
+    // Primary lookup: find lead by phone (senderId) and matching channel label
+    const [leadByPhone] = await db
+      .select()
+      .from(leads)
+      .where(and(eq(leads.phone, senderId), eq(leads.channel, channelLabel)))
+      .limit(1);
+    if (leadByPhone) return leadByPhone;
+
+    // Secondary lookup: find via social messages log (handles pre-existing logs)
+    const msgs = await db
+      .select()
+      .from(socialMessagesLog)
+      .where(and(eq(socialMessagesLog.senderId, senderId), eq(socialMessagesLog.platform, platform)))
+      .limit(1);
+    if (msgs.length === 0) return undefined;
+    const leadId = msgs[0].leadId;
+    if (!leadId) return undefined;
+    const [lead] = await db.select().from(leads).where(eq(leads.id, leadId));
+    return lead;
+  }
+
+  async findSocialMessageById(messageId: string): Promise<SocialMessagesLog | undefined> {
+    const [msg] = await db
+      .select()
+      .from(socialMessagesLog)
+      .where(eq(socialMessagesLog.messageId, messageId))
+      .limit(1);
+    return msg;
+  }
+
+  async markSocialMessagesRead(leadId: string, platform: string): Promise<void> {
+    await db
+      .update(socialMessagesLog)
+      .set({ isRead: true })
+      .where(
+        and(
+          eq(socialMessagesLog.leadId, leadId),
+          eq(socialMessagesLog.platform, platform),
+          eq(socialMessagesLog.direction, "inbound"),
+          eq(socialMessagesLog.isRead, false)
+        )
+      );
+  }
+
+  async getUnreadSocialCount(userId: string, userRole: string, teamId?: string | null): Promise<number> {
+    try {
+      const adminRoles = ["super_admin", "company_owner", "sales_admin", "admin", "sales_manager"];
+      const isAdmin = adminRoles.includes(userRole);
+
+      let query: string;
+      let params: unknown[];
+      if (isAdmin) {
+        query = `SELECT COUNT(*) FROM social_messages_log WHERE is_read = false AND direction = 'inbound'`;
+        params = [];
+      } else {
+        query = `
+          SELECT COUNT(*) FROM social_messages_log sm
+          JOIN leads l ON sm.lead_id = l.id
+          WHERE sm.is_read = false AND sm.direction = 'inbound'
+          AND l.assigned_to = $1
+        `;
+        params = [userId];
+      }
+      const result = await pool.query<{ count: string }>(query, params);
+      return parseInt(result.rows[0]?.count ?? "0", 10);
+    } catch {
+      return 0;
+    }
   }
 }
 

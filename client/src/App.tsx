@@ -43,6 +43,7 @@ import WhatsAppInboxPage from "@/pages/whatsapp-inbox";
 import WhatsAppCampaignsPage from "@/pages/whatsapp-campaigns";
 import EmailReportsPage from "@/pages/email-reports";
 import LeaderboardPage from "@/pages/leaderboard";
+import MetaSettingsPage from "@/pages/meta-settings";
 
 function LogoutButton() {
   const { logoutMutation } = useAuth();
@@ -91,6 +92,7 @@ function Router() {
       <Route path="/whatsapp-campaigns" component={WhatsAppCampaignsPage} />
       <Route path="/settings/email-reports" component={EmailReportsPage} />
       <Route path="/leaderboard" component={LeaderboardPage} />
+      <Route path="/settings/meta" component={MetaSettingsPage} />
       <Route component={NotFound} />
     </Switch>
   );

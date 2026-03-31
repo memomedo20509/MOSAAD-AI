@@ -224,6 +224,12 @@ export function AppSidebar() {
       adminOnly: true,
     },
     {
+      title: "فيسبوك وإنستجرام",
+      url: "/settings/meta",
+      icon: MessageSquare,
+      adminOnly: true,
+    },
+    {
       title: t.emailReports,
       url: "/settings/email-reports",
       icon: Mail,
