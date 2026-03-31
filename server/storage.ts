@@ -2130,6 +2130,8 @@ export class DatabaseStorage implements IStorage {
     } catch {
       return 0;
     }
+  }
+
   // Sales Performance Reports
   async getSalesActivityReport(from?: Date, to?: Date): Promise<{
     agentId: string;
