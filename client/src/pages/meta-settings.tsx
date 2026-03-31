@@ -53,8 +53,6 @@ interface FacebookPagesResponse {
 
 const ADMIN_ROLES = ["super_admin", "admin", "sales_admin", "company_owner"];
 
-const META_APP_ID = import.meta.env.VITE_META_APP_ID as string | undefined;
-
 declare global {
   interface Window {
     FB: {
@@ -105,6 +103,10 @@ export default function MetaSettingsPage() {
 
   const { data: verifyTokenData } = useQuery<VerifyTokenResponse>({
     queryKey: ["/api/meta/verify-token"],
+  });
+
+  const { data: appConfigData } = useQuery<{ appId: string }>({
+    queryKey: ["/api/meta/app-config"],
   });
 
   const webhookUrl = typeof window !== "undefined"
@@ -170,7 +172,8 @@ export default function MetaSettingsPage() {
   };
 
   const handleFacebookLogin = useCallback(async () => {
-    if (!META_APP_ID) {
+    const resolvedAppId = appConfigData?.appId || import.meta.env.VITE_META_APP_ID;
+    if (!resolvedAppId) {
       toast({
         title: "VITE_META_APP_ID غير مضبوط",
         description: "أضف متغير البيئة VITE_META_APP_ID بقيمة App ID من تطبيق Meta Developer، أو استخدم الإدخال اليدوي",
@@ -180,7 +183,7 @@ export default function MetaSettingsPage() {
     }
     setOauthLoading(true);
     try {
-      await loadFbSdk(META_APP_ID);
+      await loadFbSdk(resolvedAppId);
       window.FB.login(async (response) => {
         if (!response.authResponse?.accessToken) {
           setOauthLoading(false);
@@ -211,7 +214,7 @@ export default function MetaSettingsPage() {
       setOauthLoading(false);
       toast({ title: "فشل في تحميل Facebook SDK", variant: "destructive" });
     }
-  }, [connectPageMutation, toast]);
+  }, [connectPageMutation, toast, appConfigData]);
 
   const isConnected = connection?.connected === true;
 

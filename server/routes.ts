@@ -4262,5 +4262,11 @@ export async function registerRoutes(
     res.json({ verifyToken: META_VERIFY_TOKEN });
   });
 
+  // GET /api/meta/app-config — return public Meta App ID for frontend OAuth
+  app.get("/api/meta/app-config", isAuthenticated, async (_req, res) => {
+    const appId = process.env.VITE_META_APP_ID || process.env.META_APP_ID || "";
+    res.json({ appId });
+  });
+
   return httpServer;
 }
