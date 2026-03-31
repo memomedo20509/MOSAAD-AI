@@ -296,6 +296,7 @@ export interface IStorage {
     leadId: string;
     leadName: string | null;
     phone: string;
+    phone2: string | null;
     lastMessage: string | null;
     lastMessageAt: Date | null;
     unreadCount: number;
