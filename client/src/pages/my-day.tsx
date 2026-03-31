@@ -637,7 +637,7 @@ export default function MyDayPage() {
             </Card>
           ) : (
             data!.doneToday.map((item) => (
-              <FollowUpCard key={item.id} item={item} isDone />
+              <FollowUpCard key={item.id} item={item} isDone onOpenLead={openLeadPanel} />
             ))
           )}
         </TabsContent>
