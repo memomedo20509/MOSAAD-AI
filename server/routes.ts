@@ -2840,13 +2840,34 @@ export async function registerRoutes(
   app.put("/api/chatbot/settings", isAuthenticated, async (req, res) => {
     try {
       const userId = req.user!.id;
-      const { isActive, workingHoursStart, workingHoursEnd, welcomeMessage } = req.body;
+      const {
+        isActive,
+        workingHoursStart,
+        workingHoursEnd,
+        welcomeMessage,
+        botName,
+        companyName,
+        botRole,
+        botPersonality,
+        botMission,
+        companyKnowledge,
+        respondAlways,
+        enabledProjectIds,
+      } = req.body;
       const settings = await storage.upsertChatbotSettings({
         userId,
         isActive: isActive ?? false,
         workingHoursStart: workingHoursStart ?? 9,
         workingHoursEnd: workingHoursEnd ?? 18,
         welcomeMessage: welcomeMessage ?? "أهلاً! 👋 أنا المساعد الذكي لشركتنا العقارية.",
+        botName: botName ?? undefined,
+        companyName: companyName ?? undefined,
+        botRole: botRole ?? undefined,
+        botPersonality: botPersonality ?? undefined,
+        botMission: botMission ?? undefined,
+        companyKnowledge: companyKnowledge ?? undefined,
+        respondAlways: respondAlways ?? false,
+        enabledProjectIds: Array.isArray(enabledProjectIds) ? (enabledProjectIds as string[]) : null,
       });
       res.json(settings);
     } catch (error) {
