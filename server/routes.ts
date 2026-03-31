@@ -3087,6 +3087,16 @@ export async function registerRoutes(
           performedBy: "واتساب",
         });
 
+        // ── Auto-detect Egyptian phone numbers in any inbound message ───────
+        if (!lead.phone2) {
+          const phoneMatch = msg.messageText.match(/\b(01[0-9]{9})\b/);
+          if (phoneMatch) {
+            const detectedPhone = phoneMatch[1];
+            await storage.updateLead(lead.id, { phone2: detectedPhone });
+            lead = { ...lead, phone2: detectedPhone };
+          }
+        }
+
         // ── Chatbot Logic ───────────────────────────────────────────────────
         try {
           const botSettings = await storage.getChatbotSettings(userId);
@@ -3170,6 +3180,12 @@ export async function registerRoutes(
               }
               if (botResult.extractedTimeline && !lead.timeline) {
                 leadUpdates.timeline = botResult.extractedTimeline;
+              }
+              if (botResult.extractedPhone && !lead.phone2) {
+                const cleanPhone = botResult.extractedPhone.replace(/\D/g, "");
+                if (/^01[0-9]{9}$/.test(cleanPhone)) {
+                  leadUpdates.phone2 = cleanPhone;
+                }
               }
 
               const resolvedName = leadUpdates.name || lead.name;

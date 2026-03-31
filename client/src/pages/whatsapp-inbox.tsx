@@ -16,6 +16,7 @@ interface Conversation {
   leadId: string;
   leadName: string | null;
   phone: string;
+  phone2: string | null;
   lastMessage: string | null;
   lastMessageAt: string | null;
   unreadCount: number;
@@ -291,6 +292,11 @@ export default function WhatsAppInboxPage() {
                             {conv.phone}
                           </span>
                         )}
+                        {conv.phone2 && (
+                          <span className="text-xs text-green-600 font-medium block truncate" data-testid={`text-conv-phone2-${conv.leadId}`}>
+                            📱 {conv.phone2}
+                          </span>
+                        )}
                         <p
                           className={cn(
                             "text-xs mt-0.5 truncate",
@@ -406,6 +412,11 @@ export default function WhatsAppInboxPage() {
                     {selectedConv?.phone && (
                       <p className="text-xs text-muted-foreground" data-testid="text-chat-phone">
                         {selectedConv.phone}
+                      </p>
+                    )}
+                    {selectedConv?.phone2 && (
+                      <p className="text-xs text-green-600 font-medium" data-testid="text-chat-phone2">
+                        📱 {selectedConv.phone2}
                       </p>
                     )}
                   </div>

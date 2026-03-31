@@ -1447,6 +1447,7 @@ export class DatabaseStorage implements IStorage {
     leadId: string;
     leadName: string | null;
     phone: string;
+    phone2: string | null;
     lastMessage: string | null;
     lastMessageAt: Date | null;
     unreadCount: number;
@@ -1480,6 +1481,7 @@ export class DatabaseStorage implements IStorage {
       leadId: row.leadId,
       leadName: leadMap.get(row.leadId)?.name ?? null,
       phone: row.phone ?? "",
+      phone2: leadMap.get(row.leadId)?.phone2 ?? null,
       lastMessage: row.lastMessage ?? null,
       lastMessageAt: row.lastMessageAt ? new Date(row.lastMessageAt) : null,
       unreadCount: Number(row.unreadCount ?? 0),

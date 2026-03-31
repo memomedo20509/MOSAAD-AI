@@ -847,17 +847,28 @@ export function LeadDetailPanel({
                           </div>
                         )}
                         {lead.phone2 && (
-                          <div className="flex items-center justify-between gap-2 text-sm">
+                          <div className="flex items-center justify-between gap-2 text-sm rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 px-2 py-1.5">
                             <div className="flex items-center gap-2">
-                              <Phone className="h-4 w-4 text-muted-foreground" />
-                              <span dir="ltr">{lead.phone2}</span>
+                              <Phone className="h-4 w-4 text-green-600" />
+                              <div>
+                                <span className="text-xs text-green-600 font-medium block">موبايل مصري</span>
+                                <span dir="ltr" className="font-medium text-green-700 dark:text-green-400">{lead.phone2}</span>
+                              </div>
                             </div>
-                            <a href={`https://wa.me/${lead.phone2.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
-                              <Button size="sm" variant="outline" className="h-7 gap-1 text-green-600 border-green-200 hover:bg-green-50 text-xs" data-testid="button-whatsapp-secondary">
-                                <MessageCircle className="h-3.5 w-3.5" />
-                                واتساب
-                              </Button>
-                            </a>
+                            <div className="flex items-center gap-1">
+                              <a href={`tel:${lead.phone2}`} onClick={(e) => e.stopPropagation()}>
+                                <Button size="sm" variant="outline" className="h-7 gap-1 text-blue-600 border-blue-200 hover:bg-blue-50 text-xs" data-testid="button-call-primary">
+                                  <Phone className="h-3.5 w-3.5" />
+                                  اتصال
+                                </Button>
+                              </a>
+                              <a href={`https://wa.me/${lead.phone2.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                                <Button size="sm" variant="outline" className="h-7 gap-1 text-green-600 border-green-200 hover:bg-green-50 text-xs" data-testid="button-whatsapp-secondary">
+                                  <MessageCircle className="h-3.5 w-3.5" />
+                                  واتساب
+                                </Button>
+                              </a>
+                            </div>
                           </div>
                         )}
                         {lead.email && (

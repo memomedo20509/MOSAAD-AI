@@ -218,6 +218,7 @@ export interface BotReplyResult {
   extractedDownPayment?: string | null;
   extractedProject?: string | null;
   extractedTimeline?: string | null;
+  extractedPhone?: string | null;
   shouldHandoff: boolean;
 }
 
@@ -235,6 +236,7 @@ interface ParsedBotReply {
   extractedDownPayment?: unknown;
   extractedProject?: unknown;
   extractedTimeline?: unknown;
+  extractedPhone?: unknown;
   shouldHandoff?: unknown;
 }
 
@@ -373,6 +375,7 @@ ${leadInfo}
   "extractedDownPayment": "مبلغ المقدم أو null",
   "extractedProject": "اسم المشروع اللي العميل مهتم بيه أو null",
   "extractedTimeline": "الجدول الزمني للشراء (مثال: خلال شهر، 3 أشهر، نهاية السنة) أو null",
+  "extractedPhone": "رقم الموبايل المصري إذا ذكره العميل (مثال: 01020076679) أو null",
   "shouldHandoff": true أو false
 }`;
 
@@ -415,6 +418,7 @@ ${conversationHistory}
     extractedDownPayment: typeof parsed.extractedDownPayment === "string" ? parsed.extractedDownPayment : null,
     extractedProject: typeof parsed.extractedProject === "string" ? parsed.extractedProject : null,
     extractedTimeline: typeof parsed.extractedTimeline === "string" ? parsed.extractedTimeline : null,
+    extractedPhone: typeof parsed.extractedPhone === "string" ? parsed.extractedPhone : null,
     shouldHandoff: parsed.shouldHandoff === true,
   };
 }
