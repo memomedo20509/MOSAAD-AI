@@ -612,7 +612,7 @@ export const translations = {
     converted: "محول",
 
     // My Day
-    myDay: "يومي",
+    myDay: "متابعة اليوم",
     myDayTitle: "متابعة اليوم",
     myDaySubtitle: "جميع المتابعات المجدولة والليدز الجديدة",
     todayFollowUps: "متابعات اليوم",

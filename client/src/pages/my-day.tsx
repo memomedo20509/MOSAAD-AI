@@ -42,10 +42,13 @@ import {
   Loader2,
   UserCheck,
   ChevronRight,
+  ExternalLink,
 } from "lucide-react";
-import { format, isToday, isPast } from "date-fns";
-import type { Lead, Reminder } from "@shared/schema";
+import { SiWhatsapp } from "react-icons/si";
+import { format } from "date-fns";
+import type { Lead, Reminder, LeadState } from "@shared/schema";
 import { SCORE_COLORS } from "@/lib/scoring";
+import { LeadDetailPanel } from "@/components/lead-detail-panel";
 
 type ReminderWithLead = Reminder & { lead: Lead | null };
 
@@ -82,14 +85,22 @@ function FollowUpCard({
   isOverdue = false,
   isDone = false,
   onLogCall,
+  onOpenLead,
 }: {
   item: ReminderWithLead;
   isOverdue?: boolean;
   isDone?: boolean;
   onLogCall?: (item: ReminderWithLead) => void;
+  onOpenLead?: (lead: Lead) => void;
 }) {
   const { t } = useLanguage();
   const lead = item.lead;
+  const isWhatsApp = lead?.channel === "واتساب";
+  const displayName = lead?.name
+    ? lead.name.startsWith("واتساب - ")
+      ? lead.phone ?? lead.name.replace("واتساب - ", "")
+      : lead.name
+    : item.title;
 
   return (
     <Card
@@ -100,8 +111,14 @@ function FollowUpCard({
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
+              {isWhatsApp && (
+                <Badge className="text-xs gap-1 bg-green-100 text-green-700 border-green-200 dark:bg-green-900/40 dark:text-green-400">
+                  <SiWhatsapp className="h-2.5 w-2.5" />
+                  واتساب
+                </Badge>
+              )}
               <span className="font-semibold text-sm truncate" data-testid={`text-followup-name-${item.id}`}>
-                {lead?.name ?? item.title}
+                {displayName}
               </span>
               {lead?.score && <ScoreBadge score={lead.score} />}
               {isOverdue && (
@@ -149,25 +166,51 @@ function FollowUpCard({
             </div>
           </div>
 
-          {!isDone && onLogCall && (
-            <Button
-              size="sm"
-              onClick={() => onLogCall(item)}
-              data-testid={`button-log-call-${item.id}`}
-              className="shrink-0"
-            >
-              <Phone className="h-3.5 w-3.5 mr-1 rtl:mr-0 rtl:ml-1" />
-              {t.logCall}
-            </Button>
-          )}
+          <div className="flex flex-col gap-2 shrink-0">
+            {lead && onOpenLead && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onOpenLead(lead)}
+                data-testid={`button-open-lead-followup-${item.id}`}
+              >
+                <ExternalLink className="h-3.5 w-3.5 mr-1 rtl:mr-0 rtl:ml-1" />
+                فتح الليد
+              </Button>
+            )}
+            {!isDone && onLogCall && (
+              <Button
+                size="sm"
+                onClick={() => onLogCall(item)}
+                data-testid={`button-log-call-${item.id}`}
+              >
+                <Phone className="h-3.5 w-3.5 mr-1 rtl:mr-0 rtl:ml-1" />
+                {t.logCall}
+              </Button>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
   );
 }
 
-function NewLeadCard({ lead, onLogCall }: { lead: Lead; onLogCall?: (lead: Lead) => void }) {
+function NewLeadCard({
+  lead,
+  onLogCall,
+  onOpenLead,
+}: {
+  lead: Lead;
+  onLogCall?: (lead: Lead) => void;
+  onOpenLead?: (lead: Lead) => void;
+}) {
   const { t } = useLanguage();
+  const isWhatsApp = lead.channel === "واتساب";
+  const displayName = lead.name
+    ? lead.name.startsWith("واتساب - ")
+      ? lead.phone ?? lead.name.replace("واتساب - ", "")
+      : lead.name
+    : t.noName;
 
   return (
     <Card data-testid={`card-newlead-${lead.id}`}>
@@ -175,7 +218,15 @@ function NewLeadCard({ lead, onLogCall }: { lead: Lead; onLogCall?: (lead: Lead)
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-sm truncate">{lead.name ?? t.noName}</span>
+              {isWhatsApp && (
+                <Badge className="text-xs gap-1 bg-green-100 text-green-700 border-green-200 dark:bg-green-900/40 dark:text-green-400">
+                  <SiWhatsapp className="h-2.5 w-2.5" />
+                  واتساب
+                </Badge>
+              )}
+              <span className="font-semibold text-sm truncate" data-testid={`text-newlead-name-${lead.id}`}>
+                {displayName}
+              </span>
               {lead.score && <ScoreBadge score={lead.score} />}
             </div>
             <div className="mt-1.5 space-y-1">
@@ -198,17 +249,29 @@ function NewLeadCard({ lead, onLogCall }: { lead: Lead; onLogCall?: (lead: Lead)
               )}
             </div>
           </div>
-          {onLogCall && (
-            <Button
-              size="sm"
-              onClick={() => onLogCall(lead)}
-              data-testid={`button-log-call-newlead-${lead.id}`}
-              className="shrink-0"
-            >
-              <Phone className="h-3.5 w-3.5 mr-1 rtl:mr-0 rtl:ml-1" />
-              {t.logCall}
-            </Button>
-          )}
+          <div className="flex flex-col gap-2 shrink-0">
+            {onOpenLead && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onOpenLead(lead)}
+                data-testid={`button-open-lead-newlead-${lead.id}`}
+              >
+                <ExternalLink className="h-3.5 w-3.5 mr-1 rtl:mr-0 rtl:ml-1" />
+                فتح الليد
+              </Button>
+            )}
+            {onLogCall && (
+              <Button
+                size="sm"
+                onClick={() => onLogCall(lead)}
+                data-testid={`button-log-call-newlead-${lead.id}`}
+              >
+                <Phone className="h-3.5 w-3.5 mr-1 rtl:mr-0 rtl:ml-1" />
+                {t.logCall}
+              </Button>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -387,17 +450,39 @@ function CompletionRatesSection() {
 export default function MyDayPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [logCallDialog, setLogCallDialog] = useState<{
     open: boolean;
     leadId: string | null;
     leadName: string;
     reminderId?: string;
   }>({ open: false, leadId: null, leadName: "" });
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
 
   const isManager = user?.role === "sales_manager" || user?.role === "team_leader" || user?.role === "super_admin" || user?.role === "admin";
 
   const { data, isLoading } = useQuery<MyDayData>({
     queryKey: ["/api/my-day"],
+  });
+
+  const { data: states = [] } = useQuery<LeadState[]>({
+    queryKey: ["/api/states"],
+  });
+
+  const updateLeadMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<Lead> }) => {
+      const res = await apiRequest("PATCH", `/api/leads/${id}`, data);
+      return res.json();
+    },
+    onSuccess: (updatedLead: Lead) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/my-day"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      setSelectedLead((prev) => (prev?.id === updatedLead.id ? updatedLead : prev));
+      toast({ title: t.leadUpdatedSuccess });
+    },
+    onError: () => {
+      toast({ title: t.leadUpdatedError, variant: "destructive" });
+    },
   });
 
   const pendingCount = (data?.todayFollowUps.length ?? 0) + (data?.overdueFollowUps.length ?? 0) + (data?.newLeads.length ?? 0);
@@ -417,6 +502,10 @@ export default function MyDayPage() {
       leadId: lead.id,
       leadName: lead.name ?? t.noName,
     });
+  };
+
+  const openLeadPanel = (lead: Lead) => {
+    setSelectedLead(lead);
   };
 
   if (isLoading) {
@@ -496,6 +585,7 @@ export default function MyDayPage() {
                   item={item}
                   isOverdue
                   onLogCall={openLogCallFromReminder}
+                  onOpenLead={openLeadPanel}
                 />
               ))}
               {(data?.todayFollowUps.length ?? 0) > 0 && (
@@ -518,6 +608,7 @@ export default function MyDayPage() {
                 key={item.id}
                 item={item}
                 onLogCall={openLogCallFromReminder}
+                onOpenLead={openLeadPanel}
               />
             ))
           )}
@@ -538,6 +629,7 @@ export default function MyDayPage() {
                 item={item}
                 isOverdue
                 onLogCall={openLogCallFromReminder}
+                onOpenLead={openLeadPanel}
               />
             ))
           )}
@@ -552,7 +644,7 @@ export default function MyDayPage() {
             </Card>
           ) : (
             data!.newLeads.map((lead) => (
-              <NewLeadCard key={lead.id} lead={lead} onLogCall={openLogCallFromLead} />
+              <NewLeadCard key={lead.id} lead={lead} onLogCall={openLogCallFromLead} onOpenLead={openLeadPanel} />
             ))
           )}
         </TabsContent>
@@ -584,6 +676,17 @@ export default function MyDayPage() {
         leadId={logCallDialog.leadId}
         leadName={logCallDialog.leadName}
         reminderId={logCallDialog.reminderId}
+      />
+
+      <LeadDetailPanel
+        lead={selectedLead}
+        states={states}
+        onClose={() => setSelectedLead(null)}
+        onUpdate={(data) => {
+          if (selectedLead) {
+            updateLeadMutation.mutate({ id: selectedLead.id, data });
+          }
+        }}
       />
     </div>
   );
