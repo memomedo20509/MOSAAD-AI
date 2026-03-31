@@ -862,7 +862,7 @@ export function LeadDetailPanel({
                                   اتصال
                                 </Button>
                               </a>
-                              <a href={`https://wa.me/${lead.phone2.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                              <a href={`https://wa.me/${(() => { const d = lead.phone2!.replace(/\D/g, ""); return d.startsWith("0") ? "2" + d : d; })()}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
                                 <Button size="sm" variant="outline" className="h-7 gap-1 text-green-600 border-green-200 hover:bg-green-50 text-xs" data-testid="button-whatsapp-secondary">
                                   <MessageCircle className="h-3.5 w-3.5" />
                                   واتساب
