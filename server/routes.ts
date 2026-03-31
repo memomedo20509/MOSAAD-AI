@@ -3013,6 +3013,7 @@ export async function registerRoutes(
                   botMission: (botSettings as Record<string, unknown>)?.botMission as string | undefined,
                   companyKnowledge: (botSettings as Record<string, unknown>)?.companyKnowledge as string | undefined,
                   welcomeMessage: botSettings?.welcomeMessage ?? undefined,
+                  enabledProjectIds: (botSettings as Record<string, unknown>)?.enabledProjectIds as string[] | null | undefined,
                 },
                 isFirstBotInteraction,
               );
@@ -3046,6 +3047,12 @@ export async function registerRoutes(
               }
               if (botResult.extractedDownPayment && !lead.downPayment) {
                 leadUpdates.downPayment = botResult.extractedDownPayment;
+              }
+              if (botResult.extractedProject && !lead.preferredProject) {
+                leadUpdates.preferredProject = botResult.extractedProject;
+              }
+              if (botResult.extractedTimeline && !lead.timeline) {
+                leadUpdates.timeline = botResult.extractedTimeline;
               }
 
               const resolvedName = leadUpdates.name || lead.name;

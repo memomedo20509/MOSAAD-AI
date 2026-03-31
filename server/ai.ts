@@ -106,6 +106,9 @@ function buildLeadContext(lead: Lead): string {
   if (lead.area) parts.push(`المنطقة: ${lead.area}`);
   if (lead.location) parts.push(`الموقع: ${lead.location}`);
   if (lead.paymentType) parts.push(`نوع الدفع: ${lead.paymentType}`);
+  if (lead.downPayment) parts.push(`المقدم: ${lead.downPayment}`);
+  if (lead.preferredProject) parts.push(`المشروع المفضل: ${lead.preferredProject}`);
+  if (lead.timeline) parts.push(`الجدول الزمني: ${lead.timeline}`);
   if (lead.notes) parts.push(`ملاحظات: ${lead.notes}`);
   if (lead.score) parts.push(`تقييم الليد: ${lead.score}`);
   return parts.length > 0 ? parts.join(" | ") : "لا توجد بيانات مفصّلة";
@@ -214,6 +217,7 @@ export interface BotReplyResult {
   extractedPaymentType?: string | null;
   extractedDownPayment?: string | null;
   extractedProject?: string | null;
+  extractedTimeline?: string | null;
   shouldHandoff: boolean;
 }
 
@@ -230,6 +234,7 @@ interface ParsedBotReply {
   extractedPaymentType?: unknown;
   extractedDownPayment?: unknown;
   extractedProject?: unknown;
+  extractedTimeline?: unknown;
   shouldHandoff?: unknown;
 }
 
@@ -241,6 +246,7 @@ export interface BotConfig {
   botMission?: string;
   companyKnowledge?: string;
   welcomeMessage?: string;
+  enabledProjectIds?: string[] | null;
 }
 
 function buildInventoryContext(projects: Project[], units: Unit[]): string {
@@ -296,7 +302,12 @@ export async function generateBotReply(
   config: BotConfig,
   isFirstInteraction?: boolean,
 ): Promise<BotReplyResult> {
-  const inventoryContext = buildInventoryContext(projects, units);
+  // Filter projects by enabledProjectIds if set (non-empty array = whitelist)
+  const filteredProjects = (config.enabledProjectIds && config.enabledProjectIds.length > 0)
+    ? projects.filter(p => config.enabledProjectIds!.includes(p.id))
+    : projects;
+
+  const inventoryContext = buildInventoryContext(filteredProjects, units);
 
   const conversationHistory = recentMessages
     .slice(-8)
@@ -361,6 +372,7 @@ ${leadInfo}
   "extractedPaymentType": "كاش أو تقسيط أو null",
   "extractedDownPayment": "مبلغ المقدم أو null",
   "extractedProject": "اسم المشروع اللي العميل مهتم بيه أو null",
+  "extractedTimeline": "الجدول الزمني للشراء (مثال: خلال شهر، 3 أشهر، نهاية السنة) أو null",
   "shouldHandoff": true أو false
 }`;
 
@@ -402,6 +414,7 @@ ${conversationHistory}
     extractedPaymentType: typeof parsed.extractedPaymentType === "string" ? parsed.extractedPaymentType : null,
     extractedDownPayment: typeof parsed.extractedDownPayment === "string" ? parsed.extractedDownPayment : null,
     extractedProject: typeof parsed.extractedProject === "string" ? parsed.extractedProject : null,
+    extractedTimeline: typeof parsed.extractedTimeline === "string" ? parsed.extractedTimeline : null,
     shouldHandoff: parsed.shouldHandoff === true,
   };
 }

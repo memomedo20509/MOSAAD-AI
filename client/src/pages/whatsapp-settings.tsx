@@ -34,6 +34,14 @@ interface ChatbotSettings {
   botMission?: string;
   companyKnowledge?: string;
   respondAlways?: boolean;
+  enabledProjectIds?: string[] | null;
+}
+
+interface Project {
+  id: string;
+  name: string;
+  location?: string | null;
+  isActive?: boolean | null;
 }
 
 export default function WhatsAppSettingsPage() {
@@ -52,6 +60,7 @@ export default function WhatsAppSettingsPage() {
     botMission: "جمع بيانات العميل الكاملة (الاسم، الميزانية، نوع الوحدة، عدد الغرف، الموقع المفضل، طريقة الدفع) وترشيح وحدات مناسبة من المشاريع المتاحة قبل تحويله للمندوب.",
     companyKnowledge: "",
     respondAlways: false,
+    enabledProjectIds: null,
   });
 
   const { data, isLoading, refetch } = useQuery<WaStatusResponse>({
@@ -62,6 +71,12 @@ export default function WhatsAppSettingsPage() {
   const { data: botSettings, isLoading: botLoading } = useQuery<ChatbotSettings>({
     queryKey: ["/api/chatbot/settings"],
   });
+
+  const { data: projectsList } = useQuery<Project[]>({
+    queryKey: ["/api/projects"],
+  });
+
+  const activeProjects = (projectsList ?? []).filter(p => p.isActive !== false);
 
   useEffect(() => {
     if (botSettings) {
@@ -77,6 +92,7 @@ export default function WhatsAppSettingsPage() {
         botMission: botSettings.botMission ?? "جمع بيانات العميل الكاملة (الاسم، الميزانية، نوع الوحدة، عدد الغرف، الموقع المفضل، طريقة الدفع) وترشيح وحدات مناسبة من المشاريع المتاحة قبل تحويله للمندوب.",
         companyKnowledge: botSettings.companyKnowledge ?? "",
         respondAlways: botSettings.respondAlways ?? false,
+        enabledProjectIds: botSettings.enabledProjectIds ?? null,
       });
     }
   }, [botSettings]);
@@ -579,6 +595,53 @@ export default function WhatsAppSettingsPage() {
                 />
                 <p className="text-xs text-muted-foreground">أي معلومات إضافية عن الشركة — خطط تقسيط، عروض، مميزات — البوت هيستخدمها في ردوده</p>
               </div>
+
+              {/* Project Visibility Toggle */}
+              {activeProjects.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Building2 className="h-4 w-4 text-green-600" />
+                    <span>المشاريع المسموح للبوت بالترويج لها</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">اختر المشاريع اللي البوت يقدر يتكلم عنها ويرشح وحداتها — لو مفيش تحديد، البوت هيتكلم عن كل المشاريع المتاحة</p>
+                  <div className="space-y-2 rounded-lg border p-3">
+                    {activeProjects.map((project) => {
+                      const isEnabled = !botForm.enabledProjectIds || botForm.enabledProjectIds.length === 0 || botForm.enabledProjectIds.includes(project.id);
+                      return (
+                        <div key={project.id} className="flex items-center justify-between py-1">
+                          <div>
+                            <span className="text-sm font-medium">{project.name}</span>
+                            {project.location && (
+                              <span className="text-xs text-muted-foreground mr-2">— {project.location}</span>
+                            )}
+                          </div>
+                          <Switch
+                            checked={isEnabled}
+                            onCheckedChange={(checked) => {
+                              setBotForm(f => {
+                                const currentEnabled = f.enabledProjectIds && f.enabledProjectIds.length > 0
+                                  ? f.enabledProjectIds
+                                  : activeProjects.map(p => p.id);
+                                const newEnabled = checked
+                                  ? [...currentEnabled.filter(id => id !== project.id), project.id]
+                                  : currentEnabled.filter(id => id !== project.id);
+                                const allEnabled = newEnabled.length === activeProjects.length;
+                                return { ...f, enabledProjectIds: allEnabled ? null : newEnabled };
+                              });
+                            }}
+                            data-testid={`switch-project-${project.id}`}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {botForm.enabledProjectIds && botForm.enabledProjectIds.length > 0 && botForm.enabledProjectIds.length < activeProjects.length && (
+                    <p className="text-xs text-amber-600">
+                      البوت هيتكلم بس عن {botForm.enabledProjectIds.length} من {activeProjects.length} مشاريع
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Welcome Message */}
               <div className="space-y-2">

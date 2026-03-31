@@ -53,6 +53,8 @@ export const leads = pgTable("leads", {
   aiAnalyzedAt: timestamp("ai_analyzed_at"),
   botActive: boolean("bot_active").default(true),
   botStage: text("bot_stage").default("greeting"),
+  preferredProject: text("preferred_project"),
+  timeline: text("timeline"),
 });
 
 export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true, firstContactAt: true, responseTimeMinutes: true, aiAnalyzedAt: true }).extend({
@@ -450,6 +452,7 @@ export const chatbotSettings = pgTable("chatbot_settings", {
   botMission: text("bot_mission").default("جمع بيانات العميل الكاملة (الاسم، الميزانية، نوع الوحدة، عدد الغرف، الموقع المفضل، طريقة الدفع) وترشيح وحدات مناسبة من المشاريع المتاحة قبل تحويله للمندوب."),
   companyKnowledge: text("company_knowledge").default(""),
   respondAlways: boolean("respond_always").default(false),
+  enabledProjectIds: text("enabled_project_ids").array(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
