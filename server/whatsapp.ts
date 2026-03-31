@@ -278,13 +278,37 @@ export async function startConnection(userId: string, freshSession = false, forc
 
           // Resolve LID (@lid) JIDs to real phone numbers
           if (remoteJid.endsWith("@lid")) {
-            const resolvedPhone = lidToPhone.get(remoteJid);
+            const lidUser = rawPhone; // rawPhone is already split("@")[0]
+            let resolvedPhone = lidToPhone.get(remoteJid);
+
+            if (!resolvedPhone) {
+              // Not in memory — query auth state session files directly
+              try {
+                const keyResult = await sock.authState.keys.get("lid-mapping", [
+                  `${lidUser}_reverse`,
+                ]);
+                const pnUser = keyResult[`${lidUser}_reverse`];
+                if (pnUser && typeof pnUser === "string" && /^\d{7,15}$/.test(pnUser)) {
+                  resolvedPhone = pnUser;
+                  lidToPhone.set(remoteJid, pnUser);
+                  phoneToJid.set(pnUser, remoteJid);
+                  console.log(`[WhatsApp] Resolved LID ${remoteJid} → phone ${pnUser} (from session keys)`);
+                  for (const cb of lidResolvedCallbacks) {
+                    cb(remoteJid, pnUser).catch((err) =>
+                      console.error("[WhatsApp] lidResolved callback error:", err)
+                    );
+                  }
+                }
+              } catch (keyErr) {
+                console.warn(`[WhatsApp] Failed to query session keys for LID ${remoteJid}:`, keyErr);
+              }
+            }
+
             if (resolvedPhone) {
-              console.log(`[WhatsApp] Resolved LID ${remoteJid} → phone ${resolvedPhone}`);
               rawPhone = resolvedPhone;
             } else {
-              // LID not yet resolved — process with LID as phone (migration in routes.ts will fix later)
-              console.warn(`[WhatsApp] Unresolved LID ${remoteJid}, using LID as phone temporarily`);
+              // Cannot resolve LID — use it temporarily; onLidResolved will fix it when contacts sync
+              console.warn(`[WhatsApp] Unresolved LID ${remoteJid} — storing as temporary phone, will update when resolved`);
             }
           }
 
