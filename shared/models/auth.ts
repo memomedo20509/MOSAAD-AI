@@ -59,11 +59,11 @@ export type UserRole = "super_admin" | "company_owner" | "sales_admin" | "team_l
 export const ROLE_ARABIC_NAMES: Record<UserRole, string> = {
   super_admin: "مدير النظام",
   company_owner: "صاحب الشركة",
-  sales_admin: "سيلز ادمن",
+  sales_admin: "سيلز أدمن",
   team_leader: "تيم ليدر",
   sales_agent: "سيلز",
   admin: "مدير",
-  sales_manager: "مدير مبيعات",
+  sales_manager: "سيلز مانجر",
 };
 
 // Role badge colors

@@ -1189,12 +1189,12 @@ export function LeadDetailPanel({
                       <div>
                         <p className="text-xs font-medium">
                           {lead.botStage === "handed_off" || lead.botActive === false
-                            ? "البوت متوقف — تحت إشراف المندوب"
+                            ? "البوت متوقف — تحت إشراف السيلز"
                             : "البوت يدير المحادثة"}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {lead.botStage === "handed_off" || lead.botActive === false
-                            ? "المندوب تسلّم المحادثة يدوياً"
+                            ? "السيلز تسلّم المحادثة يدوياً"
                             : `المرحلة: ${lead.botStage ?? "greeting"}`}
                         </p>
                       </div>
@@ -1818,7 +1818,7 @@ export function LeadDetailPanel({
         <div className="space-y-3 py-2">
           <Select value={transferToUserId} onValueChange={setTransferToUserId}>
             <SelectTrigger data-testid="select-transfer-agent">
-              <SelectValue placeholder="اختر المندوب" />
+              <SelectValue placeholder="اختر السيلز" />
             </SelectTrigger>
             <SelectContent>
               {(salesAgents || []).map((agent) => (
