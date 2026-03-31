@@ -1,0 +1,45 @@
+#3 - AI Real Estate Expert + Admin Controls + Inbox Enhancements
+What & Why
+Transform the AI chatbot from a basic data-collection bot into a professional Egyptian real estate broker AI that:
+
+Speaks fluent Egyptian Arabic dialect and understands real estate terminology
+Collects comprehensive lead information (not just 4 fields)
+Has full visibility into the company's inventory (projects, units, pricing, availability)
+Can recommend specific properties based on client preferences
+Is fully configurable by the admin (identity, personality, mission, knowledge base)
+Shows contact names and phones clearly in the inbox with inline editing
+Done looks like
+Smart AI Broker: The bot responds like a professional Egyptian real estate broker — understands slang, handles objections, recommends specific available units, and collects comprehensive lead data (name, budget, location, unit type, bedrooms, bathrooms, area, payment type, down payment, preferred projects, timeline).
+Inventory-Aware: The AI sees all projects AND their individual available units (type, bedrooms, price, area, floor, finishing, view) and uses this to make real recommendations — not just project names.
+Enhanced Admin Settings Page: Admin can configure:
+Bot identity (name, company name, job title/role)
+Bot personality/tone (formal, friendly, aggressive sales, etc.)
+Bot mission (what info to collect, how to qualify leads)
+Custom company knowledge (payment plans, promotions, key selling points)
+Toggle: which projects the bot can promote
+Welcome message customization
+Working hours + respond-always toggle
+More Conversation Stages: greeting → collecting_name → collecting_needs (budget, location, type) → recommending_units → collecting_details (payment, timeline) → qualified → handed_off
+Inbox Contact Edit: Users can edit a lead's name directly from the WhatsApp inbox header (inline edit, no need to navigate to leads page).
+Extracted data auto-fills lead: All extracted info (location, area, payment type, down payment, bathrooms, etc.) is saved to the lead record, not just name/budget/unit/rooms.
+Out of scope
+Voice messages or image analysis
+Multi-language support beyond Arabic
+Automated follow-up scheduling by the bot
+WhatsApp template messages or bulk campaigns
+Tasks
+Expand AI data extraction — Add new extracted fields (location, area, bathrooms, paymentType, downPayment, preferredProject, timeline) to the bot reply interface and JSON schema. Update the conversation stages to: greeting, collecting_name, collecting_needs, recommending_units, collecting_details, qualified, handed_off. Update the lead record with all extracted data.
+
+Rewrite AI system prompt as expert Egyptian broker — Build a comprehensive system prompt that makes the AI behave like a professional Egyptian real estate broker. Include: Egyptian dialect rules, real estate terminology, objection handling, unit recommendation logic based on client preferences. Feed full unit details (not just project summaries) into the prompt context so the bot can recommend specific available units with prices, areas, and features.
+
+Enhance chatbot settings schema and admin UI — Add new settings fields: botRole (job title), botMission (custom instructions), companyKnowledge (payment plans, promotions, key info), dataToCollect (configurable list). Build a rich admin settings form with sections for Identity, Personality, Mission, and Knowledge Base. Add a project visibility toggle (which projects the bot can discuss).
+
+Inline lead name editing in WhatsApp inbox — Add an edit button next to the lead name in the chat header. On click, switch to an inline text input. Save changes via PATCH to the leads API and refresh the inbox.
+
+Relevant files
+server/ai.ts:190-340
+server/routes.ts:2940-3100
+shared/schema.ts:22-56,141-190,439-457
+server/storage.ts:331-335,1421-1440
+client/src/pages/whatsapp-settings.tsx:378-525
+client/src/pages/whatsapp-inbox.tsx:260-340
