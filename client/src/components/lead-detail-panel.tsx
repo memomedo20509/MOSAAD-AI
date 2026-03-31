@@ -1140,7 +1140,7 @@ export function LeadDetailPanel({
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {lead.phone2 ? (
+                    {lead.phone2 && (
                       <Button variant="default" className="w-full justify-start h-10 text-sm bg-green-600 hover:bg-green-700 text-white" asChild>
                         <a href={`tel:${lead.phone2}`} data-testid="button-call-phone2-primary">
                           <PhoneCall className="h-4 w-4 mr-2" />
@@ -1150,16 +1150,20 @@ export function LeadDetailPanel({
                           </span>
                         </a>
                       </Button>
-                    ) : lead.phone ? (
+                    )}
+                    {lead.phone ? (
                       <Button variant="outline" className="w-full justify-start h-10 text-sm" asChild>
                         <a href={`tel:${lead.phone}`} data-testid="button-call-phone">
                           <PhoneCall className="h-4 w-4 mr-2 text-green-600" />
-                          {lead.phone}
+                          <span className="flex flex-col items-start leading-tight">
+                            <span className="text-xs text-muted-foreground">واتساب</span>
+                            <span dir="ltr">{lead.phone}</span>
+                          </span>
                         </a>
                       </Button>
-                    ) : (
+                    ) : !lead.phone2 ? (
                       <p className="text-sm text-muted-foreground text-center py-2">لا يوجد رقم هاتف</p>
-                    )}
+                    ) : null}
                     {showLogCallForm && (
                       <div className="space-y-3 rounded-md border p-3 bg-muted/30">
                         <div className="space-y-1">
