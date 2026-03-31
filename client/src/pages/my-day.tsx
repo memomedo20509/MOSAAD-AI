@@ -45,10 +45,10 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { SiWhatsapp } from "react-icons/si";
+import { useLocation } from "wouter";
 import { format } from "date-fns";
-import type { Lead, Reminder, LeadState } from "@shared/schema";
+import type { Lead, Reminder } from "@shared/schema";
 import { SCORE_COLORS } from "@/lib/scoring";
-import { LeadDetailPanel } from "@/components/lead-detail-panel";
 
 type ReminderWithLead = Reminder & { lead: Lead | null };
 
@@ -450,39 +450,18 @@ function CompletionRatesSection() {
 export default function MyDayPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
-  const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [logCallDialog, setLogCallDialog] = useState<{
     open: boolean;
     leadId: string | null;
     leadName: string;
     reminderId?: string;
   }>({ open: false, leadId: null, leadName: "" });
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
 
   const isManager = user?.role === "sales_manager" || user?.role === "team_leader" || user?.role === "super_admin" || user?.role === "admin";
 
   const { data, isLoading } = useQuery<MyDayData>({
     queryKey: ["/api/my-day"],
-  });
-
-  const { data: states = [] } = useQuery<LeadState[]>({
-    queryKey: ["/api/states"],
-  });
-
-  const updateLeadMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<Lead> }) => {
-      const res = await apiRequest("PATCH", `/api/leads/${id}`, data);
-      return res.json();
-    },
-    onSuccess: (updatedLead: Lead) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/my-day"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
-      setSelectedLead((prev) => (prev?.id === updatedLead.id ? updatedLead : prev));
-      toast({ title: t.leadUpdatedSuccess });
-    },
-    onError: () => {
-      toast({ title: t.leadUpdatedError, variant: "destructive" });
-    },
   });
 
   const pendingCount = (data?.todayFollowUps.length ?? 0) + (data?.overdueFollowUps.length ?? 0) + (data?.newLeads.length ?? 0);
@@ -505,7 +484,7 @@ export default function MyDayPage() {
   };
 
   const openLeadPanel = (lead: Lead) => {
-    setSelectedLead(lead);
+    setLocation(`/leads?leadId=${lead.id}`);
   };
 
   if (isLoading) {
@@ -676,17 +655,6 @@ export default function MyDayPage() {
         leadId={logCallDialog.leadId}
         leadName={logCallDialog.leadName}
         reminderId={logCallDialog.reminderId}
-      />
-
-      <LeadDetailPanel
-        lead={selectedLead}
-        states={states}
-        onClose={() => setSelectedLead(null)}
-        onUpdate={(data) => {
-          if (selectedLead) {
-            updateLeadMutation.mutate({ id: selectedLead.id, data });
-          }
-        }}
       />
     </div>
   );
