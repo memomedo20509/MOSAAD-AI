@@ -64,18 +64,32 @@ declare global {
 }
 
 function loadFbSdk(appId: string): Promise<void> {
-  return new Promise((resolve) => {
-    if (window.FB) { resolve(); return; }
+  return new Promise((resolve, reject) => {
+    if (window.FB) {
+      window.FB.init({ appId, cookie: true, xfbml: false, version: "v19.0" });
+      resolve();
+      return;
+    }
     window.fbAsyncInit = () => {
       window.FB.init({ appId, cookie: true, xfbml: false, version: "v19.0" });
       resolve();
     };
+    const existing = document.querySelector('script[src*="connect.facebook.net"]');
+    if (existing) {
+      const timeout = setTimeout(() => reject(new Error("FB SDK timeout")), 10000);
+      const check = setInterval(() => {
+        if (window.FB) { clearInterval(check); clearTimeout(timeout); window.FB.init({ appId, cookie: true, xfbml: false, version: "v19.0" }); resolve(); }
+      }, 200);
+      return;
+    }
     const script = document.createElement("script");
     script.async = true;
     script.defer = true;
     script.crossOrigin = "anonymous";
     script.src = "https://connect.facebook.net/en_US/sdk.js";
+    script.onerror = () => reject(new Error("Failed to load FB SDK script"));
     document.head.appendChild(script);
+    setTimeout(() => reject(new Error("FB SDK load timeout")), 15000);
   });
 }
 
