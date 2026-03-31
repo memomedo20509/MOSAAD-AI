@@ -385,6 +385,94 @@ export interface IStorage {
   findSocialMessageById(messageId: string): Promise<SocialMessagesLog | undefined>;
   markSocialMessagesRead(leadId: string, platform: string): Promise<void>;
   getUnreadSocialCount(userId: string, userRole: string, teamId?: string | null): Promise<number>;
+
+  // Sales Performance Reports
+  getSalesActivityReport(from?: Date, to?: Date): Promise<{
+    agentId: string;
+    agentName: string;
+    callsCount: number;
+    whatsappCount: number;
+    meetingsCount: number;
+    notesCount: number;
+    totalActions: number;
+    callsToMeetingRate: number;
+    inboundWhatsappCount: number;
+    outboundWhatsappCount: number;
+    whatsappReplyRate: number;
+    weekCallsCount: number;
+    weekMeetingsCount: number;
+    weekTotalActions: number;
+    monthCallsCount: number;
+    monthMeetingsCount: number;
+    monthTotalActions: number;
+  }[]>;
+
+  getFollowUpReport(from?: Date, to?: Date): Promise<{
+    agentId: string;
+    agentName: string;
+    scheduledFollowUps: number;
+    overdueFollowUps: number;
+    completedFollowUps: number;
+    followUpRate: number;
+    neverContactedLeads: number;
+    within24hLeads: number;
+    within48hLeads: number;
+    meetingsHeld: number;
+    meetingsAttendanceRate: number;
+  }[]>;
+
+  getSalesFunnelReport(): Promise<{
+    stateId: string;
+    stateName: string;
+    stateColor: string;
+    stateOrder: number;
+    count: number;
+    conversionToNext: number | null;
+    avgDaysInState: number | null;
+  }[]>;
+
+  getDailyActivityReport(): Promise<{
+    agentId: string;
+    agentName: string;
+    todayActions: number;
+    weekActions: number;
+    todayCalls: number;
+    todayWhatsapp: number;
+    todayMeetings: number;
+    todayNotes: number;
+    isInactive: boolean;
+    lastActivityAt: Date | null;
+  }[]>;
+
+  getColdLeadsReport(): Promise<{
+    leadId: string;
+    leadName: string | null;
+    leadPhone: string | null;
+    agentId: string | null;
+    agentName: string | null;
+    lastContactDate: Date | null;
+    daysSinceContact: number;
+    stateId: string | null;
+    stateName: string | null;
+  }[]>;
+
+  getProjectPerformanceReport(): Promise<{
+    projectId: string;
+    projectName: string;
+    totalLeads: number;
+    bookingsCount: number;
+    conversionRate: number;
+    avgDaysToClose: number | null;
+  }[]>;
+
+  getWeeklyMonthlyComparison(): Promise<{
+    period: string;
+    label: string;
+    newLeads: number;
+    meetings: number;
+    bookings: number;
+    totalActions: number;
+  }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2042,6 +2130,358 @@ export class DatabaseStorage implements IStorage {
     } catch {
       return 0;
     }
+  // Sales Performance Reports
+  async getSalesActivityReport(from?: Date, to?: Date): Promise<{
+    agentId: string;
+    agentName: string;
+    callsCount: number;
+    whatsappCount: number;
+    meetingsCount: number;
+    notesCount: number;
+    totalActions: number;
+    callsToMeetingRate: number;
+    inboundWhatsappCount: number;
+    outboundWhatsappCount: number;
+    whatsappReplyRate: number;
+    weekCallsCount: number;
+    weekMeetingsCount: number;
+    weekTotalActions: number;
+    monthCallsCount: number;
+    monthMeetingsCount: number;
+    monthTotalActions: number;
+  }[]> {
+    const allUsers = await db.select().from(users);
+    const agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "team_leader");
+
+    const now = new Date();
+    const fromDate = from ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const toDate = to ?? now;
+    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Fetch enough history for weekly/monthly breakdowns
+    const earliestDate = monthStart < fromDate ? monthStart : fromDate;
+    const allComms = await db.select().from(communications)
+      .where(and(gte(communications.createdAt, earliestDate), lte(communications.createdAt, toDate)));
+
+    // Fetch WhatsApp messages log to compute inbound/outbound reply rates
+    const allWaLog = await db.select().from(whatsappMessagesLog)
+      .where(and(gte(whatsappMessagesLog.createdAt, earliestDate), lte(whatsappMessagesLog.createdAt, toDate)));
+
+    return agents.map(agent => {
+      const agentComms = allComms.filter(c => c.userId === agent.id);
+      // Selected period stats
+      const periodComms = agentComms.filter(c => c.createdAt && new Date(c.createdAt) >= fromDate);
+      const callsCount = periodComms.filter(c => c.type === "call" || c.type === "no_answer").length;
+      const whatsappCount = periodComms.filter(c => c.type === "whatsapp").length;
+      const meetingsCount = periodComms.filter(c => c.type === "meeting").length;
+      const notesCount = periodComms.filter(c => c.type === "note").length;
+      const totalActions = periodComms.length;
+      const callsToMeetingRate = callsCount > 0 ? parseFloat(((meetingsCount / callsCount) * 100).toFixed(1)) : 0;
+      // WhatsApp inbound/outbound reply rate from whatsapp_messages_log
+      const agentWaLog = allWaLog.filter(m => m.agentId === agent.id && m.createdAt && new Date(m.createdAt) >= fromDate);
+      const inboundWhatsappCount = agentWaLog.filter(m => m.direction === "inbound").length;
+      const outboundWhatsappCount = agentWaLog.filter(m => m.direction !== "inbound").length;
+      // Reply rate: % of inbound messages that got an outbound reply (approximate by outbound/inbound ratio)
+      const whatsappReplyRate = inboundWhatsappCount > 0
+        ? parseFloat(Math.min((outboundWhatsappCount / inboundWhatsappCount) * 100, 100).toFixed(1))
+        : 0;
+      // This week (last 7 days)
+      const weekComms = agentComms.filter(c => c.createdAt && new Date(c.createdAt) >= weekStart);
+      const weekCallsCount = weekComms.filter(c => c.type === "call" || c.type === "no_answer").length;
+      const weekMeetingsCount = weekComms.filter(c => c.type === "meeting").length;
+      const weekTotalActions = weekComms.length;
+      // This calendar month
+      const monthComms = agentComms.filter(c => c.createdAt && new Date(c.createdAt) >= monthStart);
+      const monthCallsCount = monthComms.filter(c => c.type === "call" || c.type === "no_answer").length;
+      const monthMeetingsCount = monthComms.filter(c => c.type === "meeting").length;
+      const monthTotalActions = monthComms.length;
+      const agentName = `${agent.firstName ?? ""} ${agent.lastName ?? ""}`.trim() || agent.username;
+      return { agentId: agent.id, agentName, callsCount, whatsappCount, meetingsCount, notesCount, totalActions, callsToMeetingRate, inboundWhatsappCount, outboundWhatsappCount, whatsappReplyRate, weekCallsCount, weekMeetingsCount, weekTotalActions, monthCallsCount, monthMeetingsCount, monthTotalActions };
+    }).sort((a, b) => b.totalActions - a.totalActions);
+  }
+
+  async getFollowUpReport(from?: Date, to?: Date): Promise<{
+    agentId: string;
+    agentName: string;
+    scheduledFollowUps: number;
+    overdueFollowUps: number;
+    completedFollowUps: number;
+    followUpRate: number;
+    neverContactedLeads: number;
+    within24hLeads: number;
+    within48hLeads: number;
+    meetingsHeld: number;
+    meetingsAttendanceRate: number;
+  }[]> {
+    const allUsers = await db.select().from(users);
+    const agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "team_leader");
+
+    const now = new Date();
+    const fromDate = from ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const toDate = to ?? now;
+
+    const allReminders = await db.select().from(reminders)
+      .where(and(gte(reminders.createdAt, fromDate), lte(reminders.createdAt, toDate)));
+    const allLeads = await db.select().from(leads);
+    const allComms = await db.select().from(communications)
+      .where(and(gte(communications.createdAt, fromDate), lte(communications.createdAt, toDate)));
+
+    return agents.map(agent => {
+      const agentReminders = allReminders.filter(r => r.userId === agent.id);
+      const scheduledFollowUps = agentReminders.length;
+      const overdueFollowUps = agentReminders.filter(r => !r.isCompleted && new Date(r.dueDate) < now).length;
+      const completedFollowUps = agentReminders.filter(r => r.isCompleted).length;
+      const followUpRate = scheduledFollowUps > 0
+        ? parseFloat(((completedFollowUps / scheduledFollowUps) * 100).toFixed(1))
+        : 0;
+      const agentLeads = allLeads.filter(l => l.assignedTo === agent.id);
+      const neverContactedLeads = agentLeads.filter(l => !l.firstContactAt).length;
+      const within24hLeads = agentLeads.filter(l => {
+        if (!l.firstContactAt || !l.createdAt) return false;
+        const diff = new Date(l.firstContactAt).getTime() - new Date(l.createdAt).getTime();
+        return diff <= 24 * 60 * 60 * 1000;
+      }).length;
+      const within48hLeads = agentLeads.filter(l => {
+        if (!l.firstContactAt || !l.createdAt) return false;
+        const diff = new Date(l.firstContactAt).getTime() - new Date(l.createdAt).getTime();
+        return diff <= 48 * 60 * 60 * 1000;
+      }).length;
+      const agentComms = allComms.filter(c => c.userId === agent.id);
+      const meetingsHeld = agentComms.filter(c => c.type === "meeting").length;
+      const meetingsAttendanceRate = scheduledFollowUps > 0
+        ? parseFloat(((meetingsHeld / scheduledFollowUps) * 100).toFixed(1))
+        : 0;
+      const agentName = `${agent.firstName ?? ""} ${agent.lastName ?? ""}`.trim() || agent.username;
+      return { agentId: agent.id, agentName, scheduledFollowUps, overdueFollowUps, completedFollowUps, followUpRate, neverContactedLeads, within24hLeads, within48hLeads, meetingsHeld, meetingsAttendanceRate };
+    }).sort((a, b) => b.scheduledFollowUps - a.scheduledFollowUps);
+  }
+
+  async getSalesFunnelReport(): Promise<{
+    stateId: string;
+    stateName: string;
+    stateColor: string;
+    stateOrder: number;
+    count: number;
+    conversionToNext: number | null;
+    avgDaysInState: number | null;
+  }[]> {
+    const allStates = await db.select().from(leadStates).orderBy(leadStates.order);
+    const allLeads = await db.select().from(leads);
+
+    const stateCountMap: Record<string, number> = {};
+    for (const s of allStates) stateCountMap[s.id] = 0;
+    for (const l of allLeads) {
+      if (l.stateId && stateCountMap[l.stateId] !== undefined) {
+        stateCountMap[l.stateId]++;
+      }
+    }
+
+    // Compute avgDaysInState: average days since lead.updatedAt (proxy for when current state was set)
+    // grouped by current stateId
+    const now = new Date();
+    const avgDaysMap: Record<string, number | null> = {};
+    for (const state of allStates) {
+      const stateLeads = allLeads.filter(l => l.stateId === state.id && l.updatedAt);
+      if (stateLeads.length === 0) {
+        avgDaysMap[state.id] = null;
+      } else {
+        const totalDays = stateLeads.reduce((sum, l) => {
+          const diffMs = now.getTime() - new Date(l.updatedAt!).getTime();
+          return sum + Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        }, 0);
+        avgDaysMap[state.id] = Math.round(totalDays / stateLeads.length);
+      }
+    }
+
+    const result = allStates.map((state, idx) => {
+      const count = stateCountMap[state.id] ?? 0;
+      const nextState = allStates[idx + 1];
+      const nextCount = nextState ? (stateCountMap[nextState.id] ?? 0) : null;
+      // Conversion to next: how many of current stage went to the next stage
+      const conversionToNext = count > 0 && nextCount !== null
+        ? parseFloat(((nextCount / count) * 100).toFixed(1))
+        : null;
+      return {
+        stateId: state.id,
+        stateName: state.name,
+        stateColor: state.color,
+        stateOrder: state.order,
+        count,
+        conversionToNext,
+        avgDaysInState: avgDaysMap[state.id] ?? null,
+      };
+    });
+
+    return result;
+  }
+
+  async getDailyActivityReport(): Promise<{
+    agentId: string;
+    agentName: string;
+    todayActions: number;
+    weekActions: number;
+    todayCalls: number;
+    todayWhatsapp: number;
+    todayMeetings: number;
+    todayNotes: number;
+    isInactive: boolean;
+    lastActivityAt: Date | null;
+  }[]> {
+    const allUsers = await db.select().from(users);
+    const agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "team_leader");
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekStart = new Date(todayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    const allComms = await db.select().from(communications)
+      .where(gte(communications.createdAt, weekStart));
+
+    return agents.map(agent => {
+      const agentComms = allComms.filter(c => c.userId === agent.id);
+      const todayComms = agentComms.filter(c => c.createdAt && new Date(c.createdAt) >= todayStart);
+      const todayActions = todayComms.length;
+      const weekActions = agentComms.length;
+      const todayCalls = todayComms.filter(c => c.type === "call" || c.type === "no_answer").length;
+      const todayWhatsapp = todayComms.filter(c => c.type === "whatsapp").length;
+      const todayMeetings = todayComms.filter(c => c.type === "meeting").length;
+      const todayNotes = todayComms.filter(c => c.type === "note").length;
+      const lastComm = agentComms.sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())[0];
+      const lastActivityAt = lastComm?.createdAt ? new Date(lastComm.createdAt) : null;
+      const isInactive = !lastActivityAt || lastActivityAt < yesterday;
+      const agentName = `${agent.firstName ?? ""} ${agent.lastName ?? ""}`.trim() || agent.username;
+      return { agentId: agent.id, agentName, todayActions, weekActions, todayCalls, todayWhatsapp, todayMeetings, todayNotes, isInactive, lastActivityAt };
+    }).sort((a, b) => b.todayActions - a.todayActions);
+  }
+
+  async getColdLeadsReport(): Promise<{
+    leadId: string;
+    leadName: string | null;
+    leadPhone: string | null;
+    agentId: string | null;
+    agentName: string | null;
+    lastContactDate: Date | null;
+    daysSinceContact: number;
+    stateId: string | null;
+    stateName: string | null;
+  }[]> {
+    const allLeads = await db.select().from(leads);
+    const allUsers = await db.select().from(users);
+    const allStates = await db.select().from(leadStates);
+
+    const now = new Date();
+    const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+
+    const userMap = new Map(allUsers.map(u => [u.id, `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.username]));
+    const stateMap = new Map(allStates.map(s => [s.id, s.name]));
+
+    const coldLeads = allLeads.filter(l => {
+      const lastContact = l.lastActionDate ? new Date(l.lastActionDate) : (l.createdAt ? new Date(l.createdAt) : null);
+      return !lastContact || lastContact < threeDaysAgo;
+    });
+
+    return coldLeads.map(l => {
+      const lastContactDate = l.lastActionDate ? new Date(l.lastActionDate) : (l.createdAt ? new Date(l.createdAt) : null);
+      const daysSinceContact = lastContactDate
+        ? Math.floor((now.getTime() - lastContactDate.getTime()) / (24 * 60 * 60 * 1000))
+        : 999;
+      const agentName = l.assignedTo ? (userMap.get(l.assignedTo) ?? null) : null;
+      const stateName = l.stateId ? (stateMap.get(l.stateId) ?? null) : null;
+      return {
+        leadId: l.id,
+        leadName: l.name,
+        leadPhone: l.phone,
+        agentId: l.assignedTo,
+        agentName,
+        lastContactDate,
+        daysSinceContact,
+        stateId: l.stateId,
+        stateName,
+      };
+    }).sort((a, b) => b.daysSinceContact - a.daysSinceContact);
+  }
+
+  async getProjectPerformanceReport(): Promise<{
+    projectId: string;
+    projectName: string;
+    totalLeads: number;
+    bookingsCount: number;
+    conversionRate: number;
+    avgDaysToClose: number | null;
+  }[]> {
+    const allProjects = await db.select().from(projects).where(eq(projects.isActive, true));
+    const allLeads = await db.select().from(leads);
+    const allStates = await db.select().from(leadStates);
+
+    const bookingStates = new Set(
+      allStates.filter(s => s.name.toLowerCase().includes("done") || s.name.toLowerCase().includes("closed") || s.name.includes("صفقة") || s.name.includes("محجوز") || s.name.toLowerCase().includes("book") || s.name.toLowerCase().includes("reserved")).map(s => s.id)
+    );
+
+    return allProjects.map(proj => {
+      const projLeads = allLeads.filter(l => l.preferredProject === proj.name || l.preferredProject === proj.id);
+      const totalLeads = projLeads.length;
+      const bookingsCount = projLeads.filter(l => l.stateId && bookingStates.has(l.stateId)).length;
+      const conversionRate = totalLeads > 0 ? parseFloat(((bookingsCount / totalLeads) * 100).toFixed(1)) : 0;
+
+      const closedLeads = projLeads.filter(l => l.stateId && bookingStates.has(l.stateId) && l.createdAt && l.updatedAt);
+      const avgDaysToClose = closedLeads.length > 0
+        ? parseFloat((closedLeads.reduce((sum, l) => {
+            const diff = new Date(l.updatedAt!).getTime() - new Date(l.createdAt!).getTime();
+            return sum + diff / (24 * 60 * 60 * 1000);
+          }, 0) / closedLeads.length).toFixed(1))
+        : null;
+
+      return { projectId: proj.id, projectName: proj.name, totalLeads, bookingsCount, conversionRate, avgDaysToClose };
+    }).sort((a, b) => b.totalLeads - a.totalLeads);
+  }
+
+  async getWeeklyMonthlyComparison(): Promise<{
+    period: string;
+    label: string;
+    newLeads: number;
+    meetings: number;
+    bookings: number;
+    totalActions: number;
+  }[]> {
+    const now = new Date();
+    const thisWeekStart = new Date(now);
+    thisWeekStart.setDate(now.getDate() - now.getDay());
+    thisWeekStart.setHours(0, 0, 0, 0);
+    const lastWeekStart = new Date(thisWeekStart.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const lastWeekEnd = new Date(thisWeekStart.getTime() - 1);
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+
+    const allLeads = await db.select().from(leads);
+    const allComms = await db.select().from(communications);
+    const allStates = await db.select().from(leadStates);
+    const bookingStates = new Set(
+      allStates.filter(s => s.name.toLowerCase().includes("done") || s.name.toLowerCase().includes("closed") || s.name.includes("صفقة") || s.name.includes("محجوز")).map(s => s.id)
+    );
+
+    const buildPeriod = (label: string, period: string, start: Date, end: Date) => {
+      const periodLeads = allLeads.filter(l => l.createdAt && new Date(l.createdAt) >= start && new Date(l.createdAt) <= end);
+      const periodComms = allComms.filter(c => c.createdAt && new Date(c.createdAt) >= start && new Date(c.createdAt) <= end);
+      return {
+        period,
+        label,
+        newLeads: periodLeads.length,
+        meetings: periodComms.filter(c => c.type === "meeting").length,
+        bookings: periodLeads.filter(l => l.stateId && bookingStates.has(l.stateId)).length,
+        totalActions: periodComms.length,
+      };
+    };
+
+    // Labels use period keys (frontend translates via i18n)
+    return [
+      buildPeriod("lastWeek", "lastWeek", lastWeekStart, lastWeekEnd),
+      buildPeriod("thisWeek", "thisWeek", thisWeekStart, now),
+      buildPeriod("lastMonth", "lastMonth", lastMonthStart, lastMonthEnd),
+      buildPeriod("thisMonth", "thisMonth", thisMonthStart, now),
+    ];
   }
 }
 

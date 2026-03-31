@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Users, TrendingUp, Target, BarChart3, PieChart, Calendar, Clock, AlertTriangle, Zap, Download, TrendingDown, FileText } from "lucide-react";
+import {
+  Loader2, Users, TrendingUp, Target, BarChart3, PieChart, Calendar, Clock,
+  AlertTriangle, Zap, Download, TrendingDown, FileText, Phone, MessageSquare,
+  UserCheck, Snowflake, Building2, Activity,
+} from "lucide-react";
 import { useLanguage } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { useState, useMemo } from "react";
@@ -33,6 +37,7 @@ import {
   Line,
 } from "recharts";
 import { format, subDays, startOfMonth, endOfMonth, subMonths, isWithinInterval, startOfWeek, endOfWeek, startOfQuarter, endOfQuarter } from "date-fns";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 const COLORS = ["#6366f1", "#8b5cf6", "#ec4899", "#f43f5e", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#3b82f6"];
 
@@ -57,6 +62,93 @@ type MarketingRow = {
   costPerConversion: number | null;
 };
 
+type SalesActivityRow = {
+  agentId: string;
+  agentName: string;
+  callsCount: number;
+  whatsappCount: number;
+  meetingsCount: number;
+  notesCount: number;
+  totalActions: number;
+  callsToMeetingRate: number;
+  inboundWhatsappCount: number;
+  outboundWhatsappCount: number;
+  whatsappReplyRate: number;
+  weekCallsCount: number;
+  weekMeetingsCount: number;
+  weekTotalActions: number;
+  monthCallsCount: number;
+  monthMeetingsCount: number;
+  monthTotalActions: number;
+};
+
+type FollowUpRow = {
+  agentId: string;
+  agentName: string;
+  scheduledFollowUps: number;
+  overdueFollowUps: number;
+  completedFollowUps: number;
+  followUpRate: number;
+  neverContactedLeads: number;
+  within24hLeads: number;
+  within48hLeads: number;
+  meetingsHeld: number;
+  meetingsAttendanceRate: number;
+};
+
+type FunnelRow = {
+  stateId: string;
+  stateName: string;
+  stateColor: string;
+  stateOrder: number;
+  count: number;
+  conversionToNext: number | null;
+  avgDaysInState: number | null;
+};
+
+type DailyActivityRow = {
+  agentId: string;
+  agentName: string;
+  todayActions: number;
+  weekActions: number;
+  todayCalls: number;
+  todayWhatsapp: number;
+  todayMeetings: number;
+  todayNotes: number;
+  isInactive: boolean;
+  lastActivityAt: string | null;
+};
+
+type ColdLeadRow = {
+  leadId: string;
+  leadName: string | null;
+  leadPhone: string | null;
+  agentId: string | null;
+  agentName: string | null;
+  lastContactDate: string | null;
+  daysSinceContact: number;
+  stateId: string | null;
+  stateName: string | null;
+};
+
+type ProjectPerformanceRow = {
+  projectId: string;
+  projectName: string;
+  totalLeads: number;
+  bookingsCount: number;
+  conversionRate: number;
+  avgDaysToClose: number | null;
+};
+
+type ComparisonRow = {
+  period: string;
+  label: string;
+  newLeads: number;
+  meetings: number;
+  bookings: number;
+  totalActions: number;
+};
+
 export default function ReportsPage() {
   const { t, isRTL, language } = useLanguage();
   const [timeRange, setTimeRange] = useState<string>("month");
@@ -64,6 +156,9 @@ export default function ReportsPage() {
   const [customFrom, setCustomFrom] = useState<string>("");
   const [customTo, setCustomTo] = useState<string>("");
   const [pdfExporting, setPdfExporting] = useState(false);
+  const [coldLeadsFilter, setColdLeadsFilter] = useState<string>("all");
+  const [reassigningLeadId, setReassigningLeadId] = useState<string | null>(null);
+  const [reassignAgentId, setReassignAgentId] = useState<string>("");
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -97,6 +192,58 @@ export default function ReportsPage() {
     enabled: isManager,
     refetchInterval: 60000,
     staleTime: 30000,
+  });
+
+  const { data: salesActivityReport = [], isLoading: salesActivityLoading } = useQuery<SalesActivityRow[]>({
+    queryKey: ["/api/reports/sales-activity"],
+    enabled: isManager,
+  });
+
+  const { data: followUpReport = [], isLoading: followUpLoading } = useQuery<FollowUpRow[]>({
+    queryKey: ["/api/reports/followup"],
+    enabled: isManager,
+  });
+
+  const { data: funnelReport = [], isLoading: funnelLoading } = useQuery<FunnelRow[]>({
+    queryKey: ["/api/reports/funnel"],
+    enabled: isManager,
+  });
+
+  const { data: dailyActivityReport = [], isLoading: dailyActivityLoading } = useQuery<DailyActivityRow[]>({
+    queryKey: ["/api/reports/daily-activity"],
+    enabled: isManager,
+    refetchInterval: 60000,
+  });
+
+  const { data: coldLeadsReport = [], isLoading: coldLeadsLoading } = useQuery<ColdLeadRow[]>({
+    queryKey: ["/api/reports/cold-leads"],
+    enabled: isManager,
+  });
+
+  const { data: projectPerformanceReport = [], isLoading: projectLoading } = useQuery<ProjectPerformanceRow[]>({
+    queryKey: ["/api/reports/project-performance"],
+    enabled: isManager,
+  });
+
+  const { data: comparisonReport = [], isLoading: comparisonLoading } = useQuery<ComparisonRow[]>({
+    queryKey: ["/api/reports/comparison"],
+    enabled: isManager,
+  });
+
+  const reassignMutation = useMutation({
+    mutationFn: async ({ leadId, agentId }: { leadId: string; agentId: string }) => {
+      return apiRequest("PATCH", `/api/leads/${leadId}/reassign`, { assignedTo: agentId });
+    },
+    onSuccess: () => {
+      toast({ title: t.reassignSuccess });
+      queryClient.invalidateQueries({ queryKey: ["/api/reports/cold-leads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      setReassigningLeadId(null);
+      setReassignAgentId("");
+    },
+    onError: () => {
+      toast({ title: t.reassignError, variant: "destructive" });
+    },
   });
 
   const getMarketingDateRange = () => {
@@ -232,6 +379,14 @@ export default function ReportsPage() {
     return Object.entries(dayMap).map(([date, count]) => ({ date, count }));
   }, [filteredLeads, timeRange]);
 
+  const filteredColdLeads = useMemo(() => {
+    if (coldLeadsFilter === "all") return coldLeadsReport;
+    if (coldLeadsFilter === "3") return coldLeadsReport.filter(l => l.daysSinceContact >= 3);
+    if (coldLeadsFilter === "7") return coldLeadsReport.filter(l => l.daysSinceContact >= 7);
+    if (coldLeadsFilter === "14") return coldLeadsReport.filter(l => l.daysSinceContact >= 14);
+    return coldLeadsReport;
+  }, [coldLeadsReport, coldLeadsFilter]);
+
   const handleExportPDF = async () => {
     setPdfExporting(true);
     try {
@@ -315,6 +470,8 @@ export default function ReportsPage() {
     );
   }
 
+  const salesAgents = users.filter(u => u.role === "sales_agent" || u.role === "team_leader");
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -341,19 +498,50 @@ export default function ReportsPage() {
       </div>
 
       <Tabs defaultValue="overview">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="flex flex-wrap h-auto gap-1 mb-2">
           <TabsTrigger value="overview" data-testid="tab-reports-overview">
             <BarChart3 className="h-4 w-4 mr-1" />
             {t.overview}
           </TabsTrigger>
           {isManager && (
-            <TabsTrigger value="marketing" data-testid="tab-reports-marketing">
-              <TrendingUp className="h-4 w-4 mr-1" />
-              {t.marketingTab}
-            </TabsTrigger>
+            <>
+              <TabsTrigger value="sales-activity" data-testid="tab-sales-activity">
+                <Phone className="h-4 w-4 mr-1" />
+                {t.salesActivityTab}
+              </TabsTrigger>
+              <TabsTrigger value="followup" data-testid="tab-followup">
+                <UserCheck className="h-4 w-4 mr-1" />
+                {t.followUpTab}
+              </TabsTrigger>
+              <TabsTrigger value="funnel" data-testid="tab-funnel">
+                <Activity className="h-4 w-4 mr-1" />
+                {t.funnelTab}
+              </TabsTrigger>
+              <TabsTrigger value="daily-activity" data-testid="tab-daily-activity">
+                <Zap className="h-4 w-4 mr-1" />
+                {t.dailyActivityTab}
+              </TabsTrigger>
+              <TabsTrigger value="cold-leads" data-testid="tab-cold-leads">
+                <Snowflake className="h-4 w-4 mr-1" />
+                {t.coldLeadsTab}
+              </TabsTrigger>
+              <TabsTrigger value="projects" data-testid="tab-projects">
+                <Building2 className="h-4 w-4 mr-1" />
+                {t.projectPerformanceTab}
+              </TabsTrigger>
+              <TabsTrigger value="comparison" data-testid="tab-comparison">
+                <TrendingUp className="h-4 w-4 mr-1" />
+                {t.comparisonTab}
+              </TabsTrigger>
+              <TabsTrigger value="marketing" data-testid="tab-reports-marketing">
+                <PieChart className="h-4 w-4 mr-1" />
+                {t.marketingTab}
+              </TabsTrigger>
+            </>
           )}
         </TabsList>
 
+        {/* ============================== OVERVIEW TAB ============================== */}
         <TabsContent value="overview" className="space-y-6 mt-4">
           <div className="flex justify-end">
             <Select value={timeRange} onValueChange={setTimeRange}>
@@ -642,6 +830,840 @@ export default function ReportsPage() {
           </Card>
         </TabsContent>
 
+        {/* ============================== SALES ACTIVITY TAB ============================== */}
+        {isManager && (
+          <TabsContent value="sales-activity" className="space-y-6 mt-4">
+            <div>
+              <h2 className="text-lg font-semibold">{t.salesActivityTitle}</h2>
+              <p className="text-sm text-muted-foreground">{t.salesActivitySubtitle}</p>
+            </div>
+            {salesActivityLoading ? (
+              <div className="flex items-center justify-center h-40">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : salesActivityReport.length === 0 ? (
+              <Card>
+                <CardContent className="flex items-center justify-center h-40 text-muted-foreground">
+                  {t.noActivityData}
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <Card data-testid="chart-sales-activity-calls">
+                    <CardHeader>
+                      <CardTitle className="text-base">{t.callsCount} & {t.meetingsCount}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[280px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={salesActivityReport}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                            <XAxis dataKey="agentName" tick={{ fontSize: 11 }} />
+                            <YAxis tick={{ fontSize: 12 }} />
+                            <Tooltip />
+                            <Legend />
+                            <Bar dataKey="callsCount" fill="#6366f1" name={t.callsCount} radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="meetingsCount" fill="#22c55e" name={t.meetingsCount} radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card data-testid="chart-sales-activity-whatsapp">
+                    <CardHeader>
+                      <CardTitle className="text-base">{t.whatsappCount} & {t.whatsappReplyRate}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[280px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={salesActivityReport}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                            <XAxis dataKey="agentName" tick={{ fontSize: 11 }} />
+                            <YAxis tick={{ fontSize: 12 }} />
+                            <Tooltip />
+                            <Legend />
+                            <Bar dataKey="inboundWhatsappCount" fill="#25d366" name={t.inboundWhatsapp} radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="outboundWhatsappCount" fill="#128c7e" name={t.outboundWhatsapp} radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card data-testid="table-sales-activity">
+                  <CardHeader>
+                    <CardTitle className="text-base">{t.salesActivityTitle}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-start py-3 px-2 font-medium" rowSpan={2}>{t.assignedTo}</th>
+                            <th className="text-center py-2 px-2 font-medium border-b" colSpan={5}>{t.periodCurrent}</th>
+                            <th className="text-center py-2 px-2 font-medium border-b border-l" colSpan={3}>{t.periodWeek}</th>
+                            <th className="text-center py-2 px-2 font-medium border-b border-l" colSpan={3}>{t.periodMonth}</th>
+                          </tr>
+                          <tr className="border-b">
+                            <th className="text-center py-2 px-2 font-medium">{t.callsCount}</th>
+                            <th className="text-center py-2 px-2 font-medium">{t.whatsappCount}</th>
+                            <th className="text-center py-2 px-2 font-medium">{t.meetingsCount}</th>
+                            <th className="text-center py-2 px-2 font-medium">{t.callsToMeetingRate}</th>
+                            <th className="text-center py-2 px-2 font-medium">{t.whatsappReplyRate}</th>
+                            <th className="text-center py-2 px-2 font-medium border-l">{t.callsCount}</th>
+                            <th className="text-center py-2 px-2 font-medium">{t.meetingsCount}</th>
+                            <th className="text-center py-2 px-2 font-medium">{t.totalActions}</th>
+                            <th className="text-center py-2 px-2 font-medium border-l">{t.callsCount}</th>
+                            <th className="text-center py-2 px-2 font-medium">{t.meetingsCount}</th>
+                            <th className="text-center py-2 px-2 font-medium">{t.totalActions}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {salesActivityReport.map((row) => (
+                            <tr key={row.agentId} className="border-b last:border-0" data-testid={`row-sales-activity-${row.agentId}`}>
+                              <td className="py-3 px-2 font-medium">{row.agentName}</td>
+                              <td className="text-center py-3 px-2">{row.callsCount}</td>
+                              <td className="text-center py-3 px-2">{row.whatsappCount}</td>
+                              <td className="text-center py-3 px-2">{row.meetingsCount}</td>
+                              <td className="text-center py-3 px-2">
+                                <Badge variant={row.callsToMeetingRate >= 20 ? "default" : "secondary"}>
+                                  {row.callsToMeetingRate}%
+                                </Badge>
+                              </td>
+                              <td className="text-center py-3 px-2">
+                                {row.inboundWhatsappCount > 0 ? (
+                                  <Badge variant={row.whatsappReplyRate >= 80 ? "default" : row.whatsappReplyRate >= 50 ? "outline" : "secondary"}>
+                                    {row.whatsappReplyRate}%
+                                  </Badge>
+                                ) : (
+                                  <span className="text-muted-foreground text-xs">—</span>
+                                )}
+                              </td>
+                              <td className="text-center py-3 px-2 border-l">{row.weekCallsCount}</td>
+                              <td className="text-center py-3 px-2">{row.weekMeetingsCount}</td>
+                              <td className="text-center py-3 px-2">
+                                <Badge variant={row.weekTotalActions >= 20 ? "default" : row.weekTotalActions >= 10 ? "outline" : "secondary"}>
+                                  {row.weekTotalActions}
+                                </Badge>
+                              </td>
+                              <td className="text-center py-3 px-2 border-l">{row.monthCallsCount}</td>
+                              <td className="text-center py-3 px-2">{row.monthMeetingsCount}</td>
+                              <td className="text-center py-3 px-2">
+                                <Badge variant={row.monthTotalActions >= 50 ? "default" : row.monthTotalActions >= 20 ? "outline" : "secondary"}>
+                                  {row.monthTotalActions}
+                                </Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </TabsContent>
+        )}
+
+        {/* ============================== FOLLOW-UP TAB ============================== */}
+        {isManager && (
+          <TabsContent value="followup" className="space-y-6 mt-4">
+            <div>
+              <h2 className="text-lg font-semibold">{t.followUpTitle}</h2>
+              <p className="text-sm text-muted-foreground">{t.followUpSubtitle}</p>
+            </div>
+            {followUpLoading ? (
+              <div className="flex items-center justify-center h-40">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : followUpReport.length === 0 ? (
+              <Card>
+                <CardContent className="flex items-center justify-center h-40 text-muted-foreground">
+                  {t.noActivityData}
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <Card data-testid="chart-followup-scheduled">
+                    <CardHeader>
+                      <CardTitle className="text-base">{t.scheduledFollowUpsCount} vs {t.overdueFollowUps}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[280px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={followUpReport}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                            <XAxis dataKey="agentName" tick={{ fontSize: 11 }} />
+                            <YAxis tick={{ fontSize: 12 }} />
+                            <Tooltip />
+                            <Legend />
+                            <Bar dataKey="scheduledFollowUps" fill="#6366f1" name={t.scheduledFollowUpsCount} radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="overdueFollowUps" fill="#f43f5e" name={t.overdueFollowUps} radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="completedFollowUps" fill="#22c55e" name={t.completedFollowUps} radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card data-testid="chart-followup-contact">
+                    <CardHeader>
+                      <CardTitle className="text-base">{t.neverContacted}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[280px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={followUpReport}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                            <XAxis dataKey="agentName" tick={{ fontSize: 11 }} />
+                            <YAxis tick={{ fontSize: 12 }} />
+                            <Tooltip />
+                            <Legend />
+                            <Bar dataKey="neverContactedLeads" fill="#f43f5e" name={t.neverContacted} radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="within24hLeads" fill="#22c55e" name={t.contactedWithin24h} radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card data-testid="table-followup">
+                  <CardHeader>
+                    <CardTitle className="text-base">{t.followUpTitle}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-start py-3 px-2 font-medium">{t.assignedTo}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.scheduledFollowUpsCount}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.overdueFollowUps}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.completedFollowUps}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.followUpRate}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.neverContacted}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.contactedWithin24h}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.contactedWithin48h}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.meetingsHeld}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.meetingsAttendanceRate}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {followUpReport.map((row) => (
+                            <tr key={row.agentId} className="border-b last:border-0" data-testid={`row-followup-${row.agentId}`}>
+                              <td className="py-3 px-2 font-medium">{row.agentName}</td>
+                              <td className="text-center py-3 px-2">{row.scheduledFollowUps}</td>
+                              <td className="text-center py-3 px-2">
+                                {row.overdueFollowUps > 0 ? (
+                                  <Badge variant="destructive">{row.overdueFollowUps}</Badge>
+                                ) : (
+                                  <Badge variant="secondary">0</Badge>
+                                )}
+                              </td>
+                              <td className="text-center py-3 px-2">{row.completedFollowUps}</td>
+                              <td className="text-center py-3 px-2">
+                                <Badge variant={row.followUpRate >= 70 ? "default" : row.followUpRate >= 40 ? "outline" : "secondary"}>
+                                  {row.followUpRate}%
+                                </Badge>
+                              </td>
+                              <td className="text-center py-3 px-2">
+                                {row.neverContactedLeads > 0 ? (
+                                  <Badge variant="destructive">{row.neverContactedLeads}</Badge>
+                                ) : (
+                                  <Badge variant="secondary">0</Badge>
+                                )}
+                              </td>
+                              <td className="text-center py-3 px-2">{row.within24hLeads}</td>
+                              <td className="text-center py-3 px-2">{row.within48hLeads}</td>
+                              <td className="text-center py-3 px-2">{row.meetingsHeld}</td>
+                              <td className="text-center py-3 px-2">
+                                <Badge variant={row.meetingsAttendanceRate >= 50 ? "default" : "outline"}>
+                                  {row.meetingsAttendanceRate}%
+                                </Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </TabsContent>
+        )}
+
+        {/* ============================== SALES FUNNEL TAB ============================== */}
+        {isManager && (
+          <TabsContent value="funnel" className="space-y-6 mt-4">
+            <div>
+              <h2 className="text-lg font-semibold">{t.funnelTitle}</h2>
+              <p className="text-sm text-muted-foreground">{t.funnelSubtitle}</p>
+            </div>
+            {funnelLoading ? (
+              <div className="flex items-center justify-center h-40">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : funnelReport.length === 0 ? (
+              <Card>
+                <CardContent className="flex items-center justify-center h-40 text-muted-foreground">
+                  {t.noFunnelData}
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <Card data-testid="chart-funnel">
+                  <CardHeader>
+                    <CardTitle className="text-base">{t.funnelTitle}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[350px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={funnelReport} layout="vertical">
+                          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                          <XAxis type="number" tick={{ fontSize: 12 }} />
+                          <YAxis dataKey="stateName" type="category" tick={{ fontSize: 12 }} width={120} />
+                          <Tooltip />
+                          <Bar dataKey="count" radius={[0, 4, 4, 0]} name={t.funnelCount}>
+                            {funnelReport.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.stateColor || COLORS[index % COLORS.length]} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card data-testid="table-funnel">
+                  <CardContent className="pt-6">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-start py-3 px-2 font-medium">{t.funnelStage}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.funnelCount}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.funnelConversion}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.avgDaysInStage}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {funnelReport.map((row, idx) => (
+                            <tr key={row.stateId} className="border-b last:border-0" data-testid={`row-funnel-${row.stateId}`}>
+                              <td className="py-3 px-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: row.stateColor }} />
+                                  <span className="font-medium">{row.stateName}</span>
+                                </div>
+                              </td>
+                              <td className="text-center py-3 px-2">
+                                <Badge variant="outline">{row.count}</Badge>
+                              </td>
+                              <td className="text-center py-3 px-2">
+                                {row.conversionToNext !== null ? (
+                                  <Badge variant={row.conversionToNext >= 30 ? "default" : "secondary"}>
+                                    {row.conversionToNext}%
+                                  </Badge>
+                                ) : "—"}
+                              </td>
+                              <td className="text-center py-3 px-2 text-muted-foreground">
+                                {row.avgDaysInState !== null ? row.avgDaysInState : "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </TabsContent>
+        )}
+
+        {/* ============================== DAILY ACTIVITY TAB ============================== */}
+        {isManager && (
+          <TabsContent value="daily-activity" className="space-y-6 mt-4">
+            <div>
+              <h2 className="text-lg font-semibold">{t.dailyActivityTitle}</h2>
+              <p className="text-sm text-muted-foreground">{t.dailyActivitySubtitle}</p>
+            </div>
+            {dailyActivityLoading ? (
+              <div className="flex items-center justify-center h-40">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : dailyActivityReport.length === 0 ? (
+              <Card>
+                <CardContent className="flex items-center justify-center h-40 text-muted-foreground">
+                  {t.noActivityData}
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <Card data-testid="card-daily-total-actions">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">{t.totalActions} ({t.todayActivity})</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">
+                        {dailyActivityReport.reduce((s, r) => s + r.todayActions, 0)}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card data-testid="card-daily-calls">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">{t.callsCount} ({t.todayActivity})</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">
+                        {dailyActivityReport.reduce((s, r) => s + r.todayCalls, 0)}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card data-testid="card-daily-meetings">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">{t.meetingsCount} ({t.todayActivity})</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">
+                        {dailyActivityReport.reduce((s, r) => s + r.todayMeetings, 0)}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card data-testid="card-daily-inactive">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">{t.inactiveWarning}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-destructive">
+                        {dailyActivityReport.filter(r => r.isInactive).length}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card data-testid="table-daily-activity">
+                  <CardContent className="pt-6">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-start py-3 px-2 font-medium">{t.assignedTo}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.callsCount}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.whatsappCount}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.meetingsCount}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.notesCount}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.todayActivity}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.weekActivity}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.lastActivity}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dailyActivityReport.map((row) => (
+                            <tr
+                              key={row.agentId}
+                              className={`border-b last:border-0 ${row.isInactive ? "bg-destructive/5" : ""}`}
+                              data-testid={`row-daily-activity-${row.agentId}`}
+                            >
+                              <td className="py-3 px-2 font-medium">
+                                <div className="flex items-center gap-2">
+                                  {row.isInactive && (
+                                    <Badge variant="destructive" className="text-xs">{t.inactiveWarning}</Badge>
+                                  )}
+                                  {row.agentName}
+                                </div>
+                              </td>
+                              <td className="text-center py-3 px-2">{row.todayCalls}</td>
+                              <td className="text-center py-3 px-2">{row.todayWhatsapp}</td>
+                              <td className="text-center py-3 px-2">{row.todayMeetings}</td>
+                              <td className="text-center py-3 px-2">{row.todayNotes}</td>
+                              <td className="text-center py-3 px-2">
+                                <Badge variant={row.todayActions >= 10 ? "default" : row.todayActions >= 5 ? "outline" : "secondary"}>
+                                  {row.todayActions}
+                                </Badge>
+                              </td>
+                              <td className="text-center py-3 px-2">{row.weekActions}</td>
+                              <td className="text-center py-3 px-2 text-muted-foreground text-xs">
+                                {row.lastActivityAt
+                                  ? format(new Date(row.lastActivityAt), "MM/dd HH:mm")
+                                  : "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </TabsContent>
+        )}
+
+        {/* ============================== COLD LEADS TAB ============================== */}
+        {isManager && (
+          <TabsContent value="cold-leads" className="space-y-6 mt-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">{t.coldLeadsTitle}</h2>
+                <p className="text-sm text-muted-foreground">{t.coldLeadsSubtitle}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant={coldLeadsFilter === "all" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setColdLeadsFilter("all")}
+                  data-testid="button-cold-all"
+                >
+                  {t.allColdLeads}
+                </Button>
+                <Button
+                  variant={coldLeadsFilter === "3" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setColdLeadsFilter("3")}
+                  data-testid="button-cold-3days"
+                >
+                  {t.coldLeads3Days}
+                </Button>
+                <Button
+                  variant={coldLeadsFilter === "7" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setColdLeadsFilter("7")}
+                  data-testid="button-cold-7days"
+                >
+                  {t.coldLeads7Days}
+                </Button>
+                <Button
+                  variant={coldLeadsFilter === "14" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setColdLeadsFilter("14")}
+                  data-testid="button-cold-14days"
+                >
+                  {t.coldLeads14Days}
+                </Button>
+              </div>
+            </div>
+            {coldLeadsLoading ? (
+              <div className="flex items-center justify-center h-40">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : filteredColdLeads.length === 0 ? (
+              <Card>
+                <CardContent className="flex items-center justify-center h-40 text-muted-foreground">
+                  {t.noColdLeadsData}
+                </CardContent>
+              </Card>
+            ) : (
+              <Card data-testid="table-cold-leads">
+                <CardContent className="pt-6">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-start py-3 px-2 font-medium">{t.name}</th>
+                          <th className="text-center py-3 px-2 font-medium">{t.phone}</th>
+                          <th className="text-center py-3 px-2 font-medium">{t.assignedTo}</th>
+                          <th className="text-center py-3 px-2 font-medium">{t.lastContactDate}</th>
+                          <th className="text-center py-3 px-2 font-medium">{t.daysSinceContact}</th>
+                          <th className="text-center py-3 px-2 font-medium">{t.leadStatus}</th>
+                          <th className="text-center py-3 px-2 font-medium">{t.reassign}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredColdLeads.map((row) => (
+                          <tr key={row.leadId} className="border-b last:border-0" data-testid={`row-cold-lead-${row.leadId}`}>
+                            <td className="py-3 px-2 font-medium">{row.leadName || t.noName}</td>
+                            <td className="text-center py-3 px-2 text-muted-foreground">{row.leadPhone || "—"}</td>
+                            <td className="text-center py-3 px-2">{row.agentName || "—"}</td>
+                            <td className="text-center py-3 px-2 text-muted-foreground text-xs">
+                              {row.lastContactDate
+                                ? format(new Date(row.lastContactDate), "MM/dd/yyyy")
+                                : "—"}
+                            </td>
+                            <td className="text-center py-3 px-2">
+                              <Badge variant={row.daysSinceContact >= 14 ? "destructive" : row.daysSinceContact >= 7 ? "outline" : "secondary"}>
+                                {row.daysSinceContact}
+                              </Badge>
+                            </td>
+                            <td className="text-center py-3 px-2">
+                              <Badge variant="outline">{row.stateName || "—"}</Badge>
+                            </td>
+                            <td className="text-center py-3 px-2">
+                              {reassigningLeadId === row.leadId ? (
+                                <div className="flex items-center gap-2">
+                                  <Select value={reassignAgentId} onValueChange={setReassignAgentId}>
+                                    <SelectTrigger className="h-7 w-[140px]" data-testid={`select-reassign-agent-${row.leadId}`}>
+                                      <SelectValue placeholder={t.selectAgent} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {salesAgents.map(a => (
+                                        <SelectItem key={a.id} value={a.id}>
+                                          {`${a.firstName || ""} ${a.lastName || ""}`.trim() || a.username}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <Button
+                                    size="sm"
+                                    className="h-7"
+                                    onClick={() => {
+                                      if (reassignAgentId) {
+                                        reassignMutation.mutate({ leadId: row.leadId, agentId: reassignAgentId });
+                                      }
+                                    }}
+                                    disabled={!reassignAgentId || reassignMutation.isPending}
+                                    data-testid={`button-confirm-reassign-${row.leadId}`}
+                                  >
+                                    {reassignMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "✓"}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7"
+                                    onClick={() => { setReassigningLeadId(null); setReassignAgentId(""); }}
+                                    data-testid={`button-cancel-reassign-${row.leadId}`}
+                                  >
+                                    ✕
+                                  </Button>
+                                </div>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7"
+                                  onClick={() => setReassigningLeadId(row.leadId)}
+                                  data-testid={`button-reassign-${row.leadId}`}
+                                >
+                                  {t.reassign}
+                                </Button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        )}
+
+        {/* ============================== PROJECT PERFORMANCE TAB ============================== */}
+        {isManager && (
+          <TabsContent value="projects" className="space-y-6 mt-4">
+            <div>
+              <h2 className="text-lg font-semibold">{t.projectPerformanceTitle}</h2>
+              <p className="text-sm text-muted-foreground">{t.projectPerformanceSubtitle}</p>
+            </div>
+            {projectLoading ? (
+              <div className="flex items-center justify-center h-40">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : projectPerformanceReport.length === 0 ? (
+              <Card>
+                <CardContent className="flex items-center justify-center h-40 text-muted-foreground">
+                  {t.noProjectData}
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <Card data-testid="chart-project-leads">
+                    <CardHeader>
+                      <CardTitle className="text-base">{t.totalLeads} / {t.bookings}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[280px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={projectPerformanceReport.slice(0, 10)}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                            <XAxis dataKey="projectName" tick={{ fontSize: 10 }} />
+                            <YAxis tick={{ fontSize: 12 }} />
+                            <Tooltip />
+                            <Legend />
+                            <Bar dataKey="totalLeads" fill="#6366f1" name={t.totalLeads} radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="bookingsCount" fill="#22c55e" name={t.bookings} radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card data-testid="chart-project-conversion">
+                    <CardHeader>
+                      <CardTitle className="text-base">{t.conversionRate}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[280px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={projectPerformanceReport.slice(0, 10)}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                            <XAxis dataKey="projectName" tick={{ fontSize: 10 }} />
+                            <YAxis tick={{ fontSize: 12 }} unit="%" />
+                            <Tooltip formatter={(v) => [`${v}%`, t.conversionRate]} />
+                            <Bar dataKey="conversionRate" fill="#f97316" radius={[4, 4, 0, 0]} name={t.conversionRate} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card data-testid="table-project-performance">
+                  <CardContent className="pt-6">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-start py-3 px-2 font-medium">{t.project}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.totalLeads}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.bookings}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.conversionRate}</th>
+                            <th className="text-center py-3 px-2 font-medium">{t.avgDaysToClose}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {projectPerformanceReport.map((row) => (
+                            <tr key={row.projectId} className="border-b last:border-0" data-testid={`row-project-${row.projectId}`}>
+                              <td className="py-3 px-2 font-medium">{row.projectName}</td>
+                              <td className="text-center py-3 px-2">{row.totalLeads}</td>
+                              <td className="text-center py-3 px-2">{row.bookingsCount}</td>
+                              <td className="text-center py-3 px-2">
+                                <Badge variant={row.conversionRate >= 20 ? "default" : "secondary"}>
+                                  {row.conversionRate}%
+                                </Badge>
+                              </td>
+                              <td className="text-center py-3 px-2">
+                                {row.avgDaysToClose !== null ? `${row.avgDaysToClose} ${t.responseTimeMinutes}` : "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </TabsContent>
+        )}
+
+        {/* ============================== COMPARISON TAB ============================== */}
+        {isManager && (
+          <TabsContent value="comparison" className="space-y-6 mt-4">
+            <div>
+              <h2 className="text-lg font-semibold">{t.comparisonTitle}</h2>
+              <p className="text-sm text-muted-foreground">{t.comparisonSubtitle}</p>
+            </div>
+            {comparisonLoading ? (
+              <div className="flex items-center justify-center h-40">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : comparisonReport.length === 0 ? (
+              <Card>
+                <CardContent className="flex items-center justify-center h-40 text-muted-foreground">
+                  {t.noComparisonData}
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  {comparisonReport.map((row) => (
+                    <Card key={row.period} data-testid={`card-comparison-${row.period}`}>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium">
+                          {row.label === "lastWeek" ? t.lastWeek :
+                           row.label === "thisWeek" ? t.periodWeek :
+                           row.label === "lastMonth" ? t.lastMonth :
+                           row.label === "thisMonth" ? t.periodMonth :
+                           row.label}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">{t.newLeadsCount}</span>
+                            <span className="font-semibold">{row.newLeads}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">{t.meetingsCount}</span>
+                            <span className="font-semibold">{row.meetings}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">{t.bookings}</span>
+                            <span className="font-semibold">{row.bookings}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">{t.totalActionsCount}</span>
+                            <span className="font-semibold">{row.totalActions}</span>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <Card data-testid="chart-comparison-leads">
+                    <CardHeader>
+                      <CardTitle className="text-base">{t.newLeadsCount}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[250px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={comparisonReport.map(r => ({
+                            ...r,
+                            translatedLabel: r.label === "lastWeek" ? t.lastWeek : r.label === "thisWeek" ? t.periodWeek : r.label === "lastMonth" ? t.lastMonth : t.periodMonth,
+                          }))}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                            <XAxis dataKey="translatedLabel" tick={{ fontSize: 11 }} />
+                            <YAxis tick={{ fontSize: 12 }} />
+                            <Tooltip />
+                            <Bar dataKey="newLeads" fill="#6366f1" radius={[4, 4, 0, 0]} name={t.newLeadsCount} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card data-testid="chart-comparison-actions">
+                    <CardHeader>
+                      <CardTitle className="text-base">{t.meetingsCount} & {t.bookings}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[250px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={comparisonReport.map(r => ({
+                            ...r,
+                            translatedLabel: r.label === "lastWeek" ? t.lastWeek : r.label === "thisWeek" ? t.periodWeek : r.label === "lastMonth" ? t.lastMonth : t.periodMonth,
+                          }))}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                            <XAxis dataKey="translatedLabel" tick={{ fontSize: 11 }} />
+                            <YAxis tick={{ fontSize: 12 }} />
+                            <Tooltip />
+                            <Legend />
+                            <Bar dataKey="meetings" fill="#22c55e" radius={[4, 4, 0, 0]} name={t.meetingsCount} />
+                            <Bar dataKey="bookings" fill="#f97316" radius={[4, 4, 0, 0]} name={t.bookings} />
+                            <Bar dataKey="totalActions" fill="#6366f1" radius={[4, 4, 0, 0]} name={t.totalActionsCount} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </>
+            )}
+          </TabsContent>
+        )}
+
+        {/* ============================== MARKETING TAB ============================== */}
         {isManager && (
           <TabsContent value="marketing" className="space-y-6 mt-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4 justify-between">

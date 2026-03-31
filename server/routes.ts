@@ -1120,6 +1120,102 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== SALES PERFORMANCE REPORTS ====================
+
+  app.get("/api/reports/sales-activity", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (req, res) => {
+    try {
+      const { from, to } = req.query as { from?: string; to?: string };
+      const fromDate = from ? new Date(from) : undefined;
+      const toDate = to ? new Date(to) : undefined;
+      const report = await storage.getSalesActivityReport(fromDate, toDate);
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching sales activity report:", error);
+      res.status(500).json({ error: "Failed to fetch sales activity report" });
+    }
+  });
+
+  app.get("/api/reports/followup", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (req, res) => {
+    try {
+      const { from, to } = req.query as { from?: string; to?: string };
+      const fromDate = from ? new Date(from) : undefined;
+      const toDate = to ? new Date(to) : undefined;
+      const report = await storage.getFollowUpReport(fromDate, toDate);
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching follow-up report:", error);
+      res.status(500).json({ error: "Failed to fetch follow-up report" });
+    }
+  });
+
+  app.get("/api/reports/funnel", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (req, res) => {
+    try {
+      const report = await storage.getSalesFunnelReport();
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching funnel report:", error);
+      res.status(500).json({ error: "Failed to fetch funnel report" });
+    }
+  });
+
+  app.get("/api/reports/daily-activity", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (req, res) => {
+    try {
+      const report = await storage.getDailyActivityReport();
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching daily activity report:", error);
+      res.status(500).json({ error: "Failed to fetch daily activity report" });
+    }
+  });
+
+  app.get("/api/reports/cold-leads", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (req, res) => {
+    try {
+      const report = await storage.getColdLeadsReport();
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching cold leads report:", error);
+      res.status(500).json({ error: "Failed to fetch cold leads report" });
+    }
+  });
+
+  app.get("/api/reports/project-performance", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (req, res) => {
+    try {
+      const report = await storage.getProjectPerformanceReport();
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching project performance report:", error);
+      res.status(500).json({ error: "Failed to fetch project performance report" });
+    }
+  });
+
+  app.get("/api/reports/comparison", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (req, res) => {
+    try {
+      const report = await storage.getWeeklyMonthlyComparison();
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching comparison report:", error);
+      res.status(500).json({ error: "Failed to fetch comparison report" });
+    }
+  });
+
+  app.patch("/api/leads/:id/reassign", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const { assignedTo } = req.body;
+      if (!assignedTo) {
+        return res.status(400).json({ error: "assignedTo is required" });
+      }
+      const lead = await storage.updateLead(id, { assignedTo });
+      if (!lead) {
+        return res.status(404).json({ error: "Lead not found" });
+      }
+      res.json(lead);
+    } catch (error) {
+      console.error("Error reassigning lead:", error);
+      res.status(500).json({ error: "Failed to reassign lead" });
+    }
+  });
+
   app.get("/api/dashboard/team-activity", isAuthenticated, requireRole("super_admin", "company_owner", "sales_admin", "team_leader", "admin", "sales_manager"), async (req, res) => {
     try {
       const activity = await storage.getTeamActivityToday();
