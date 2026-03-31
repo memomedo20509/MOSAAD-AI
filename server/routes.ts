@@ -330,6 +330,48 @@ export async function registerRoutes(
       const data = insertLeadSchema.parse(req.body);
       const user = req.user;
       const lead = await storage.createLead(data, user?.teamId ?? null);
+
+      // Send notifications to admins/managers and assigned agent
+      try {
+        const allUsers = await storage.getAllUsers();
+        const adminRoles = ["super_admin", "company_owner", "sales_admin", "admin", "team_leader", "sales_manager"];
+        const leadName = lead.name || lead.phone || "ليد جديد";
+        const message = `ليد جديد: ${leadName}`;
+        const notifyUserIds = new Set<string>();
+
+        // Add all admins/managers
+        for (const u of allUsers) {
+          if (u.role && adminRoles.includes(u.role)) {
+            notifyUserIds.add(u.id);
+          }
+        }
+
+        // Add assigned agent if any (and not already included)
+        if (lead.assignedTo) {
+          const assignedUser = allUsers.find(u => u.username === lead.assignedTo || u.id === lead.assignedTo);
+          if (assignedUser) {
+            notifyUserIds.add(assignedUser.id);
+          }
+        }
+
+        // Don't notify the person who created the lead
+        if (user?.id) {
+          notifyUserIds.delete(user.id);
+        }
+
+        for (const userId of notifyUserIds) {
+          await storage.createNotification({
+            userId,
+            type: "new_lead",
+            message,
+            leadId: lead.id,
+            isRead: false,
+          });
+        }
+      } catch (notifErr) {
+        console.error("Error sending new lead notifications:", notifErr);
+      }
+
       res.status(201).json(lead);
     } catch (error) {
       console.error("Error creating lead:", error);

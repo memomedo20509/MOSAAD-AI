@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLanguage } from "@/lib/i18n";
@@ -19,18 +19,34 @@ export function NotificationBell() {
   const { t } = useLanguage();
   const [, setLocation] = useLocation();
   const [open, setOpen] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
 
   const { data: notifications = [] } = useQuery<Notification[]>({
     queryKey: ["/api/notifications"],
-    refetchInterval: 60_000,
+    refetchInterval: 30_000,
   });
 
   const { data: countData } = useQuery<{ count: number }>({
     queryKey: ["/api/notifications/unread-count"],
-    refetchInterval: 60_000,
+    refetchInterval: 30_000,
   });
 
   const unreadCount = countData?.count ?? 0;
+
+  useEffect(() => {
+    if (unreadCount > 0 && !open) {
+      setIsAnimating(true);
+    } else {
+      setIsAnimating(false);
+    }
+  }, [unreadCount, open]);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (nextOpen) {
+      setIsAnimating(false);
+    }
+  };
 
   const markReadMutation = useMutation({
     mutationFn: (id: string) => apiRequest("PATCH", `/api/notifications/${id}/read`),
@@ -61,7 +77,7 @@ export function NotificationBell() {
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
@@ -70,7 +86,10 @@ export function NotificationBell() {
           data-testid="button-notification-bell"
           aria-label={t.notificationsBell}
         >
-          <Bell className="h-4 w-4" />
+          <Bell
+            className={`h-4 w-4 origin-top${isAnimating ? " animate-bell-ring" : ""}`}
+            data-testid="icon-bell"
+          />
           {unreadCount > 0 && (
             <Badge
               variant="destructive"
