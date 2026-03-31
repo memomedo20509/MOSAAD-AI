@@ -2,6 +2,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+ARG VITE_META_APP_ID
+ENV VITE_META_APP_ID=$VITE_META_APP_ID
+
 COPY package*.json ./
 RUN npm ci
 
