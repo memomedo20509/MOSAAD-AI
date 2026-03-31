@@ -1831,6 +1831,60 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== CUSTOM ROLES ====================
+
+  app.get("/api/custom-roles", isAuthenticated, async (req, res) => {
+    try {
+      const roles = await storage.getAllCustomRoles();
+      res.json(roles);
+    } catch (error) {
+      console.error("Error fetching custom roles:", error);
+      res.status(500).json({ error: "Failed to fetch custom roles" });
+    }
+  });
+
+  app.post("/api/custom-roles", isAuthenticated, requireRole("super_admin"), async (req, res) => {
+    try {
+      const { name, permissions } = req.body;
+      if (!name || !permissions) {
+        return res.status(400).json({ error: "name and permissions are required" });
+      }
+      // Normalize name: trim whitespace
+      const normalizedName = name.trim();
+      if (!normalizedName) {
+        return res.status(400).json({ error: "Role name cannot be empty" });
+      }
+      // Prevent collision with built-in role names (case-insensitive)
+      const BUILTIN_ROLES = ["super_admin", "company_owner", "sales_admin", "team_leader", "sales_agent", "admin", "sales_manager"];
+      if (BUILTIN_ROLES.includes(normalizedName.toLowerCase())) {
+        return res.status(400).json({ error: "Cannot use a built-in role name" });
+      }
+      const existing = await storage.getCustomRoleByName(normalizedName);
+      if (existing) {
+        return res.status(400).json({ error: "A role with this name already exists" });
+      }
+      const role = await storage.createCustomRole({ name: normalizedName, permissions });
+      res.status(201).json(role);
+    } catch (error) {
+      console.error("Error creating custom role:", error);
+      res.status(400).json({ error: "Failed to create custom role" });
+    }
+  });
+
+  app.delete("/api/custom-roles/:id", isAuthenticated, requireRole("super_admin"), async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const deleted = await storage.deleteCustomRole(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Custom role not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting custom role:", error);
+      res.status(500).json({ error: "Failed to delete custom role" });
+    }
+  });
+
   // ─── Import Leads from Excel/CSV ───────────────────────────────────────────
   app.post(
     "/api/leads/import",

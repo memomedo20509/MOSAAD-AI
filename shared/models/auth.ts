@@ -84,6 +84,16 @@ export type RolePermissions = {
   canViewAllReports: boolean;
   canDeleteData: boolean;
   canTransferLeads: boolean;
+  // Module access permissions
+  canAccessKanban: boolean;
+  canAccessInventory: boolean;
+  canAccessWhatsapp: boolean;
+  canAccessCampaigns: boolean;
+  canAccessCommissions: boolean;
+  canAccessReports: boolean;
+  canAccessLeaderboard: boolean;
+  canAccessMyDay: boolean;
+  canAccessSettings: boolean;
 };
 
 export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
@@ -94,6 +104,15 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     canViewAllReports: true,
     canDeleteData: true,
     canTransferLeads: true,
+    canAccessKanban: true,
+    canAccessInventory: true,
+    canAccessWhatsapp: true,
+    canAccessCampaigns: true,
+    canAccessCommissions: true,
+    canAccessReports: true,
+    canAccessLeaderboard: true,
+    canAccessMyDay: true,
+    canAccessSettings: true,
   },
   company_owner: {
     canViewAllLeads: true,
@@ -102,6 +121,15 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     canViewAllReports: true,
     canDeleteData: false,
     canTransferLeads: false,
+    canAccessKanban: true,
+    canAccessInventory: true,
+    canAccessWhatsapp: true,
+    canAccessCampaigns: true,
+    canAccessCommissions: true,
+    canAccessReports: true,
+    canAccessLeaderboard: true,
+    canAccessMyDay: true,
+    canAccessSettings: true,
   },
   sales_admin: {
     canViewAllLeads: true,
@@ -110,22 +138,49 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     canViewAllReports: true,
     canDeleteData: false,
     canTransferLeads: true,
+    canAccessKanban: true,
+    canAccessInventory: true,
+    canAccessWhatsapp: true,
+    canAccessCampaigns: true,
+    canAccessCommissions: true,
+    canAccessReports: true,
+    canAccessLeaderboard: true,
+    canAccessMyDay: true,
+    canAccessSettings: true,
   },
   team_leader: {
-    canViewAllLeads: false, // Only team leads
+    canViewAllLeads: false,
     canManageUsers: false,
     canManageTeams: false,
     canViewAllReports: false,
     canDeleteData: false,
     canTransferLeads: false,
+    canAccessKanban: true,
+    canAccessInventory: false,
+    canAccessWhatsapp: true,
+    canAccessCampaigns: false,
+    canAccessCommissions: true,
+    canAccessReports: false,
+    canAccessLeaderboard: true,
+    canAccessMyDay: true,
+    canAccessSettings: false,
   },
   sales_agent: {
-    canViewAllLeads: false, // Only own leads
+    canViewAllLeads: false,
     canManageUsers: false,
     canManageTeams: false,
     canViewAllReports: false,
     canDeleteData: false,
     canTransferLeads: false,
+    canAccessKanban: true,
+    canAccessInventory: false,
+    canAccessWhatsapp: true,
+    canAccessCampaigns: false,
+    canAccessCommissions: true,
+    canAccessReports: false,
+    canAccessLeaderboard: true,
+    canAccessMyDay: true,
+    canAccessSettings: false,
   },
   admin: {
     canViewAllLeads: true,
@@ -134,6 +189,15 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     canViewAllReports: true,
     canDeleteData: true,
     canTransferLeads: true,
+    canAccessKanban: true,
+    canAccessInventory: true,
+    canAccessWhatsapp: true,
+    canAccessCampaigns: true,
+    canAccessCommissions: true,
+    canAccessReports: true,
+    canAccessLeaderboard: true,
+    canAccessMyDay: true,
+    canAccessSettings: true,
   },
   sales_manager: {
     canViewAllLeads: true,
@@ -142,6 +206,15 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     canViewAllReports: true,
     canDeleteData: false,
     canTransferLeads: true,
+    canAccessKanban: true,
+    canAccessInventory: false,
+    canAccessWhatsapp: true,
+    canAccessCampaigns: true,
+    canAccessCommissions: true,
+    canAccessReports: true,
+    canAccessLeaderboard: true,
+    canAccessMyDay: true,
+    canAccessSettings: false,
   },
 };
 
@@ -157,3 +230,15 @@ export const rolePermissions = pgTable("role_permissions", {
 });
 
 export type RolePermissionRecord = typeof rolePermissions.$inferSelect;
+
+// Custom roles table - user-defined roles with custom permissions
+export const customRoles = pgTable("custom_roles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull().unique(),
+  permissions: jsonbCol("permissions").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertCustomRoleSchema = createInsertSchema(customRoles).omit({ id: true, createdAt: true });
+export type InsertCustomRole = z.infer<typeof insertCustomRoleSchema>;
+export type CustomRole = typeof customRoles.$inferSelect;

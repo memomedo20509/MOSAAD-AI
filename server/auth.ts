@@ -145,10 +145,29 @@ export function registerAuthRoutes(app: Express) {
     });
   });
 
-  app.get("/api/user", (req, res) => {
+  app.get("/api/user", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     const { password: _, ...userWithoutPassword } = req.user as SelectUser;
-    res.json(userWithoutPassword);
+    const role = (req.user as SelectUser).role as UserRole;
+    let effectivePermissions: RolePermissions | null = null;
+    try {
+      // Check if this is a standard role
+      if (DEFAULT_ROLE_PERMISSIONS[role]) {
+        const dbPerms = await storage.getPermissionsForRole(role);
+        effectivePermissions = dbPerms ?? DEFAULT_ROLE_PERMISSIONS[role];
+      } else {
+        // Might be a custom role - look it up by name
+        const customRole = await storage.getCustomRoleByName(role);
+        if (customRole) {
+          effectivePermissions = customRole.permissions as RolePermissions;
+        } else {
+          effectivePermissions = DEFAULT_ROLE_PERMISSIONS["sales_agent"];
+        }
+      }
+    } catch {
+      effectivePermissions = DEFAULT_ROLE_PERMISSIONS[role] ?? DEFAULT_ROLE_PERMISSIONS["sales_agent"];
+    }
+    res.json({ ...userWithoutPassword, permissions: effectivePermissions });
   });
 }
 
@@ -180,8 +199,17 @@ export function requirePermission(permission: keyof RolePermissions) {
     const user = req.user as SelectUser;
     const role = user.role as UserRole;
 
-    const dbPerms = await storage.getPermissionsForRole(role);
-    const perms: RolePermissions = dbPerms ?? DEFAULT_ROLE_PERMISSIONS[role] ?? { canViewAllLeads: false, canManageUsers: false, canManageTeams: false, canViewAllReports: false, canDeleteData: false, canTransferLeads: false };
+    let perms: RolePermissions;
+    if (DEFAULT_ROLE_PERMISSIONS[role]) {
+      const dbPerms = await storage.getPermissionsForRole(role);
+      perms = dbPerms ?? DEFAULT_ROLE_PERMISSIONS[role];
+    } else {
+      // Custom role - look up by name
+      const customRole = await storage.getCustomRoleByName(role);
+      perms = customRole
+        ? (customRole.permissions as RolePermissions)
+        : DEFAULT_ROLE_PERMISSIONS["sales_agent"];
+    }
 
     if (!perms[permission]) {
       return res.status(403).json({ error: "Forbidden" });

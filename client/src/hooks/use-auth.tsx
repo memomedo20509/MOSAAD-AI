@@ -4,7 +4,7 @@ import {
   useMutation,
   UseMutationResult,
 } from "@tanstack/react-query";
-import type { User } from "@shared/models/auth";
+import type { User, RolePermissions } from "@shared/models/auth";
 import { getQueryFn, apiRequest, queryClient } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -21,13 +21,15 @@ type RegisterData = {
   lastName?: string;
 };
 
+type UserWithPermissions = User & { permissions?: RolePermissions };
+
 type AuthContextType = {
-  user: User | null;
+  user: UserWithPermissions | null;
   isLoading: boolean;
   error: Error | null;
-  loginMutation: UseMutationResult<User, Error, LoginData>;
+  loginMutation: UseMutationResult<UserWithPermissions, Error, LoginData>;
   logoutMutation: UseMutationResult<void, Error, void>;
-  registerMutation: UseMutationResult<User, Error, RegisterData>;
+  registerMutation: UseMutationResult<UserWithPermissions, Error, RegisterData>;
 };
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -38,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     data: user,
     error,
     isLoading,
-  } = useQuery<User | null, Error>({
+  } = useQuery<UserWithPermissions | null, Error>({
     queryKey: ["/api/user"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
@@ -48,8 +50,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiRequest("POST", "/api/login", credentials);
       return await res.json();
     },
-    onSuccess: (user: User) => {
-      queryClient.setQueryData(["/api/user"], user);
+    onSuccess: async (user: UserWithPermissions) => {
+      // Invalidate and refetch /api/user to get full user data including permissions
+      await queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       toast({
         title: "تم تسجيل الدخول بنجاح",
         description: `مرحباً ${user.firstName || user.username}`,
@@ -69,8 +72,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiRequest("POST", "/api/register", credentials);
       return await res.json();
     },
-    onSuccess: (user: User) => {
-      queryClient.setQueryData(["/api/user"], user);
+    onSuccess: async (user: UserWithPermissions) => {
+      // Invalidate and refetch /api/user to get full user data including permissions
+      await queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       toast({
         title: "تم إنشاء الحساب بنجاح",
         description: `مرحباً ${user.firstName || user.username}`,

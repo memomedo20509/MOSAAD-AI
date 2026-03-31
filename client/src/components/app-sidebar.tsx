@@ -71,6 +71,7 @@ export function AppSidebar() {
   const { user } = useAuth();
   const { t, isRTL } = useLanguage();
   const userRole = user?.role as UserRole | undefined;
+  const perms = user?.permissions;
 
   const { data: myDayData } = useQuery<{
     todayFollowUps: unknown[];
@@ -98,42 +99,58 @@ export function AppSidebar() {
   });
   const waUnreadCount = waUnreadData?.count ?? 0;
 
+  const canAccessMyDay = !perms || perms.canAccessMyDay !== false;
+  const canAccessLeaderboard = !perms || perms.canAccessLeaderboard !== false;
+  const canAccessReports = !perms || perms.canAccessReports !== false;
+  const canAccessInventory = !perms || perms.canAccessInventory !== false;
+  const canAccessWhatsapp = !perms || perms.canAccessWhatsapp !== false;
+  const canAccessCampaigns = !perms || perms.canAccessCampaigns !== false;
+  const canAccessCommissions = !perms || perms.canAccessCommissions !== false;
+  const canAccessSettings = !perms || perms.canAccessSettings !== false;
+  const canAccessKanban = !perms || perms.canAccessKanban !== false;
+
   const mainNavItems = [
     {
       title: t.dashboard,
       url: "/",
       icon: LayoutDashboard,
+      show: true,
     },
     {
       title: t.myDay,
       url: "/my-day",
       icon: Sun,
       badge: pendingActionsCount > 0 ? pendingActionsCount : null,
+      show: canAccessMyDay,
     },
     {
       title: t.leaderboard,
       url: "/leaderboard",
       icon: Trophy,
+      show: canAccessLeaderboard,
     },
     {
       title: t.reports,
       url: "/reports",
       icon: BarChart3,
+      show: canAccessReports,
     },
-  ];
+  ].filter(item => item.show);
 
   const salesItems = [
     {
       title: t.kanbanBoard,
       url: "/kanban",
       icon: Kanban,
+      show: canAccessKanban,
     },
     {
       title: t.allLeads,
       url: "/leads",
       icon: Users,
+      show: true,
     },
-  ];
+  ].filter(item => item.show);
 
   const adminItems = [
     {
@@ -332,7 +349,7 @@ export function AppSidebar() {
           </Collapsible>
         </SidebarGroup>
 
-        {isAdmin(userRole) && (
+        {canAccessInventory && (
           <SidebarGroup>
             <Collapsible defaultOpen className="group/collapsible">
               <SidebarGroupLabel asChild>
@@ -361,36 +378,38 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        <SidebarGroup>
-          <SidebarGroupLabel>التواصل</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/whatsapp-inbox"}>
-                  <Link href="/whatsapp-inbox" data-testid="link-nav-whatsapp-inbox">
-                    <MessageSquare className="h-4 w-4" />
-                    <span className="flex-1">صندوق بريد واتساب</span>
-                    {waUnreadCount > 0 && (
-                      <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px] flex items-center justify-center" data-testid="badge-whatsapp-unread-sidebar">
-                        {waUnreadCount > 99 ? "99+" : waUnreadCount}
-                      </Badge>
-                    )}
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              {isManager(userRole) && (
+        {canAccessWhatsapp && (
+          <SidebarGroup>
+            <SidebarGroupLabel>التواصل</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/whatsapp-campaigns"}>
-                    <Link href="/whatsapp-campaigns" data-testid="link-nav-whatsapp-campaigns">
-                      <Megaphone className="h-4 w-4" />
-                      <span>حملات واتساب</span>
+                  <SidebarMenuButton asChild isActive={location === "/whatsapp-inbox"}>
+                    <Link href="/whatsapp-inbox" data-testid="link-nav-whatsapp-inbox">
+                      <MessageSquare className="h-4 w-4" />
+                      <span className="flex-1">صندوق بريد واتساب</span>
+                      {waUnreadCount > 0 && (
+                        <Badge variant="destructive" className="h-4 min-w-4 px-1 text-[10px] flex items-center justify-center" data-testid="badge-whatsapp-unread-sidebar">
+                          {waUnreadCount > 99 ? "99+" : waUnreadCount}
+                        </Badge>
+                      )}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-              )}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+                {canAccessCampaigns && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={location === "/whatsapp-campaigns"}>
+                      <Link href="/whatsapp-campaigns" data-testid="link-nav-whatsapp-campaigns">
+                        <Megaphone className="h-4 w-4" />
+                        <span>حملات واتساب</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         <SidebarGroup>
           <SidebarGroupLabel>{t.clients}</SidebarGroupLabel>
@@ -404,54 +423,58 @@ export function AppSidebar() {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/commissions"}>
-                  <Link href="/commissions" data-testid="link-nav-commissions">
-                    <DollarSign className="h-4 w-4" />
-                    <span>{t.commissionsTitle}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {canAccessCommissions && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/commissions"}>
+                    <Link href="/commissions" data-testid="link-nav-commissions">
+                      <DollarSign className="h-4 w-4" />
+                      <span>{t.commissionsTitle}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <Collapsible className="group/collapsible">
-            <SidebarGroupLabel asChild>
-              <CollapsibleTrigger className="flex w-full items-center justify-between">
-                {t.settings}
-                <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
-              </CollapsibleTrigger>
-            </SidebarGroupLabel>
-            <CollapsibleContent>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {filteredSettingsItems.map((item) => (
-                    <SidebarMenuItem key={item.url}>
-                      <SidebarMenuButton asChild isActive={location === item.url}>
-                        <Link href={item.url} data-testid={`link-nav-${item.url.replace(/\//g, "-").slice(1)}`}>
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.title}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                  {permissionsLink && (
-                    <SidebarMenuItem key={permissionsLink.url}>
-                      <SidebarMenuButton asChild isActive={location === permissionsLink.url}>
-                        <Link href={permissionsLink.url} data-testid="link-nav-settings-permissions">
-                          <permissionsLink.icon className="h-4 w-4" />
-                          <span>{permissionsLink.title}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  )}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </CollapsibleContent>
-          </Collapsible>
-        </SidebarGroup>
+        {(canAccessSettings || isSuperAdmin(userRole)) && (
+          <SidebarGroup>
+            <Collapsible className="group/collapsible">
+              <SidebarGroupLabel asChild>
+                <CollapsibleTrigger className="flex w-full items-center justify-between">
+                  {t.settings}
+                  <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                </CollapsibleTrigger>
+              </SidebarGroupLabel>
+              <CollapsibleContent>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {filteredSettingsItems.map((item) => (
+                      <SidebarMenuItem key={item.url}>
+                        <SidebarMenuButton asChild isActive={location === item.url}>
+                          <Link href={item.url} data-testid={`link-nav-${item.url.replace(/\//g, "-").slice(1)}`}>
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                    {permissionsLink && (
+                      <SidebarMenuItem key={permissionsLink.url}>
+                        <SidebarMenuButton asChild isActive={location === permissionsLink.url}>
+                          <Link href={permissionsLink.url} data-testid="link-nav-settings-permissions">
+                            <permissionsLink.icon className="h-4 w-4" />
+                            <span>{permissionsLink.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    )}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </CollapsibleContent>
+            </Collapsible>
+          </SidebarGroup>
+        )}
       </SidebarContent>
       <SidebarFooter className="p-4">
         {user && (

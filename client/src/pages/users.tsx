@@ -13,7 +13,7 @@ import { Users, Edit, UserCheck, UserX, Search, Plus } from "lucide-react";
 import type { User, Team } from "@shared/schema";
 import { useLanguage } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
-import { ROLE_ARABIC_NAMES, ROLE_COLORS } from "@shared/models/auth";
+import { ROLE_ARABIC_NAMES, ROLE_COLORS, type CustomRole } from "@shared/models/auth";
 
 function getRoleName(role: string | null | undefined): string {
   return ROLE_ARABIC_NAMES[(role ?? "sales_agent") as keyof typeof ROLE_ARABIC_NAMES] || role || "سيلز";
@@ -40,6 +40,10 @@ export default function UsersPage() {
 
   const { data: teams = [] } = useQuery<Team[]>({
     queryKey: ["/api/teams"],
+  });
+
+  const { data: customRoles = [] } = useQuery<CustomRole[]>({
+    queryKey: ["/api/custom-roles"],
   });
 
   const updateUserMutation = useMutation({
@@ -130,12 +134,17 @@ export default function UsersPage() {
     );
   }
 
-  const ROLE_OPTIONS = [
+  const BASE_ROLE_OPTIONS = [
     { value: "super_admin", label: "مدير النظام" },
     { value: "company_owner", label: "صاحب الشركة" },
     { value: "sales_admin", label: "سيلز ادمن" },
     { value: "team_leader", label: "تيم ليدر" },
     { value: "sales_agent", label: "سيلز" },
+  ];
+
+  const ROLE_OPTIONS = [
+    ...BASE_ROLE_OPTIONS,
+    ...customRoles.map(cr => ({ value: cr.name, label: cr.name })),
   ];
 
   return (

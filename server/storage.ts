@@ -92,6 +92,11 @@ import {
   type WhatsappFollowupRule,
   type InsertWhatsappFollowupRule,
 } from "@shared/schema";
+import {
+  customRoles,
+  type CustomRole,
+  type InsertCustomRole,
+} from "@shared/models/auth";
 
 const PostgresSessionStore = connectPg(session);
 
@@ -353,6 +358,13 @@ export interface IStorage {
   deleteFollowupRule(id: string): Promise<boolean>;
   getActiveFollowupRules(): Promise<WhatsappFollowupRule[]>;
   getLeadsForFollowupRule(daysAfterNoReply: number): Promise<Lead[]>;
+
+  // Custom Roles
+  getAllCustomRoles(): Promise<CustomRole[]>;
+  getCustomRole(id: string): Promise<CustomRole | undefined>;
+  getCustomRoleByName(name: string): Promise<CustomRole | undefined>;
+  createCustomRole(data: InsertCustomRole): Promise<CustomRole>;
+  deleteCustomRole(id: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1844,6 +1856,31 @@ export class DatabaseStorage implements IStorage {
       [cutoff]
     );
     return result.rows;
+  }
+
+  // Custom Roles
+  async getAllCustomRoles(): Promise<CustomRole[]> {
+    return db.select().from(customRoles).orderBy(customRoles.createdAt);
+  }
+
+  async getCustomRole(id: string): Promise<CustomRole | undefined> {
+    const [r] = await db.select().from(customRoles).where(eq(customRoles.id, id));
+    return r;
+  }
+
+  async getCustomRoleByName(name: string): Promise<CustomRole | undefined> {
+    const [r] = await db.select().from(customRoles).where(eq(customRoles.name, name));
+    return r;
+  }
+
+  async createCustomRole(data: InsertCustomRole): Promise<CustomRole> {
+    const [r] = await db.insert(customRoles).values(data).returning();
+    return r;
+  }
+
+  async deleteCustomRole(id: string): Promise<boolean> {
+    const result = await db.delete(customRoles).where(eq(customRoles.id, id)).returning();
+    return result.length > 0;
   }
 }
 
