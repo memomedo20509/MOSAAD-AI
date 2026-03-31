@@ -3221,7 +3221,21 @@ export async function registerRoutes(
                         );
                         if (targetState) {
                           leadUpdates.stateId = targetState.id;
+                          // Stop the bot for terminal states (uninterested / canceled)
+                          const terminalStateNames = ["غير مهتم", "ملغي", "cancelled", "not_interested"];
+                          const isTerminal = terminalStateNames.some(n => targetState.name.includes(n) || (action.stateName && action.stateName.includes(n)));
+                          if (isTerminal) {
+                            leadUpdates.botActive = false;
+                            leadUpdates.botStage = "handed_off";
+                            console.log(`[BotAction] Bot deactivated for terminal state: ${targetState.name}`);
+                          }
                           botActionsSummaryParts.push(`تغيير الحالة: ${targetState.name}`);
+                          await storage.createHistory({
+                            leadId: lead.id,
+                            action: `البوت غيّر الحالة لـ "${targetState.name}"`,
+                            description: `إجراء تلقائي من البوت بناءً على رسالة العميل`,
+                            performedBy: "البوت",
+                          });
                           await storage.createNotification({
                             userId: notifTargetForActions,
                             type: "bot_action",
@@ -3245,6 +3259,12 @@ export async function registerRoutes(
                           });
                           const formattedDate = reminderDate.toLocaleString("ar-EG", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
                           botActionsSummaryParts.push(`تذكير متابعة: ${formattedDate}`);
+                          await storage.createHistory({
+                            leadId: lead.id,
+                            action: `البوت حدّد موعد متابعة`,
+                            description: `${reminderNote} — ${formattedDate}`,
+                            performedBy: "البوت",
+                          });
                           await storage.createNotification({
                             userId: notifTargetForActions,
                             type: "bot_action",
@@ -3258,6 +3278,26 @@ export async function registerRoutes(
                         leadUpdates.score = action.score;
                         const scoreLabels: Record<string, string> = { hot: "ساخن", warm: "دافئ", cold: "بارد" };
                         botActionsSummaryParts.push(`تقييم: ${scoreLabels[action.score] || action.score}`);
+                        // For high-interest leads, also progress state if still at "ليد جديد"
+                        if (action.score === "hot") {
+                          const currentStateId = lead.stateId;
+                          const currentState = allStates.find(s => s.id === currentStateId);
+                          const isNewLead = !currentState || currentState.order === 0;
+                          if (isNewLead) {
+                            const followUpState = allStates.find(s => s.name === "تحت المتابعة" || s.order === 1);
+                            if (followUpState && !leadUpdates.stateId) {
+                              leadUpdates.stateId = followUpState.id;
+                              botActionsSummaryParts.push(`تقدّم للحالة: ${followUpState.name}`);
+                            }
+                          }
+                        }
+                        await storage.createNotification({
+                          userId: notifTargetForActions,
+                          type: "bot_action",
+                          message: `🤖 البوت رصد اهتمام ${scoreLabels[action.score] || action.score} — ${leadDisplayNameForActions}`,
+                          leadId: lead.id,
+                          isRead: false,
+                        });
                         console.log(`[BotAction] update_score: ${action.score} for lead ${lead.id}`);
                       }
                     } catch (actionErr) {
