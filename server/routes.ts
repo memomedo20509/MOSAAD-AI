@@ -3331,6 +3331,7 @@ export async function registerRoutes(
                   messageText: handoffMsg,
                   messageId: null,
                   isRead: false,
+                  botActionsSummary: botActionsSummary ?? undefined,
                 });
 
                 const resolvedLocation = leadUpdates.location || lead.location;

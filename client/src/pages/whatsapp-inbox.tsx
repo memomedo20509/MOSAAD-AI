@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MessageSquare, PhoneCall, ExternalLink, Clock, Inbox, Send, Sparkles, Loader2, Pencil, Check, X, Bot, CalendarClock, Tag, Flame, Thermometer } from "lucide-react";
+import { MessageSquare, PhoneCall, ExternalLink, Clock, Inbox, Send, Sparkles, Loader2, Pencil, Check, X, Bot, CalendarClock, Tag, Flame } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
