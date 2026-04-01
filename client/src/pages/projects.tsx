@@ -28,7 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Plus, Pencil, Trash2, FolderKanban, MapPin, Calendar, Home, Loader2,
   Search, Building2, DollarSign, Eye, ExternalLink, CheckCircle2,
-  CreditCard, X, Filter, ChevronDown,
+  CreditCard, X, LayoutGrid, List, ArrowUpDown,
 } from "lucide-react";
 import type { Project, Developer, InsertProject } from "@shared/schema";
 import { useLanguage } from "@/lib/i18n";
@@ -97,6 +97,22 @@ function formatPrice(p: number | null): string {
   return p.toLocaleString();
 }
 
+type SortOption = "newest" | "price_asc" | "price_desc" | "delivery" | "name";
+
+interface ProjectCardProps {
+  project: Project;
+  developerName: string;
+  isAdmin: boolean;
+  isSuperAdmin: boolean;
+  onEdit: (project: Project) => void;
+  onDelete: (id: string) => void;
+  onViewDetails: () => void;
+  editingProject: Project | null;
+  resetForm: () => void;
+  ProjectForm: () => JSX.Element;
+  t: ReturnType<typeof useLanguage>["t"];
+}
+
 export default function ProjectsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -112,9 +128,13 @@ export default function ProjectsPage() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterUnitType, setFilterUnitType] = useState("all");
   const [filterDelivery, setFilterDelivery] = useState("all");
+  const [filterLocation, setFilterLocation] = useState("all");
+  const [filterMinPrice, setFilterMinPrice] = useState("");
+  const [filterMaxPrice, setFilterMaxPrice] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [search, setSearch] = useState("");
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   const isAdmin = user?.role === "super_admin" || user?.role === "admin";
   const isSuperAdmin = user?.role === "super_admin";
@@ -152,28 +172,74 @@ export default function ProjectsPage() {
 
   const getDeveloperName = (devId: string | null) => developers.find(d => d.id === devId)?.name || "غير محدد";
 
+  const locations = useMemo(() => [...new Set(projects.map(p => p.location).filter(Boolean))].sort() as string[], [projects]);
+  const deliveryYears = useMemo(() => [...new Set(projects.map(p => p.deliveryDate).filter(Boolean))].sort(), [projects]);
+
   const filteredProjects = useMemo(() => {
-    return projects.filter(p => {
+    const minP = filterMinPrice ? parseInt(filterMinPrice) * 1000000 : null;
+    const maxP = filterMaxPrice ? parseInt(filterMaxPrice) * 1000000 : null;
+
+    const result = projects.filter(p => {
       if (!p.isActive) return false;
       if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !getDeveloperName(p.developerId).includes(search)) return false;
       if (filterDeveloper !== "all" && p.developerId !== filterDeveloper) return false;
       if (filterStatus !== "all" && p.status !== filterStatus) return false;
       if (filterDelivery !== "all" && p.deliveryDate !== filterDelivery) return false;
+      if (filterLocation !== "all" && p.location !== filterLocation) return false;
       if (filterUnitType !== "all") {
         const types = extractUnitTypes(p.description);
         if (!types.includes(filterUnitType)) return false;
       }
+      if (minP !== null) {
+        if (!p.maxPrice) return false;
+        if (p.maxPrice < minP) return false;
+      }
+      if (maxP !== null) {
+        if (!p.minPrice) return false;
+        if (p.minPrice > maxP) return false;
+      }
       return true;
-    }).sort((a, b) => {
-      const aHasDesc = (a.description?.length || 0) > 200 ? 1 : 0;
-      const bHasDesc = (b.description?.length || 0) > 200 ? 1 : 0;
-      return bHasDesc - aHasDesc;
     });
-  }, [projects, search, filterDeveloper, filterStatus, filterDelivery, filterUnitType, developers]);
 
-  const deliveryYears = useMemo(() => [...new Set(projects.map(p => p.deliveryDate).filter(Boolean))].sort(), [projects]);
+    return result.sort((a, b) => {
+      switch (sortBy) {
+        case "price_asc":
+          return (a.minPrice || 0) - (b.minPrice || 0);
+        case "price_desc":
+          return (b.minPrice || 0) - (a.minPrice || 0);
+        case "delivery":
+          return (a.deliveryDate || "9999").localeCompare(b.deliveryDate || "9999");
+        case "name":
+          return a.name.localeCompare(b.name, "ar");
+        default: {
+          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return bTime - aTime;
+        }
+      }
+    });
+  }, [projects, search, filterDeveloper, filterStatus, filterDelivery, filterUnitType, filterLocation, filterMinPrice, filterMaxPrice, sortBy, developers]);
 
-  const activeFiltersCount = [filterDeveloper !== "all", filterStatus !== "all", filterDelivery !== "all", filterUnitType !== "all"].filter(Boolean).length;
+  const activeChips = useMemo(() => {
+    const chips: { key: string; label: string; onRemove: () => void }[] = [];
+    if (search) chips.push({ key: "search", label: `بحث: ${search}`, onRemove: () => setSearch("") });
+    if (filterDeveloper !== "all") chips.push({ key: "developer", label: getDeveloperName(filterDeveloper), onRemove: () => setFilterDeveloper("all") });
+    if (filterStatus !== "all") chips.push({ key: "status", label: STATUS_CONFIG[filterStatus]?.label || filterStatus, onRemove: () => setFilterStatus("all") });
+    if (filterUnitType !== "all") chips.push({ key: "unitType", label: filterUnitType, onRemove: () => setFilterUnitType("all") });
+    if (filterDelivery !== "all") chips.push({ key: "delivery", label: `تسليم ${filterDelivery}`, onRemove: () => setFilterDelivery("all") });
+    if (filterLocation !== "all") chips.push({ key: "location", label: filterLocation, onRemove: () => setFilterLocation("all") });
+    if (filterMinPrice) chips.push({ key: "minPrice", label: `من ${filterMinPrice} م`, onRemove: () => setFilterMinPrice("") });
+    if (filterMaxPrice) chips.push({ key: "maxPrice", label: `إلى ${filterMaxPrice} م`, onRemove: () => setFilterMaxPrice("") });
+    const sortLabels: Record<SortOption, string> = { newest: "الأحدث", price_asc: "السعر تصاعدي", price_desc: "السعر تنازلي", delivery: "سنة التسليم", name: "الاسم أبجدياً" };
+    if (sortBy !== "newest") chips.push({ key: "sort", label: `ترتيب: ${sortLabels[sortBy]}`, onRemove: () => setSortBy("newest") });
+    return chips;
+  }, [search, filterDeveloper, filterStatus, filterUnitType, filterDelivery, filterLocation, filterMinPrice, filterMaxPrice, sortBy, developers]);
+
+  const clearAllFilters = () => {
+    setSearch(""); setFilterDeveloper("all"); setFilterStatus("all"); setFilterUnitType("all");
+    setFilterDelivery("all"); setFilterLocation("all"); setFilterMinPrice(""); setFilterMaxPrice("");
+    setSortBy("newest");
+  };
 
   if (projectsLoading) return (
     <div className="flex items-center justify-center h-64">
@@ -241,7 +307,8 @@ export default function ProjectsPage() {
   );
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-6 space-y-4">
+      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold" data-testid="text-page-title">{t.projectsTitle}</h1>
@@ -263,81 +330,155 @@ export default function ProjectsPage() {
         )}
       </div>
 
-      {/* Search + Filters */}
-      <div className="space-y-3">
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="ابحث باسم الكمبوند أو المطور..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="pr-10"
-              data-testid="input-search-project"
-            />
-          </div>
+      {/* Search bar */}
+      <div className="relative">
+        <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="ابحث باسم الكمبوند أو المطور..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="pr-10"
+          data-testid="input-search-project"
+        />
+      </div>
+
+      {/* Always-visible filter bar — row 1: developer, status, unit type, delivery */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <Select value={filterDeveloper} onValueChange={setFilterDeveloper}>
+          <SelectTrigger className="h-9 text-sm" data-testid="filter-developer">
+            <SelectValue placeholder="كل المطورين" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">كل المطورين</SelectItem>
+            {developers.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+
+        <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <SelectTrigger className="h-9 text-sm" data-testid="filter-status">
+            <SelectValue placeholder="كل الحالات" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">كل الحالات</SelectItem>
+            {Object.entries(STATUS_CONFIG).map(([v, c]) => <SelectItem key={v} value={v}>{c.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+
+        <Select value={filterUnitType} onValueChange={setFilterUnitType}>
+          <SelectTrigger className="h-9 text-sm" data-testid="filter-unit-type">
+            <SelectValue placeholder="كل الأنواع" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">كل الأنواع</SelectItem>
+            {["شقة","فيلا","توين هاوس","تاون هاوس","دوبلكس","بنتهاوس","إستوديو","مكتب","تجاري"].map(tp => <SelectItem key={tp} value={tp}>{tp}</SelectItem>)}
+          </SelectContent>
+        </Select>
+
+        <Select value={filterDelivery} onValueChange={setFilterDelivery}>
+          <SelectTrigger className="h-9 text-sm" data-testid="filter-delivery">
+            <SelectValue placeholder="كل السنوات" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">كل السنوات</SelectItem>
+            {deliveryYears.map(y => <SelectItem key={y!} value={y!}>{y}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Filter bar — row 2: location, price range, sort, view toggle */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+        <Select value={filterLocation} onValueChange={setFilterLocation}>
+          <SelectTrigger className="h-9 text-sm" data-testid="filter-location">
+            <MapPin className="h-3.5 w-3.5 ml-1 shrink-0 text-muted-foreground" />
+            <SelectValue placeholder="كل المناطق" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">كل المناطق</SelectItem>
+            {locations.map(loc => <SelectItem key={loc} value={loc}>{loc}</SelectItem>)}
+          </SelectContent>
+        </Select>
+
+        <div className="flex gap-1">
+          <Input
+            type="number"
+            placeholder="أقل (م)"
+            value={filterMinPrice}
+            onChange={e => setFilterMinPrice(e.target.value)}
+            className="h-9 text-sm"
+            data-testid="filter-min-price"
+          />
+          <Input
+            type="number"
+            placeholder="أعلى (م)"
+            value={filterMaxPrice}
+            onChange={e => setFilterMaxPrice(e.target.value)}
+            className="h-9 text-sm"
+            data-testid="filter-max-price"
+          />
+        </div>
+
+        <Select value={sortBy} onValueChange={v => { const valid: SortOption[] = ["newest","price_asc","price_desc","delivery","name"]; if (valid.includes(v as SortOption)) setSortBy(v as SortOption); }}>
+          <SelectTrigger className="h-9 text-sm" data-testid="filter-sort">
+            <ArrowUpDown className="h-3.5 w-3.5 ml-1 shrink-0 text-muted-foreground" />
+            <SelectValue placeholder="الترتيب" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="newest">الأحدث</SelectItem>
+            <SelectItem value="price_asc">السعر تصاعدي</SelectItem>
+            <SelectItem value="price_desc">السعر تنازلي</SelectItem>
+            <SelectItem value="delivery">سنة التسليم</SelectItem>
+            <SelectItem value="name">الاسم أبجدياً</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <div className="flex gap-1 col-span-1 md:col-span-2 justify-end">
           <Button
-            variant={activeFiltersCount > 0 ? "default" : "outline"}
-            onClick={() => setShowFilters(!showFilters)}
-            className="shrink-0"
-            data-testid="button-toggle-filters"
+            variant={viewMode === "grid" ? "default" : "outline"}
+            size="icon"
+            className="h-9 w-9"
+            onClick={() => setViewMode("grid")}
+            data-testid="button-view-grid"
           >
-            <Filter className="h-4 w-4 ml-1" />
-            فلاتر {activeFiltersCount > 0 && `(${activeFiltersCount})`}
-            <ChevronDown className={`h-3 w-3 mr-1 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+            <LayoutGrid className="h-4 w-4" />
           </Button>
-          {activeFiltersCount > 0 && (
-            <Button variant="ghost" size="icon" onClick={() => { setFilterDeveloper("all"); setFilterStatus("all"); setFilterDelivery("all"); setFilterUnitType("all"); setSearch(""); }} data-testid="button-clear-filters">
-              <X className="h-4 w-4" />
+          <Button
+            variant={viewMode === "list" ? "default" : "outline"}
+            size="icon"
+            className="h-9 w-9"
+            onClick={() => setViewMode("list")}
+            data-testid="button-view-list"
+          >
+            <List className="h-4 w-4" />
+          </Button>
+          {activeChips.length > 0 && (
+            <Button variant="ghost" size="sm" className="h-9 text-xs text-muted-foreground" onClick={clearAllFilters} data-testid="button-clear-all-filters">
+              <X className="h-3.5 w-3.5 ml-1" />مسح الكل
             </Button>
           )}
         </div>
-
-        {showFilters && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 bg-muted/30 rounded-lg border">
-            <div className="space-y-1">
-              <Label className="text-xs">المطور</Label>
-              <Select value={filterDeveloper} onValueChange={setFilterDeveloper}>
-                <SelectTrigger className="h-8 text-sm" data-testid="filter-developer"><SelectValue placeholder="الكل" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">كل المطورين</SelectItem>
-                  {developers.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">الحالة</Label>
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="h-8 text-sm" data-testid="filter-status"><SelectValue placeholder="الكل" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">كل الحالات</SelectItem>
-                  {Object.entries(STATUS_CONFIG).map(([v, c]) => <SelectItem key={v} value={v}>{c.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">نوع الوحدة</Label>
-              <Select value={filterUnitType} onValueChange={setFilterUnitType}>
-                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="الكل" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">كل الأنواع</SelectItem>
-                  {["شقة","فيلا","توين هاوس","تاون هاوس","دوبلكس","بنتهاوس","إستوديو","مكتب","تجاري"].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">سنة التسليم</Label>
-              <Select value={filterDelivery} onValueChange={setFilterDelivery}>
-                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="الكل" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">كل السنوات</SelectItem>
-                  {deliveryYears.map(y => <SelectItem key={y!} value={y!}>{y}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Active Filter Chips */}
+      {activeChips.length > 0 && (
+        <div className="flex flex-wrap gap-1.5" data-testid="active-filter-chips">
+          {activeChips.map(chip => (
+            <span
+              key={chip.key}
+              className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary rounded-full px-2.5 py-1 font-medium"
+              data-testid={`chip-filter-${chip.key}`}
+            >
+              {chip.label}
+              <button
+                onClick={chip.onRemove}
+                className="hover:text-destructive transition-colors ml-0.5"
+                data-testid={`remove-chip-${chip.key}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Stats bar */}
       <div className="flex gap-4 text-xs text-muted-foreground flex-wrap">
@@ -348,6 +489,7 @@ export default function ProjectsPage() {
         })}
       </div>
 
+      {/* Projects display */}
       {filteredProjects.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
@@ -356,10 +498,29 @@ export default function ProjectsPage() {
             <p className="text-muted-foreground text-sm mt-1">جرب تغيير الفلاتر أو البحث</p>
           </CardContent>
         </Card>
-      ) : (
+      ) : viewMode === "grid" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filteredProjects.map(project => (
             <ProjectCard
+              key={project.id}
+              project={project}
+              developerName={getDeveloperName(project.developerId)}
+              isAdmin={isAdmin}
+              isSuperAdmin={isSuperAdmin}
+              onEdit={openEditDialog}
+              onDelete={id => deleteMutation.mutate(id)}
+              onViewDetails={() => setSelectedProject(project)}
+              editingProject={editingProject}
+              resetForm={resetForm}
+              ProjectForm={ProjectForm}
+              t={t}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {filteredProjects.map(project => (
+            <ProjectListRow
               key={project.id}
               project={project}
               developerName={getDeveloperName(project.developerId)}
@@ -387,7 +548,7 @@ export default function ProjectsPage() {
   );
 }
 
-function ProjectCard({ project, developerName, isAdmin, isSuperAdmin, onEdit, onDelete, onViewDetails, editingProject, resetForm, ProjectForm, t }: any) {
+function ProjectCard({ project, developerName, isAdmin, isSuperAdmin, onEdit, onDelete, onViewDetails, editingProject, resetForm, ProjectForm, t }: ProjectCardProps) {
   const unitTypes = extractUnitTypes(project.description);
   const paymentPlans = extractPaymentPlans(project.description);
   const statusInfo = STATUS_CONFIG[project.status || "under_construction"] || STATUS_CONFIG.under_construction;
@@ -398,23 +559,37 @@ function ProjectCard({ project, developerName, isAdmin, isSuperAdmin, onEdit, on
     <Card className="flex flex-col hover:shadow-md transition-shadow group overflow-hidden" data-testid={`card-project-${project.id}`}>
       {/* Project image */}
       {projectImage && (
-        <div className="h-36 overflow-hidden bg-muted relative">
+        <div className="h-40 overflow-hidden bg-muted relative">
           <img
             src={projectImage}
             alt={project.name}
             className="w-full h-full object-cover transition-transform group-hover:scale-105"
             onError={e => { (e.target as HTMLImageElement).parentElement!.style.display = 'none'; }}
           />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
           <div className="absolute top-2 left-2">
-            <Badge className={`text-xs border-0 ${statusInfo.color}`}>{statusInfo.icon} {statusInfo.label}</Badge>
+            <Badge className={`text-xs border-0 shadow-sm ${statusInfo.color}`}>{statusInfo.icon} {statusInfo.label}</Badge>
           </div>
+          {project.totalUnits && (
+            <div className="absolute top-2 right-2">
+              <Badge className="text-xs border-0 bg-black/60 text-white shadow-sm">{project.totalUnits} وحدة</Badge>
+            </div>
+          )}
+          {project.deliveryDate && (
+            <div className="absolute bottom-2 right-2">
+              <span className="text-xs font-semibold text-white bg-black/50 rounded px-2 py-0.5 flex items-center gap-1">
+                <Calendar className="h-3 w-3" />{project.deliveryDate}
+              </span>
+            </div>
+          )}
         </div>
       )}
+
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <CardTitle className="text-base leading-tight mb-1" data-testid={`text-project-name-${project.id}`}>{project.name}</CardTitle>
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs text-muted-foreground flex items-center gap-1">
                 <Building2 className="h-3 w-3" />{developerName}
               </span>
@@ -426,8 +601,11 @@ function ProjectCard({ project, developerName, isAdmin, isSuperAdmin, onEdit, on
             </div>
           </div>
           {!projectImage && (
-            <div className="flex gap-1 shrink-0">
+            <div className="flex flex-col items-end gap-1 shrink-0">
               <Badge className={`text-xs border-0 ${statusInfo.color}`}>{statusInfo.icon} {statusInfo.label}</Badge>
+              {project.totalUnits && (
+                <span className="text-xs text-muted-foreground">{project.totalUnits} وحدة</span>
+              )}
             </div>
           )}
         </div>
@@ -437,12 +615,20 @@ function ProjectCard({ project, developerName, isAdmin, isSuperAdmin, onEdit, on
         {/* Price range */}
         {(project.minPrice || project.maxPrice) && (
           <div className="flex items-center gap-1.5 bg-green-50 dark:bg-green-950 rounded-md px-2.5 py-1.5">
-            <DollarSign className="h-3.5 w-3.5 text-green-600" />
+            <DollarSign className="h-3.5 w-3.5 text-green-600 shrink-0" />
             <span className="text-sm font-semibold text-green-700 dark:text-green-300">
               {project.minPrice ? `${formatPrice(project.minPrice)} جم` : ""}
               {project.minPrice && project.maxPrice ? " – " : ""}
               {project.maxPrice && project.maxPrice !== project.minPrice ? `${formatPrice(project.maxPrice)} جم` : ""}
             </span>
+          </div>
+        )}
+
+        {/* Delivery date (when no image) */}
+        {!projectImage && project.deliveryDate && (
+          <div className="flex items-center gap-1.5 text-xs">
+            <Calendar className="h-3.5 w-3.5 text-blue-500" />
+            <span className="font-medium text-blue-700 dark:text-blue-300">التسليم: {project.deliveryDate}</span>
           </div>
         )}
 
@@ -461,14 +647,6 @@ function ProjectCard({ project, developerName, isAdmin, isSuperAdmin, onEdit, on
           <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
             <CreditCard className="h-3.5 w-3.5 mt-0.5 shrink-0 text-blue-500" />
             <span className="line-clamp-2">{paymentPlans.split(' | ').slice(0, 2).join(' | ')}{paymentPlans.split(' | ').length > 2 ? ' ...' : ''}</span>
-          </div>
-        )}
-
-        {/* Delivery date */}
-        {project.deliveryDate && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Calendar className="h-3.5 w-3.5" />
-            <span>التسليم: {project.deliveryDate === "2025" && project.status === "delivered" ? "تم التسليم" : project.deliveryDate}</span>
           </div>
         )}
 
@@ -528,6 +706,118 @@ function ProjectCard({ project, developerName, isAdmin, isSuperAdmin, onEdit, on
   );
 }
 
+function ProjectListRow({ project, developerName, isAdmin, isSuperAdmin, onEdit, onDelete, onViewDetails, editingProject, resetForm, ProjectForm, t }: ProjectCardProps) {
+  const unitTypes = extractUnitTypes(project.description);
+  const statusInfo = STATUS_CONFIG[project.status || "under_construction"] || STATUS_CONFIG.under_construction;
+  const projectImage = project.images?.[0];
+  const [imgError, setImgError] = useState(false);
+
+  return (
+    <div
+      className="flex items-center gap-3 p-3 bg-card border rounded-lg hover:shadow-sm transition-shadow group"
+      data-testid={`row-project-${project.id}`}
+    >
+      {/* Thumbnail */}
+      <div className="w-16 h-14 rounded-md overflow-hidden bg-muted shrink-0 flex items-center justify-center">
+        {projectImage && !imgError ? (
+          <img
+            src={projectImage}
+            alt={project.name}
+            className="w-full h-full object-cover"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <Building2 className="h-6 w-6 text-muted-foreground" />
+        )}
+      </div>
+
+      {/* Name + developer + location */}
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-sm leading-tight truncate" data-testid={`text-row-project-name-${project.id}`}>{project.name}</p>
+        <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5 flex-wrap">
+          <span className="flex items-center gap-0.5"><Building2 className="h-3 w-3" />{developerName}</span>
+          {project.location && <span className="flex items-center gap-0.5"><MapPin className="h-3 w-3" />{project.location}</span>}
+        </p>
+      </div>
+
+      {/* Price */}
+      <div className="hidden md:block w-28 shrink-0 text-right">
+        {(project.minPrice || project.maxPrice) ? (
+          <p className="text-sm font-semibold text-green-700 dark:text-green-300">
+            {project.minPrice ? formatPrice(project.minPrice) : ""}
+            {project.minPrice && project.maxPrice ? "–" : ""}
+            {project.maxPrice && project.maxPrice !== project.minPrice ? formatPrice(project.maxPrice) : ""}
+            <span className="text-xs font-normal text-muted-foreground"> جم</span>
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">—</p>
+        )}
+      </div>
+
+      {/* Status badge */}
+      <div className="hidden sm:block shrink-0">
+        <Badge className={`text-xs border-0 ${statusInfo.color}`}>{statusInfo.icon} {statusInfo.label}</Badge>
+      </div>
+
+      {/* Delivery year */}
+      <div className="hidden lg:flex items-center gap-1 text-xs text-muted-foreground shrink-0 w-16 justify-center">
+        {project.deliveryDate && <><Calendar className="h-3 w-3" /><span>{project.deliveryDate}</span></>}
+      </div>
+
+      {/* Unit types */}
+      <div className="hidden xl:flex flex-wrap gap-1 w-36 shrink-0">
+        {unitTypes.slice(0, 3).map(type => (
+          <Badge key={type} variant="outline" className={`text-xs ${UNIT_TYPE_COLORS[type] || ''}`}>{type}</Badge>
+        ))}
+        {unitTypes.length > 3 && <Badge variant="outline" className="text-xs">+{unitTypes.length - 3}</Badge>}
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-1 shrink-0">
+        <Button variant="outline" size="sm" className="h-7 text-xs px-2" onClick={onViewDetails} data-testid={`button-row-details-${project.id}`}>
+          <Eye className="h-3 w-3 ml-1" />تفاصيل
+        </Button>
+        <Link href={`/inventory/projects/${project.id}/units`}>
+          <Button size="sm" className="h-7 text-xs px-2" data-testid={`button-row-units-${project.id}`}>
+            <Home className="h-3 w-3 ml-1" />الوحدات
+          </Button>
+        </Link>
+        {isAdmin && (
+          <>
+            <Dialog open={editingProject?.id === project.id} onOpenChange={o => { if (!o) resetForm(); }}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(project)} data-testid={`button-row-edit-${project.id}`}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader><DialogTitle>{t.editProject}</DialogTitle></DialogHeader>
+                {editingProject?.id === project.id && <ProjectForm />}
+              </DialogContent>
+            </Dialog>
+            {isSuperAdmin && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" data-testid={`button-row-delete-${project.id}`}>
+                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader><AlertDialogTitle>حذف المشروع؟</AlertDialogTitle><AlertDialogDescription>سيتم حذف "{project.name}" نهائياً</AlertDialogDescription></AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => onDelete(project.id)}>{t.delete}</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ProjectDetailPanel({ project, developerName, isAdmin, isSuperAdmin, onEdit, onDelete, t }: any) {
   const unitRanges = extractUnitRanges(project.description);
   const paymentPlans = extractPaymentPlans(project.description);
@@ -568,6 +858,12 @@ function ProjectDetailPanel({ project, developerName, isAdmin, isSuperAdmin, onE
               <p className="font-semibold text-sm">{project.deliveryDate}</p>
             </div>
           )}
+          {project.totalUnits && (
+            <div>
+              <p className="text-xs text-muted-foreground">إجمالي الوحدات</p>
+              <p className="font-semibold text-sm">{project.totalUnits}</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -594,7 +890,7 @@ function ProjectDetailPanel({ project, developerName, isAdmin, isSuperAdmin, onE
         <div className="space-y-2">
           <p className="text-sm font-semibold flex items-center gap-2"><CreditCard className="h-4 w-4" />أنظمة السداد</p>
           <div className="space-y-1.5">
-            {paymentPlans.split(' | ').map((plan, i) => (
+            {paymentPlans.split(' | ').map((plan: string, i: number) => (
               <div key={i} className="flex items-center gap-2 bg-blue-50 dark:bg-blue-950 rounded-md px-3 py-1.5">
                 <CheckCircle2 className="h-3.5 w-3.5 text-blue-500 shrink-0" />
                 <span className="text-sm">{plan}</span>
