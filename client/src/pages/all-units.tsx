@@ -418,9 +418,9 @@ export default function AllUnitsPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "super_admin" || user?.role === "admin";
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterBedrooms, setFilterBedrooms] = useState<string>("all");
+  const [filterLocation, setFilterLocation] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
   const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
@@ -434,12 +434,18 @@ export default function AllUnitsPage() {
 
   const unitTypes = useMemo(() => [...new Set(units.map(u => u.type).filter(Boolean))].sort(), [units]);
   const bedroomOptions = useMemo(() => [...new Set(units.map(u => u.bedrooms).filter(b => b !== null && b !== undefined))].sort((a, b) => (a || 0) - (b || 0)), [units]);
+  const locationOptions = useMemo(() => {
+    const locs = units
+      .map(u => projectMap[u.projectId]?.location)
+      .filter((l): l is string => !!l);
+    return [...new Set(locs)].sort();
+  }, [units, projectMap]);
 
   const filteredUnits = useMemo(() => units.filter(unit => {
-    if (filterStatus !== "all" && unit.status !== filterStatus) return false;
     if (filterType !== "all" && unit.type !== filterType) return false;
     if (filterBedrooms !== "all" && String(unit.bedrooms) !== filterBedrooms) return false;
     if (selectedProjectId !== "all" && unit.projectId !== selectedProjectId) return false;
+    if (filterLocation !== "all" && projectMap[unit.projectId]?.location !== filterLocation) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const proj = projectMap[unit.projectId];
@@ -450,19 +456,17 @@ export default function AllUnitsPage() {
       ) return false;
     }
     return true;
-  }), [units, filterStatus, filterType, filterBedrooms, selectedProjectId, searchQuery, projectMap]);
+  }), [units, filterType, filterBedrooms, filterLocation, selectedProjectId, searchQuery, projectMap]);
 
   const stats = useMemo(() => ({
     total: filteredUnits.length,
     available: filteredUnits.filter(u => u.status === "available").length,
-    reserved: filteredUnits.filter(u => u.status === "reserved").length,
-    sold: filteredUnits.filter(u => u.status === "sold").length,
   }), [filteredUnits]);
 
   const selectedProject = selectedUnit ? projectMap[selectedUnit.projectId] || null : null;
   const selectedDeveloper = selectedProject ? developerMap[selectedProject.developerId] || null : null;
 
-  const hasActiveFilters = filterStatus !== "all" || filterType !== "all" || filterBedrooms !== "all" || selectedProjectId !== "all" || searchQuery !== "";
+  const hasActiveFilters = filterType !== "all" || filterBedrooms !== "all" || filterLocation !== "all" || selectedProjectId !== "all" || searchQuery !== "";
 
   if (isLoading) return (
     <div className="flex items-center justify-center h-64">
@@ -491,12 +495,10 @@ export default function AllUnitsPage() {
 
       {/* Stats bar */}
       {isAdmin ? (
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {[
             { label: "الإجمالي", value: stats.total, color: "text-foreground", bg: "bg-muted/50" },
             { label: "متاحة", value: stats.available, color: "text-green-700 dark:text-green-300", bg: "bg-green-50 dark:bg-green-950" },
-            { label: "محجوزة", value: stats.reserved, color: "text-yellow-700 dark:text-yellow-300", bg: "bg-yellow-50 dark:bg-yellow-950" },
-            { label: "مباعة", value: stats.sold, color: "text-red-700 dark:text-red-300", bg: "bg-red-50 dark:bg-red-950" },
           ].map(s => (
             <div key={s.label} className={`rounded-xl p-3 text-center ${s.bg}`}>
               <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
@@ -536,20 +538,19 @@ export default function AllUnitsPage() {
           </SelectContent>
         </Select>
 
-        {/* Status filter pills — admins only */}
-        {isAdmin && (
-          <div className="flex gap-1.5">
-            {UNIT_STATUSES.map(s => (
-              <button
-                key={s.value}
-                onClick={() => setFilterStatus(filterStatus === s.value ? "all" : s.value)}
-                className={`h-9 px-3 text-xs rounded-lg font-medium transition-colors border ${filterStatus === s.value ? `${s.color} text-white border-transparent` : `${s.bg} ${s.text} ${s.border}`}`}
-                data-testid={`filter-status-${s.value}`}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
+        {locationOptions.length > 0 && (
+          <Select value={filterLocation} onValueChange={setFilterLocation}>
+            <SelectTrigger className="w-[160px] h-9 text-xs" data-testid="filter-location">
+              <MapPin className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
+              <SelectValue placeholder="كل المناطق" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">كل المناطق</SelectItem>
+              {locationOptions.map(loc => (
+                <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
 
         {unitTypes.length > 1 && (
@@ -581,7 +582,7 @@ export default function AllUnitsPage() {
             variant="ghost"
             size="sm"
             className="h-9 text-xs"
-            onClick={() => { setFilterStatus("all"); setFilterType("all"); setFilterBedrooms("all"); setSelectedProjectId("all"); setSearchQuery(""); }}
+            onClick={() => { setFilterType("all"); setFilterBedrooms("all"); setFilterLocation("all"); setSelectedProjectId("all"); setSearchQuery(""); }}
           >
             <X className="h-3.5 w-3.5 ml-1" />مسح
           </Button>
