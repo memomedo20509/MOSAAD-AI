@@ -792,6 +792,12 @@ export async function registerRoutes(
   // Sync project images from Nawy (admin only)
   app.post("/api/admin/sync-project-images", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
     try {
+      interface NawyCompound {
+        images?: Array<{ id: number }>;
+        coverImageUrl?: string;
+        imageUrl?: string;
+      }
+
       const allProjects = await storage.getAllProjects();
       const nawyUrlRegex = /🔗 المصدر: (https?:\/\/[^\n]+)/;
 
@@ -807,8 +813,26 @@ export async function registerRoutes(
         }
         // Extract Nawy URL from description
         const match = project.description ? project.description.match(nawyUrlRegex) : null;
-        const nawyUrl = match ? match[1].trim() : null;
-        if (!nawyUrl) {
+        const rawUrl = match ? match[1].trim() : null;
+        if (!rawUrl) {
+          skipped++;
+          continue;
+        }
+
+        // SSRF protection: only allow https://www.nawy.com/ar/compound/* or https://nawy.com/ar/compound/*
+        let nawyUrl: string;
+        try {
+          const parsed = new URL(rawUrl);
+          const validHost = parsed.host === "www.nawy.com" || parsed.host === "nawy.com";
+          const validPath = parsed.pathname.startsWith("/ar/compound/");
+          if (!validHost || !validPath) {
+            console.warn(`[sync-images] Skipping invalid URL for project ${project.id}: ${rawUrl}`);
+            skipped++;
+            continue;
+          }
+          nawyUrl = parsed.href;
+        } catch {
+          console.warn(`[sync-images] Malformed URL for project ${project.id}: ${rawUrl}`);
           skipped++;
           continue;
         }
@@ -836,10 +860,10 @@ export async function registerRoutes(
             continue;
           }
 
-          let compound: any = null;
+          let compound: NawyCompound | null = null;
           try {
-            const nextData = JSON.parse(nextDataMatch[1]);
-            compound = nextData?.props?.pageProps?.compound;
+            const nextData = JSON.parse(nextDataMatch[1]) as { props?: { pageProps?: { compound?: NawyCompound } } };
+            compound = nextData?.props?.pageProps?.compound ?? null;
           } catch {
             console.warn(`[sync-images] JSON parse error for project ${project.id}`);
             failed++;
@@ -883,11 +907,12 @@ export async function registerRoutes(
 
           // Small delay between requests to avoid rate limiting
           await new Promise((r) => setTimeout(r, 500));
-        } catch (fetchErr: any) {
-          if (fetchErr?.name === "AbortError") {
+        } catch (fetchErr: unknown) {
+          if (fetchErr instanceof Error && fetchErr.name === "AbortError") {
             console.warn(`[sync-images] Timeout for project ${project.id}`);
           } else {
-            console.warn(`[sync-images] Fetch error for project ${project.id}:`, fetchErr?.message);
+            const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+            console.warn(`[sync-images] Fetch error for project ${project.id}:`, msg);
           }
           failed++;
         }
