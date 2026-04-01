@@ -32,7 +32,7 @@ const ACTION_PERMISSIONS: { key: keyof RolePermissions; labelAr: string }[] = [
 
 const MODULE_PERMISSIONS: { key: keyof RolePermissions; labelAr: string }[] = [
   { key: "canAccessKanban", labelAr: "الكنبان (لوحة البيع)" },
-  { key: "canAccessInventory", labelAr: "المخزون (مطورين / مشاريع / وحدات)" },
+  { key: "canAccessInventory", labelAr: "مشروعات برايمري (مطورين / مشاريع / وحدات)" },
   { key: "canAccessWhatsapp", labelAr: "واتساب (صندوق البريد)" },
   { key: "canAccessCampaigns", labelAr: "حملات واتساب" },
   { key: "canAccessCommissions", labelAr: "العمولات" },

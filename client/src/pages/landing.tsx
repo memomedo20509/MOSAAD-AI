@@ -26,7 +26,7 @@ export default function LandingPage() {
                 <span className="text-primary block">CRM Solution</span>
               </h1>
               <p className="text-lg text-muted-foreground max-w-lg">
-                Manage your leads, inventory, and sales pipeline with our comprehensive CRM designed specifically for real estate brokers and agents.
+                Manage your leads, primary projects, and sales pipeline with our comprehensive CRM designed specifically for real estate brokers and agents.
               </p>
               <div className="flex flex-wrap gap-4 pt-4">
                 <a href="/api/login">
@@ -102,7 +102,7 @@ export default function LandingPage() {
                   <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
                     <Building2 className="h-6 w-6 text-primary" />
                   </div>
-                  <h3 className="font-semibold text-lg">Inventory Control</h3>
+                  <h3 className="font-semibold text-lg">Primary Projects</h3>
                   <p className="text-muted-foreground text-sm">
                     Manage developers, projects, and units with visual stacking plans. Real-time availability tracking.
                   </p>
