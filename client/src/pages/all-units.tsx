@@ -21,6 +21,7 @@ import {
   ArrowUpRight, Layers,
 } from "lucide-react";
 import type { Unit, Project, Developer } from "@shared/schema";
+import { useLanguage, getLocalizedName } from "@/lib/i18n";
 
 // Inline mini installment calculator for the sheet
 function MiniCalc({ price }: { price: number }) {
@@ -136,6 +137,7 @@ function UnitDetailSheet({
 }) {
   const [showDesc, setShowDesc] = useState(false);
   const [showCalc, setShowCalc] = useState(false);
+  const { language } = useLanguage();
 
   if (!unit) return null;
 
@@ -171,8 +173,8 @@ function UnitDetailSheet({
             <div className="flex items-start justify-between gap-2">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  {isAdmin && <Badge className={`${si.color} text-white text-xs px-2`}>{si.label}</Badge>}
-                  {unit.type && <span className="text-sm font-medium text-muted-foreground">{unit.type}</span>}
+                  {isAdmin && <Badge className={`${si.color} text-white text-xs px-2`}>{language === "en" ? si.labelEn : si.label}</Badge>}
+                  {unit.type && <span className="text-sm font-medium text-muted-foreground">{(language === "en" && (unit as any).typeEn) ? (unit as any).typeEn : unit.type}</span>}
                 </div>
                 <SheetTitle className="text-xl">وحدة {unit.unitNumber}</SheetTitle>
                 {project && (
@@ -416,6 +418,7 @@ function UnitDetailSheet({
 // ---------- Main Page ----------
 export default function AllUnitsPage() {
   const { user } = useAuth();
+  const { language } = useLanguage();
   const isAdmin = user?.role === "super_admin" || user?.role === "admin";
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [filterType, setFilterType] = useState<string>("all");
@@ -627,8 +630,8 @@ export default function AllUnitsPage() {
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
                     <div className="absolute bottom-2 right-2 left-2 flex items-center justify-between">
-                      {isAdmin && <Badge className={`${si.color} text-white text-[10px] px-1.5`}>{si.label}</Badge>}
-                      {unit.type && <span className="text-white text-[10px] font-medium bg-black/40 rounded px-1.5 py-0.5">{unit.type}</span>}
+                      {isAdmin && <Badge className={`${si.color} text-white text-[10px] px-1.5`}>{language === "en" ? si.labelEn : si.label}</Badge>}
+                      {unit.type && <span className="text-white text-[10px] font-medium bg-black/40 rounded px-1.5 py-0.5">{(language === "en" && (unit as any).typeEn) ? (unit as any).typeEn : unit.type}</span>}
                     </div>
                   </div>
                 ) : (
@@ -640,17 +643,17 @@ export default function AllUnitsPage() {
                   {!projImage && (
                     <div className="flex items-center justify-between">
                       {isAdmin
-                        ? <Badge variant="outline" className={`text-xs ${si.text}`}>{si.label}</Badge>
+                        ? <Badge variant="outline" className={`text-xs ${si.text}`}>{language === "en" ? si.labelEn : si.label}</Badge>
                         : <span />
                       }
-                      {unit.type && <span className="text-xs font-medium text-muted-foreground">{unit.type}</span>}
+                      {unit.type && <span className="text-xs font-medium text-muted-foreground">{(language === "en" && (unit as any).typeEn) ? (unit as any).typeEn : unit.type}</span>}
                     </div>
                   )}
 
                   {/* Project name */}
                   {proj && (
-                    <p className="text-xs font-semibold truncate" title={proj.name}>
-                      {proj.name}
+                    <p className="text-xs font-semibold truncate" title={getLocalizedName(proj.name, (proj as any).nameEn, language)}>
+                      {getLocalizedName(proj.name, (proj as any).nameEn, language)}
                     </p>
                   )}
 
@@ -730,18 +733,18 @@ export default function AllUnitsPage() {
                               onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
                             />
                           ) : <div className="w-8 h-8 rounded bg-muted shrink-0 flex items-center justify-center"><Building2 className="h-4 w-4 text-muted-foreground" /></div>}
-                          <span className="font-medium truncate max-w-[140px]" title={proj?.name}>{proj?.name || "-"}</span>
+                          <span className="font-medium truncate max-w-[140px]" title={getLocalizedName(proj?.name, (proj as any)?.nameEn, language)}>{getLocalizedName(proj?.name || "", (proj as any)?.nameEn, language) || "-"}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3 font-bold">{unit.unitNumber}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{unit.type || "-"}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{(language === "en" && (unit as any).typeEn) ? (unit as any).typeEn : (unit.type || "-")}</td>
                       <td className="px-4 py-3 text-center">{unit.bedrooms ?? "-"}</td>
                       <td className="px-4 py-3 text-center">{unit.bathrooms ?? "-"}</td>
                       <td className="px-4 py-3">{unit.area ? `${unit.area} م²` : "-"}</td>
                       <td className="px-4 py-3 font-semibold">{unit.price ? `${unit.price.toLocaleString()} جم` : "-"}</td>
                       {isAdmin && (
                         <td className="px-4 py-3">
-                          <Badge className={`${si.color} text-white text-xs`}>{si.label}</Badge>
+                          <Badge className={`${si.color} text-white text-xs`}>{language === "en" ? si.labelEn : si.label}</Badge>
                         </td>
                       )}
                     </tr>

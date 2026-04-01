@@ -85,7 +85,7 @@ function extractNawyUrl(desc: string | null): string {
 export default function UnitsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [, params] = useRoute("/inventory/projects/:projectId/units");
   const projectId = params?.projectId;
 
@@ -320,8 +320,8 @@ export default function UnitsPage() {
               {/* Type + Status */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  {isAdmin && <Badge variant="outline" className={`text-xs font-semibold ${si.text}`}>{si.label}</Badge>}
-                  {unit.type && <span className="text-sm font-semibold">{unit.type}</span>}
+                  {isAdmin && <Badge variant="outline" className={`text-xs font-semibold ${si.text}`}>{language === "en" ? si.labelEn : si.label}</Badge>}
+                  {unit.type && <span className="text-sm font-semibold">{(language === "en" && (unit as any).typeEn) ? (unit as any).typeEn : unit.type}</span>}
                 </div>
                 <span className="text-xs text-muted-foreground">#{unit.unitNumber}</span>
               </div>

@@ -31,7 +31,7 @@ import {
   CreditCard, X, LayoutGrid, List, ArrowUpDown, ChevronDown, Filter,
 } from "lucide-react";
 import type { Project, Developer, InsertProject } from "@shared/schema";
-import { useLanguage } from "@/lib/i18n";
+import { useLanguage, getLocalizedName } from "@/lib/i18n";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
   delivered:          { label: "تم التسليم",    color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100",  icon: "✅" },
@@ -124,13 +124,15 @@ type SortOption = "newest" | "price_asc" | "price_desc" | "delivery" | "name";
 interface ProjectCardProps {
   project: Project;
   developerName: string;
+  displayName: string;
+  displayLocation: string;
   onViewDetails: () => void;
 }
 
 export default function ProjectsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const searchStr = useSearch();
   const urlParams = new URLSearchParams(searchStr);
   const preselectedDev = urlParams.get("developer") || "all";
@@ -176,8 +178,19 @@ export default function ProjectsPage() {
 
   const resetForm = () => { setFormData({}); };
 
-  const getDeveloperName = (devId: string | null) =>
-    developers.find(d => d.id === devId)?.name || "غير محدد";
+  const getDeveloperName = (devId: string | null) => {
+    const dev = developers.find(d => d.id === devId);
+    if (!dev) return language === "en" ? "Unknown" : "غير محدد";
+    return getLocalizedName(dev.name, dev.nameEn, language);
+  };
+
+  const getProjectDisplayName = (project: Project) =>
+    getLocalizedName(project.name, project.nameEn, language);
+
+  const getProjectLocation = (project: Project) => {
+    if (language === "en" && project.locationEn) return project.locationEn;
+    return project.location || "";
+  };
 
   const locations = useMemo(
     () => [...new Set(projects.map(p => p.location).filter(Boolean))].sort() as string[],
@@ -632,6 +645,8 @@ export default function ProjectsPage() {
               key={project.id}
               project={project}
               developerName={getDeveloperName(project.developerId)}
+              displayName={getProjectDisplayName(project)}
+              displayLocation={getProjectLocation(project)}
               onViewDetails={() => setSelectedProject(project)}
             />
           ))}
@@ -643,6 +658,8 @@ export default function ProjectsPage() {
               key={project.id}
               project={project}
               developerName={getDeveloperName(project.developerId)}
+              displayName={getProjectDisplayName(project)}
+              displayLocation={getProjectLocation(project)}
               onViewDetails={() => setSelectedProject(project)}
             />
           ))}
@@ -664,11 +681,13 @@ export default function ProjectsPage() {
   );
 }
 
-function ProjectCard({ project, developerName, onViewDetails }: ProjectCardProps) {
+function ProjectCard({ project, developerName, displayName, displayLocation, onViewDetails }: ProjectCardProps) {
   const unitTypes = extractUnitTypes(project.description);
   const paymentPlans = extractPaymentPlans(project.description);
   const statusInfo = STATUS_CONFIG[project.status || "under_construction"] || STATUS_CONFIG.under_construction;
   const projectImage = project.images?.[0];
+  const { language } = useLanguage();
+  const amenitiesDisplay = (language === "en" && project.amenitiesEn?.length ? project.amenitiesEn : project.amenities) || [];
 
   return (
     <Card className="flex flex-col hover:shadow-md transition-shadow group overflow-hidden" data-testid={`card-project-${project.id}`}>
@@ -677,7 +696,7 @@ function ProjectCard({ project, developerName, onViewDetails }: ProjectCardProps
         <div className="h-40 overflow-hidden bg-muted relative">
           <img
             src={projectImage}
-            alt={project.name}
+            alt={displayName}
             className="w-full h-full object-cover transition-transform group-hover:scale-105"
             onError={e => { (e.target as HTMLImageElement).parentElement!.style.display = 'none'; }}
           />
@@ -687,7 +706,7 @@ function ProjectCard({ project, developerName, onViewDetails }: ProjectCardProps
           </div>
           {project.totalUnits && (
             <div className="absolute top-2 right-2">
-              <Badge className="text-xs border-0 bg-black/60 text-white shadow-sm">{project.totalUnits} وحدة</Badge>
+              <Badge className="text-xs border-0 bg-black/60 text-white shadow-sm">{project.totalUnits} {language === "en" ? "units" : "وحدة"}</Badge>
             </div>
           )}
           {project.deliveryDate && (
@@ -703,14 +722,14 @@ function ProjectCard({ project, developerName, onViewDetails }: ProjectCardProps
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <CardTitle className="text-base leading-tight mb-1" data-testid={`text-project-name-${project.id}`}>{project.name}</CardTitle>
+            <CardTitle className="text-base leading-tight mb-1" data-testid={`text-project-name-${project.id}`}>{displayName}</CardTitle>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs text-muted-foreground flex items-center gap-1">
                 <Building2 className="h-3 w-3" />{developerName}
               </span>
-              {project.location && (
+              {displayLocation && (
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
-                  <MapPin className="h-3 w-3" />{project.location}
+                  <MapPin className="h-3 w-3" />{displayLocation}
                 </span>
               )}
             </div>
@@ -769,13 +788,13 @@ function ProjectCard({ project, developerName, onViewDetails }: ProjectCardProps
         )}
 
         {/* Amenities */}
-        {project.amenities && project.amenities.length > 0 && (
+        {amenitiesDisplay.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            {project.amenities.slice(0, 3).map((a: string) => (
+            {amenitiesDisplay.slice(0, 3).map((a: string) => (
               <span key={a} className="text-xs text-muted-foreground bg-muted rounded px-1.5 py-0.5">{a}</span>
             ))}
-            {project.amenities.length > 3 && (
-              <span className="text-xs text-muted-foreground">+{project.amenities.length - 3} مزايا</span>
+            {amenitiesDisplay.length > 3 && (
+              <span className="text-xs text-muted-foreground">+{amenitiesDisplay.length - 3} {language === "en" ? "amenities" : "مزايا"}</span>
             )}
           </div>
         )}
@@ -783,11 +802,11 @@ function ProjectCard({ project, developerName, onViewDetails }: ProjectCardProps
 
       <div className="border-t px-4 py-3 flex gap-2">
         <Button variant="outline" size="sm" className="flex-1" onClick={onViewDetails} data-testid={`button-view-details-${project.id}`}>
-          <Eye className="h-3.5 w-3.5 ml-1" />التفاصيل
+          <Eye className="h-3.5 w-3.5 ml-1" />{language === "en" ? "Details" : "التفاصيل"}
         </Button>
         <Link href={`/inventory/projects/${project.id}/units`} className="flex-1">
           <Button size="sm" className="w-full" data-testid={`button-view-units-${project.id}`}>
-            <Home className="h-3.5 w-3.5 ml-1" />الوحدات
+            <Home className="h-3.5 w-3.5 ml-1" />{language === "en" ? "Units" : "الوحدات"}
           </Button>
         </Link>
       </div>
@@ -795,7 +814,7 @@ function ProjectCard({ project, developerName, onViewDetails }: ProjectCardProps
   );
 }
 
-function ProjectListRow({ project, developerName, onViewDetails }: ProjectCardProps) {
+function ProjectListRow({ project, developerName, displayName, displayLocation, onViewDetails }: ProjectCardProps) {
   const unitTypes = extractUnitTypes(project.description);
   const statusInfo = STATUS_CONFIG[project.status || "under_construction"] || STATUS_CONFIG.under_construction;
   const projectImage = project.images?.[0];
@@ -811,7 +830,7 @@ function ProjectListRow({ project, developerName, onViewDetails }: ProjectCardPr
         {projectImage && !imgError ? (
           <img
             src={projectImage}
-            alt={project.name}
+            alt={displayName}
             className="w-full h-full object-cover"
             onError={() => setImgError(true)}
           />
@@ -822,10 +841,10 @@ function ProjectListRow({ project, developerName, onViewDetails }: ProjectCardPr
 
       {/* Name + developer + location */}
       <div className="flex-1 min-w-0">
-        <p className="font-semibold text-sm leading-tight truncate" data-testid={`text-row-project-name-${project.id}`}>{project.name}</p>
+        <p className="font-semibold text-sm leading-tight truncate" data-testid={`text-row-project-name-${project.id}`}>{displayName}</p>
         <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5 flex-wrap">
           <span className="flex items-center gap-0.5"><Building2 className="h-3 w-3" />{developerName}</span>
-          {project.location && <span className="flex items-center gap-0.5"><MapPin className="h-3 w-3" />{project.location}</span>}
+          {displayLocation && <span className="flex items-center gap-0.5"><MapPin className="h-3 w-3" />{displayLocation}</span>}
         </p>
       </div>
 
@@ -877,21 +896,27 @@ function ProjectListRow({ project, developerName, onViewDetails }: ProjectCardPr
 }
 
 function ProjectDetailPanel({ project, developerName }: { project: Project; developerName: string }) {
+  const { language } = useLanguage();
   const unitRanges = extractUnitRanges(project.description);
   const paymentPlans = extractPaymentPlans(project.description);
-  const aboutText = extractAboutText(project.description);
+  const aboutText = language === "en" && project.descriptionEn
+    ? project.descriptionEn
+    : extractAboutText(project.description);
   const nawyUrl = extractNawyUrl(project.description);
   const statusInfo = STATUS_CONFIG[project.status || "under_construction"] || STATUS_CONFIG.under_construction;
+  const displayName = getLocalizedName(project.name, project.nameEn, language);
+  const displayLocation = (language === "en" && project.locationEn) ? project.locationEn : project.location;
+  const amenitiesDisplay = (language === "en" && project.amenitiesEn?.length ? project.amenitiesEn : project.amenities) || [];
 
   return (
     <div className="space-y-5">
       <SheetHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <SheetTitle className="text-xl leading-tight">{project.name}</SheetTitle>
+            <SheetTitle className="text-xl leading-tight">{displayName}</SheetTitle>
             <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
               <Building2 className="h-3.5 w-3.5" />{developerName}
-              {project.location && <><MapPin className="h-3.5 w-3.5 mr-1" />{project.location}</>}
+              {displayLocation && <><MapPin className="h-3.5 w-3.5 mr-1" />{displayLocation}</>}
             </p>
           </div>
           <Badge className={`text-xs border-0 shrink-0 ${statusInfo.color}`}>{statusInfo.icon} {statusInfo.label}</Badge>
@@ -903,22 +928,22 @@ function ProjectDetailPanel({ project, developerName }: { project: Project; deve
         <div className="bg-green-50 dark:bg-green-950 rounded-lg p-3 flex items-center gap-3">
           <DollarSign className="h-5 w-5 text-green-600" />
           <div>
-            <p className="text-xs text-muted-foreground">نطاق الأسعار</p>
+            <p className="text-xs text-muted-foreground">{language === "en" ? "Price Range" : "نطاق الأسعار"}</p>
             <p className="font-bold text-green-700 dark:text-green-300">
-              {project.minPrice ? `${formatPrice(project.minPrice)} جم` : ""}
+              {project.minPrice ? `${formatPrice(project.minPrice)} ${language === "en" ? "EGP" : "جم"}` : ""}
               {project.minPrice && project.maxPrice ? " — " : ""}
-              {project.maxPrice ? `${formatPrice(project.maxPrice)} جم` : ""}
+              {project.maxPrice ? `${formatPrice(project.maxPrice)} ${language === "en" ? "EGP" : "جم"}` : ""}
             </p>
           </div>
           {project.deliveryDate && (
             <div className="mr-auto">
-              <p className="text-xs text-muted-foreground">التسليم</p>
+              <p className="text-xs text-muted-foreground">{language === "en" ? "Delivery" : "التسليم"}</p>
               <p className="font-semibold text-sm">{project.deliveryDate}</p>
             </div>
           )}
           {project.totalUnits && (
             <div>
-              <p className="text-xs text-muted-foreground">إجمالي الوحدات</p>
+              <p className="text-xs text-muted-foreground">{language === "en" ? "Total Units" : "إجمالي الوحدات"}</p>
               <p className="font-semibold text-sm">{project.totalUnits}</p>
             </div>
           )}
@@ -928,7 +953,7 @@ function ProjectDetailPanel({ project, developerName }: { project: Project; deve
       {/* Unit types with ranges */}
       {unitRanges.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm font-semibold flex items-center gap-2"><Home className="h-4 w-4" />أنواع الوحدات</p>
+          <p className="text-sm font-semibold flex items-center gap-2"><Home className="h-4 w-4" />{language === "en" ? "Unit Types" : "أنواع الوحدات"}</p>
           <div className="space-y-2">
             {unitRanges.map(({ type, range, price }) => (
               <div key={type} className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2">
@@ -946,7 +971,7 @@ function ProjectDetailPanel({ project, developerName }: { project: Project; deve
       {/* Payment plans */}
       {paymentPlans && (
         <div className="space-y-2">
-          <p className="text-sm font-semibold flex items-center gap-2"><CreditCard className="h-4 w-4" />أنظمة السداد</p>
+          <p className="text-sm font-semibold flex items-center gap-2"><CreditCard className="h-4 w-4" />{language === "en" ? "Payment Plans" : "أنظمة السداد"}</p>
           <div className="space-y-1.5">
             {paymentPlans.split(' | ').map((plan: string, i: number) => (
               <div key={i} className="flex items-center gap-2 bg-blue-50 dark:bg-blue-950 rounded-md px-3 py-1.5">
@@ -959,11 +984,11 @@ function ProjectDetailPanel({ project, developerName }: { project: Project; deve
       )}
 
       {/* Amenities */}
-      {project.amenities && project.amenities.length > 0 && (
+      {amenitiesDisplay.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm font-semibold">المميزات والخدمات</p>
+          <p className="text-sm font-semibold">{language === "en" ? "Amenities & Services" : "المميزات والخدمات"}</p>
           <div className="flex flex-wrap gap-2">
-            {project.amenities.map((a: string) => (
+            {amenitiesDisplay.map((a: string) => (
               <span key={a} className="text-xs bg-muted rounded-full px-3 py-1">{a}</span>
             ))}
           </div>
@@ -975,7 +1000,7 @@ function ProjectDetailPanel({ project, developerName }: { project: Project; deve
       {/* About text */}
       {aboutText && aboutText.length > 50 && (
         <div className="space-y-2">
-          <p className="text-sm font-semibold">عن الكمبوند</p>
+          <p className="text-sm font-semibold">{language === "en" ? "About This Project" : "عن الكمبوند"}</p>
           <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{aboutText}</p>
         </div>
       )}
@@ -984,13 +1009,13 @@ function ProjectDetailPanel({ project, developerName }: { project: Project; deve
       <div className="flex flex-wrap gap-2 pt-2">
         <Link href={`/inventory/projects/${project.id}/units`} className="flex-1">
           <Button className="w-full" data-testid="button-view-units-detail">
-            <Home className="h-4 w-4 ml-2" />عرض الوحدات
+            <Home className="h-4 w-4 ml-2" />{language === "en" ? "View Units" : "عرض الوحدات"}
           </Button>
         </Link>
         {nawyUrl && (
           <a href={nawyUrl} target="_blank" rel="noopener noreferrer" className="flex-1">
             <Button variant="outline" className="w-full">
-              <ExternalLink className="h-4 w-4 ml-2" />عرض على nawy
+              <ExternalLink className="h-4 w-4 ml-2" />{language === "en" ? "View on Nawy" : "عرض على nawy"}
             </Button>
           </a>
         )}

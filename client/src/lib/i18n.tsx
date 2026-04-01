@@ -1690,3 +1690,49 @@ export function useLanguage() {
   }
   return context;
 }
+
+/**
+ * Get the display name of a project/developer/unit in the current language.
+ * For English: uses nameEn if available, else extracts from "English | Arabic" format.
+ * For Arabic: uses the Arabic part of "English | Arabic" or the raw name.
+ */
+export function getLocalizedName(
+  nameAr: string | null | undefined,
+  nameEn: string | null | undefined,
+  language: Language
+): string {
+  if (!nameAr && !nameEn) return "";
+
+  if (language === "en") {
+    if (nameEn) return nameEn;
+    // Extract English from bilingual format "English Name | الاسم العربي"
+    if (nameAr && nameAr.includes(" | ")) {
+      return nameAr.split(" | ")[0].trim();
+    }
+    return nameAr || "";
+  }
+
+  // Arabic mode
+  if (nameAr && nameAr.includes(" | ")) {
+    return nameAr.split(" | ")[1].trim();
+  }
+  return nameAr || "";
+}
+
+/**
+ * Get Arabic part of a bilingual "English | Arabic" name, or the full name if not bilingual.
+ */
+export function getArabicName(name: string | null | undefined): string {
+  if (!name) return "";
+  if (name.includes(" | ")) return name.split(" | ")[1].trim();
+  return name;
+}
+
+/**
+ * Get English part of a bilingual "English | Arabic" name, or the full name if not bilingual.
+ */
+export function getEnglishName(name: string | null | undefined): string {
+  if (!name) return "";
+  if (name.includes(" | ")) return name.split(" | ")[0].trim();
+  return name;
+}

@@ -19,12 +19,12 @@ import {
   Loader2, Search, FolderKanban, ChevronRight,
 } from "lucide-react";
 import type { Developer, InsertDeveloper, Project } from "@shared/schema";
-import { useLanguage } from "@/lib/i18n";
+import { useLanguage, getLocalizedName } from "@/lib/i18n";
 
 export default function DevelopersPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [, navigate] = useLocation();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingDeveloper, setEditingDeveloper] = useState<Developer | null>(null);
@@ -49,14 +49,23 @@ export default function DevelopersPage() {
     return projects.filter(p => p.developerId === selectedDev.id);
   }, [selectedDev, projects]);
 
+  const getDevDisplayName = (dev: Developer) => getLocalizedName(dev.name, dev.nameEn, language);
+  const getDevDescription = (dev: Developer) =>
+    language === "en" && dev.descriptionEn ? dev.descriptionEn : (dev.description || "");
+
   const filtered = useMemo(() =>
     developers
       .filter(d => {
         const q = search.toLowerCase();
-        return d.name?.toLowerCase().includes(q) || d.description?.toLowerCase().includes(q);
+        const nameToSearch = language === "en"
+          ? (d.nameEn || d.name || "")
+          : (d.name || "");
+        return nameToSearch.toLowerCase().includes(q) ||
+          (d.description || "").toLowerCase().includes(q) ||
+          (d.nameEn || "").toLowerCase().includes(q);
       })
       .sort((a, b) => (projectCountByDev[b.id] || 0) - (projectCountByDev[a.id] || 0)),
-    [developers, search, projectCountByDev]
+    [developers, search, projectCountByDev, language]
   );
 
   const createMutation = useMutation({
@@ -212,6 +221,7 @@ export default function DevelopersPage() {
                     <DevCard key={dev.id} dev={dev} projectCount={projectCountByDev[dev.id] || 0}
                       isSelected={selectedDev?.id === dev.id}
                       onSelect={() => setSelectedDev(dev.id === selectedDev?.id ? null : dev)}
+                      language={language}
                     />
                   ))}
                 </div>
@@ -225,6 +235,7 @@ export default function DevelopersPage() {
                     <DevCard key={dev.id} dev={dev} projectCount={projectCountByDev[dev.id] || 0}
                       isSelected={selectedDev?.id === dev.id}
                       onSelect={() => setSelectedDev(dev.id === selectedDev?.id ? null : dev)}
+                      language={language}
                     />
                   ))}
                 </div>
@@ -249,11 +260,11 @@ export default function DevelopersPage() {
             <div className="flex flex-col items-center text-center gap-3 py-4">
               {selectedDev.logo ? (
                 <div className="w-28 h-28 rounded-2xl border bg-white flex items-center justify-center p-3 shadow-sm overflow-hidden">
-                  <img src={selectedDev.logo} alt={selectedDev.name}
+                  <img src={selectedDev.logo} alt={getDevDisplayName(selectedDev)}
                     className="w-full h-full object-contain"
                     onError={e => {
-                      const t = e.currentTarget.parentElement!;
-                      t.innerHTML = `<div class="w-full h-full flex items-center justify-center"><span class="text-4xl font-bold text-primary/30">${selectedDev.name?.charAt(0) || '?'}</span></div>`;
+                      const el = e.currentTarget.parentElement!;
+                      el.innerHTML = `<div class="w-full h-full flex items-center justify-center"><span class="text-4xl font-bold text-primary/30">${selectedDev.name?.charAt(0) || '?'}</span></div>`;
                     }}
                   />
                 </div>
@@ -263,15 +274,15 @@ export default function DevelopersPage() {
                 </div>
               )}
               <div>
-                <h3 className="text-xl font-bold">{selectedDev.name}</h3>
+                <h3 className="text-xl font-bold">{getDevDisplayName(selectedDev)}</h3>
                 <div className="flex items-center justify-center gap-2 mt-1">
                   <Badge variant={selectedDev.isActive ? "default" : "secondary"}>
-                    {selectedDev.isActive ? "نشط" : "غير نشط"}
+                    {selectedDev.isActive ? (language === "en" ? "Active" : "نشط") : (language === "en" ? "Inactive" : "غير نشط")}
                   </Badge>
                   {(projectCountByDev[selectedDev.id] || 0) > 0 && (
                     <Badge variant="outline" className="text-primary border-primary/30">
                       <FolderKanban className="h-3 w-3 ml-1" />
-                      {projectCountByDev[selectedDev.id]} مشروع
+                      {projectCountByDev[selectedDev.id]} {language === "en" ? "projects" : "مشروع"}
                     </Badge>
                   )}
                 </div>
@@ -305,17 +316,23 @@ export default function DevelopersPage() {
             )}
 
             {/* Description */}
-            {selectedDev.description && (
+            {(selectedDev.description || selectedDev.descriptionEn) && (
               <div className="rounded-xl border bg-card p-4">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">عن الشركة</p>
-                <p className="text-sm leading-relaxed text-foreground/80 whitespace-pre-line">{selectedDev.description}</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                  {language === "en" ? "About" : "عن الشركة"}
+                </p>
+                <p className="text-sm leading-relaxed text-foreground/80 whitespace-pre-line">
+                  {getDevDescription(selectedDev)}
+                </p>
               </div>
             )}
 
             {/* Projects */}
             {devProjects.length > 0 && (
               <div className="rounded-xl border bg-card p-4 space-y-3">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">المشاريع ({devProjects.length})</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  {language === "en" ? `Projects (${devProjects.length})` : `المشاريع (${devProjects.length})`}
+                </p>
                 <div className="space-y-2 max-h-60 overflow-y-auto">
                   {devProjects.map(p => (
                     <button key={p.id}
@@ -324,15 +341,17 @@ export default function DevelopersPage() {
                       data-testid={`link-project-${p.id}`}
                     >
                       {(p as any).images?.[0] ? (
-                        <img src={(p as any).images[0]} alt={p.name} className="w-10 h-10 rounded-lg object-cover shrink-0 border" />
+                        <img src={(p as any).images[0]} alt={getLocalizedName(p.name, p.nameEn, language)} className="w-10 h-10 rounded-lg object-cover shrink-0 border" />
                       ) : (
                         <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 border">
                           <Building2 className="h-4 w-4 text-primary/40" />
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{p.name}</p>
-                        <p className="text-xs text-muted-foreground truncate">{p.location}</p>
+                        <p className="text-sm font-medium truncate">{getLocalizedName(p.name, p.nameEn, language)}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {language === "en" && p.locationEn ? p.locationEn : p.location}
+                        </p>
                       </div>
                       <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                     </button>
@@ -355,8 +374,9 @@ export default function DevelopersPage() {
   );
 }
 
-function DevCard({ dev, projectCount, isSelected, onSelect }: any) {
+function DevCard({ dev, projectCount, isSelected, onSelect, language }: any) {
   const [imgError, setImgError] = useState(false);
+  const displayName = getLocalizedName(dev.name, dev.nameEn, language);
 
   return (
     <div
@@ -369,7 +389,7 @@ function DevCard({ dev, projectCount, isSelected, onSelect }: any) {
         {dev.logo && !imgError ? (
           <img
             src={dev.logo}
-            alt={dev.name}
+            alt={displayName}
             className="max-h-20 max-w-full object-contain"
             onError={() => setImgError(true)}
           />
@@ -384,14 +404,14 @@ function DevCard({ dev, projectCount, isSelected, onSelect }: any) {
 
       {/* Info */}
       <div className="p-3 flex-1 flex flex-col gap-1">
-        <p className="text-sm font-semibold leading-tight line-clamp-2" data-testid={`text-developer-name-${dev.id}`}>{dev.name}</p>
+        <p className="text-sm font-semibold leading-tight line-clamp-2" data-testid={`text-developer-name-${dev.id}`}>{displayName}</p>
         <div className="flex items-center gap-1.5 flex-wrap mt-auto pt-1">
           {projectCount > 0 ? (
             <Badge variant="secondary" className="text-xs px-1.5 py-0">
-              <FolderKanban className="h-3 w-3 ml-0.5" />{projectCount} مشروع
+              <FolderKanban className="h-3 w-3 ml-0.5" />{projectCount} {language === "en" ? "projects" : "مشروع"}
             </Badge>
           ) : (
-            <span className="text-xs text-muted-foreground">بدون مشاريع</span>
+            <span className="text-xs text-muted-foreground">{language === "en" ? "No projects" : "بدون مشاريع"}</span>
           )}
           {dev.phone && <Phone className="h-3.5 w-3.5 text-muted-foreground/60" />}
         </div>
