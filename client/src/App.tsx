@@ -12,6 +12,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { useRealtime } from "@/hooks/use-realtime";
 import { Loader2 } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
@@ -100,6 +101,7 @@ function Router() {
 
 function AuthenticatedApp() {
   const { user } = useAuth();
+  useRealtime();
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",

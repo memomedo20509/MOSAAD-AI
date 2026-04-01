@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import type { BotStage } from "./ai";
 import { createServer, type Server } from "http";
+import { addSseClient, removeSseClient, broadcastToUser, broadcastToAll } from "./sse";
 import path from "path";
 import fs from "fs";
 import multer from "multer";
@@ -3491,6 +3492,17 @@ export async function registerRoutes(
           isRead: false,
         });
 
+        // Broadcast real-time SSE events to connected clients
+        const ssePayload = { leadId: lead.id, phone, isNewLead };
+        if (isNewLead) {
+          broadcastToUser(userId, { type: "new_lead", payload: ssePayload });
+          if (notifUserId !== userId) broadcastToUser(notifUserId, { type: "new_lead", payload: ssePayload });
+        } else {
+          broadcastToUser(userId, { type: "new_whatsapp_message", payload: ssePayload });
+          if (notifUserId !== userId) broadcastToUser(notifUserId, { type: "new_whatsapp_message", payload: ssePayload });
+        }
+        broadcastToUser(notifUserId, { type: "new_notification", payload: {} });
+
       } catch (err) {
         console.error("[WhatsApp] Error in incoming message handler:", err);
       }
@@ -4266,6 +4278,31 @@ export async function registerRoutes(
   app.get("/api/meta/app-config", isAuthenticated, async (_req, res) => {
     const appId = process.env.VITE_META_APP_ID || process.env.META_APP_ID || "";
     res.json({ appId });
+  });
+
+  // SSE real-time event stream
+  app.get("/api/events/stream", isAuthenticated, (req, res) => {
+    const userId = (req.user as { id: string } | undefined)?.id;
+    if (!userId) { res.status(401).end(); return; }
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders();
+
+    res.write(`data: ${JSON.stringify({ type: "ping" })}\n\n`);
+
+    addSseClient(userId, res);
+
+    const keepAlive = setInterval(() => {
+      try { res.write(`data: ${JSON.stringify({ type: "ping" })}\n\n`); } catch { /* disconnected */ }
+    }, 25000);
+
+    req.on("close", () => {
+      clearInterval(keepAlive);
+      removeSseClient(res);
+    });
   });
 
   return httpServer;
