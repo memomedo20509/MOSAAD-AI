@@ -789,6 +789,117 @@ export async function registerRoutes(
     }
   });
 
+  // Sync project images from Nawy (admin only)
+  app.post("/api/admin/sync-project-images", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
+    try {
+      const allProjects = await storage.getAllProjects();
+      const nawyUrlRegex = /🔗 المصدر: (https?:\/\/[^\n]+)/;
+
+      let updated = 0;
+      let failed = 0;
+      let skipped = 0;
+
+      for (const project of allProjects) {
+        // Skip projects that already have images
+        if (project.images && project.images.length > 0) {
+          skipped++;
+          continue;
+        }
+        // Extract Nawy URL from description
+        const match = project.description ? project.description.match(nawyUrlRegex) : null;
+        const nawyUrl = match ? match[1].trim() : null;
+        if (!nawyUrl) {
+          skipped++;
+          continue;
+        }
+
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000);
+          const response = await fetch(nawyUrl, {
+            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            console.warn(`[sync-images] HTTP ${response.status} for project ${project.id} (${nawyUrl})`);
+            failed++;
+            continue;
+          }
+
+          const html = await response.text();
+          const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
+          if (!nextDataMatch) {
+            console.warn(`[sync-images] No __NEXT_DATA__ for project ${project.id}`);
+            failed++;
+            continue;
+          }
+
+          let compound: any = null;
+          try {
+            const nextData = JSON.parse(nextDataMatch[1]);
+            compound = nextData?.props?.pageProps?.compound;
+          } catch {
+            console.warn(`[sync-images] JSON parse error for project ${project.id}`);
+            failed++;
+            continue;
+          }
+
+          if (!compound) {
+            console.warn(`[sync-images] No compound data for project ${project.id}`);
+            failed++;
+            continue;
+          }
+
+          const imageIds: number[] = [];
+          if (Array.isArray(compound.images)) {
+            for (const img of compound.images) {
+              if (img?.id) imageIds.push(img.id);
+            }
+          }
+
+          // Fallback: coverImageUrl or imageUrl as direct URL
+          const imageUrls: string[] = imageIds.map(
+            (id) => `https://prod-images.nawy.com/processed/compound_image/image/${id}/high.webp`
+          );
+
+          if (imageUrls.length === 0 && compound.coverImageUrl) {
+            imageUrls.push(compound.coverImageUrl);
+          }
+          if (imageUrls.length === 0 && compound.imageUrl) {
+            imageUrls.push(compound.imageUrl);
+          }
+
+          if (imageUrls.length === 0) {
+            console.warn(`[sync-images] No images found for project ${project.id}`);
+            failed++;
+            continue;
+          }
+
+          await storage.updateProject(project.id, { images: imageUrls });
+          console.log(`[sync-images] Updated project ${project.id} with ${imageUrls.length} images`);
+          updated++;
+
+          // Small delay between requests to avoid rate limiting
+          await new Promise((r) => setTimeout(r, 500));
+        } catch (fetchErr: any) {
+          if (fetchErr?.name === "AbortError") {
+            console.warn(`[sync-images] Timeout for project ${project.id}`);
+          } else {
+            console.warn(`[sync-images] Fetch error for project ${project.id}:`, fetchErr?.message);
+          }
+          failed++;
+        }
+      }
+
+      res.json({ updated, failed, skipped });
+    } catch (error) {
+      console.error("Error syncing project images:", error);
+      res.status(500).json({ error: "Failed to sync project images" });
+    }
+  });
+
   // Units
   app.get("/api/units", isAuthenticated, async (req, res) => {
     try {

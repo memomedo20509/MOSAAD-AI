@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Wifi, WifiOff, RefreshCw, SmartphoneNfc, CheckCircle2, AlertCircle, XCircle, Trash2, Bot, Clock, MessageSquare, Save, Building2, User, Sparkles, AlarmClock } from "lucide-react";
+import { ArrowLeft, Wifi, WifiOff, RefreshCw, SmartphoneNfc, CheckCircle2, AlertCircle, XCircle, Trash2, Bot, Clock, MessageSquare, Save, Building2, User, Sparkles, AlarmClock, ImageIcon } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -172,6 +172,23 @@ export default function WhatsAppSettingsPage() {
     },
     onError: () => {
       toast({ title: "فشل في حفظ الإعدادات", variant: "destructive" });
+    },
+  });
+
+  const syncImagesMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/sync-project-images");
+      return res.json() as Promise<{ updated: number; failed: number; skipped: number }>;
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      toast({
+        title: `✅ تمت المزامنة`,
+        description: `تم تحديث ${result.updated} مشروع • فشل ${result.failed} • تخطي ${result.skipped}`,
+      });
+    },
+    onError: () => {
+      toast({ title: "فشل في مزامنة الصور، حاول مرة أخرى", variant: "destructive" });
     },
   });
 
@@ -686,6 +703,46 @@ export default function WhatsAppSettingsPage() {
               </Button>
             </>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <ImageIcon className="h-4 w-4 text-blue-500" />
+            أدوات المشاريع
+          </CardTitle>
+          <CardDescription>أدوات لإدارة بيانات المشاريع وتحديثها من المصادر الخارجية</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-start justify-between gap-4 p-4 rounded-lg border bg-muted/30">
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-sm">مزامنة صور المشاريع من Nawy</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                يجلب صور الكومباوند من موقع Nawy للمشاريع التي ليس لها صور بعد — يستخرج رابط ناوي من وصف المشروع ويحدّث الصور تلقائياً.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => syncImagesMutation.mutate()}
+              disabled={syncImagesMutation.isPending}
+              data-testid="button-sync-nawy-images"
+            >
+              {syncImagesMutation.isPending ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  جاري المزامنة...
+                </>
+              ) : (
+                <>
+                  <ImageIcon className="h-4 w-4 mr-2" />
+                  مزامنة الصور
+                </>
+              )}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
