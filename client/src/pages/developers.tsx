@@ -13,14 +13,10 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Plus, Pencil, Trash2, Building2, Phone, Mail, Globe, MapPin,
-  Loader2, Search, FolderKanban, ChevronRight, ExternalLink,
+  Plus, Building2, Phone, Mail, MapPin,
+  Loader2, Search, FolderKanban, ChevronRight,
 } from "lucide-react";
 import type { Developer, InsertDeveloper, Project } from "@shared/schema";
 import { useLanguage } from "@/lib/i18n";
@@ -189,9 +185,8 @@ export default function DevelopersPage() {
         {/* Stats summary */}
         <div className="flex gap-3">
           {[
-            { label: "الكل", value: developers.filter(d => d.isActive).length, color: "bg-blue-50 text-blue-700 border-blue-200" },
-            { label: "بلوجو", value: developers.filter(d => d.logo).length, color: "bg-green-50 text-green-700 border-green-200" },
-            { label: "بمشاريع", value: Object.keys(projectCountByDev).length, color: "bg-purple-50 text-purple-700 border-purple-200" },
+            { label: "مطور نشط", value: developers.filter(d => d.isActive).length, color: "bg-blue-50 text-blue-700 border-blue-200" },
+            { label: "لديهم مشاريع", value: Object.keys(projectCountByDev).length, color: "bg-purple-50 text-purple-700 border-purple-200" },
           ].map(s => (
             <div key={s.label} className={`px-3 py-1.5 rounded-lg border text-sm font-medium ${s.color}`}>
               {s.value} {s.label}
@@ -215,12 +210,8 @@ export default function DevelopersPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {activeDevelopers.map(dev => (
                     <DevCard key={dev.id} dev={dev} projectCount={projectCountByDev[dev.id] || 0}
-                      isAdmin={isAdmin} isSuperAdmin={isSuperAdmin}
                       isSelected={selectedDev?.id === dev.id}
                       onSelect={() => setSelectedDev(dev.id === selectedDev?.id ? null : dev)}
-                      onNavigate={() => navigate(`/inventory/projects?developer=${dev.id}`)}
-                      onEdit={openEditDialog} onDelete={id => deleteMutation.mutate(id)}
-                      editingId={editingDeveloper?.id} resetForm={resetForm} DeveloperForm={DeveloperForm} t={t}
                     />
                   ))}
                 </div>
@@ -232,12 +223,8 @@ export default function DevelopersPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 opacity-60">
                   {inactiveDevelopers.map(dev => (
                     <DevCard key={dev.id} dev={dev} projectCount={projectCountByDev[dev.id] || 0}
-                      isAdmin={isAdmin} isSuperAdmin={isSuperAdmin}
                       isSelected={selectedDev?.id === dev.id}
                       onSelect={() => setSelectedDev(dev.id === selectedDev?.id ? null : dev)}
-                      onNavigate={() => navigate(`/inventory/projects?developer=${dev.id}`)}
-                      onEdit={openEditDialog} onDelete={id => deleteMutation.mutate(id)}
-                      editingId={editingDeveloper?.id} resetForm={resetForm} DeveloperForm={DeveloperForm} t={t}
                     />
                   ))}
                 </div>
@@ -292,7 +279,7 @@ export default function DevelopersPage() {
             </div>
 
             {/* Contact info */}
-            {(selectedDev.phone || selectedDev.email || selectedDev.website || selectedDev.address) && (
+            {(selectedDev.phone || selectedDev.email || selectedDev.address) && (
               <div className="rounded-xl border bg-card p-4 space-y-2.5">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">معلومات التواصل</p>
                 {selectedDev.phone && (
@@ -307,14 +294,7 @@ export default function DevelopersPage() {
                     <a href={`mailto:${selectedDev.email}`} className="hover:underline text-foreground">{selectedDev.email}</a>
                   </div>
                 )}
-                {selectedDev.website && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Globe className="h-4 w-4 text-purple-500 shrink-0" />
-                    <a href={selectedDev.website} target="_blank" rel="noopener noreferrer" className="hover:underline text-primary flex items-center gap-1">
-                      الموقع الرسمي <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </div>
-                )}
+
                 {selectedDev.address && (
                   <div className="flex items-center gap-2 text-sm">
                     <MapPin className="h-4 w-4 text-orange-500 shrink-0" />
@@ -362,24 +342,11 @@ export default function DevelopersPage() {
             )}
 
             {/* Actions */}
-            <div className="flex gap-2 pt-1">
-              <Button className="flex-1" onClick={() => navigate(`/inventory/projects?developer=${selectedDev.id}`)}>
+            <div className="pt-1">
+              <Button className="w-full" onClick={() => navigate(`/inventory/projects?developer=${selectedDev.id}`)}>
                 <FolderKanban className="h-4 w-4 ml-2" />
                 كل مشاريع الشركة
               </Button>
-              {isAdmin && (
-                <Dialog open={editingDeveloper?.id === selectedDev.id} onOpenChange={o => { if (!o) resetForm(); }}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="icon" onClick={() => openEditDialog(selectedDev)} data-testid={`button-edit-developer-${selectedDev.id}`}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-h-[90vh] overflow-y-auto">
-                    <DialogHeader><DialogTitle>{t.editDeveloper}</DialogTitle></DialogHeader>
-                    <DeveloperForm />
-                  </DialogContent>
-                </Dialog>
-              )}
             </div>
           </div>
         </div>
@@ -388,7 +355,7 @@ export default function DevelopersPage() {
   );
 }
 
-function DevCard({ dev, projectCount, isAdmin, isSuperAdmin, isSelected, onSelect, onNavigate, onEdit, onDelete, editingId, resetForm, DeveloperForm, t }: any) {
+function DevCard({ dev, projectCount, isSelected, onSelect }: any) {
   const [imgError, setImgError] = useState(false);
 
   return (
@@ -413,43 +380,6 @@ function DevCard({ dev, projectCount, isAdmin, isSuperAdmin, isSelected, onSelec
             </div>
           </div>
         )}
-        {/* Admin actions */}
-        {(isAdmin || isSuperAdmin) && (
-          <div className="absolute top-1.5 left-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-            {isAdmin && (
-              <Dialog open={editingId === dev.id} onOpenChange={o => { if (!o) resetForm(); }}>
-                <DialogTrigger asChild>
-                  <Button variant="secondary" size="icon" className="h-6 w-6" onClick={e => { e.stopPropagation(); onEdit(dev); }} data-testid={`button-edit-developer-${dev.id}`}>
-                    <Pencil className="h-3 w-3" />
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                  <DialogHeader><DialogTitle>{t.editDeveloper}</DialogTitle></DialogHeader>
-                  <DeveloperForm />
-                </DialogContent>
-              </Dialog>
-            )}
-            {isSuperAdmin && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="secondary" size="icon" className="h-6 w-6" onClick={e => e.stopPropagation()} data-testid={`button-delete-developer-${dev.id}`}>
-                    <Trash2 className="h-3 w-3 text-destructive" />
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent onClick={e => e.stopPropagation()}>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>{t.deleteDeveloper}?</AlertDialogTitle>
-                    <AlertDialogDescription>{t.deleteDeveloperConfirm} "{dev.name}"</AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => onDelete(dev.id)} data-testid="button-confirm-delete-developer">{t.delete}</AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Info */}
@@ -463,7 +393,6 @@ function DevCard({ dev, projectCount, isAdmin, isSuperAdmin, isSelected, onSelec
           ) : (
             <span className="text-xs text-muted-foreground">بدون مشاريع</span>
           )}
-          {dev.website && <Globe className="h-3.5 w-3.5 text-muted-foreground/60" />}
           {dev.phone && <Phone className="h-3.5 w-3.5 text-muted-foreground/60" />}
         </div>
       </div>
