@@ -1,0 +1,339 @@
+🎯 الهدف
+سحب كل الكومباوندات (مشاريع عقارية) من موقع nawy.com لمنطقة محددة (مثلاً: أكتوبر، الشيخ زايد، مدينة نصر، التجمع... إلخ)، واستخراج بيانات كل كومباوند بالكامل (المطور، التفاصيل، أنظمة السداد، أنواع الوحدات وأسعارها، الصور، المميزات)، ثم تنسيقها بشكل JSON جاهز للاستيراد لقاعدة البيانات.
+
+🗄️ هيكل قاعدة البيانات المستهدف
+البيانات هتتحط في 3 جداول:
+
+جدول developers (المطورين)
+id          - UUID تلقائي
+name        - اسم المطور (مطلوب)
+logo        - رابط صورة اللوجو
+website     - الموقع الإلكتروني
+description - وصف المطور
+phone       - رقم تليفون
+email       - إيميل
+جدول projects (المشاريع / الكومباوندات)
+id           - UUID تلقائي
+developerId  - ID المطور (مرتبط بجدول developers)
+name         - اسم الكومباوند (مطلوب)
+type         - نوع المشروع (سكني - compound، تجاري - commercial، إلخ)
+location     - المنطقة (مثل: أكتوبر، الشيخ زايد)
+address      - العنوان التفصيلي
+status       - حالة المشروع: under_construction | ready | off_plan
+totalUnits   - عدد الوحدات الإجمالي
+deliveryDate - تاريخ التسليم (نص حر مثل: 2026، Q2 2027)
+minPrice     - أقل سعر بالجنيه المصري (رقم)
+maxPrice     - أعلى سعر بالجنيه المصري (رقم)
+images       - array من روابط الصور
+amenities    - array من المميزات (حمام سباحة، جيم، حراسة، إلخ)
+description  - وصف منسق بصيغة محددة (شرح تفصيلي أدناه)
+جدول units (الوحدات داخل كل مشروع)
+id         - UUID تلقائي
+projectId  - ID المشروع (مرتبط بجدول projects)
+unitNumber - رقم/كود الوحدة (مثل: "شقة 2غ - 120م")
+type       - نوع الوحدة (شقة، فيلا، توين هاوس، دوبليكس، ستوديو، تجاري)
+bedrooms   - عدد الغرف
+bathrooms  - عدد الحمامات
+area       - المساحة بالمتر المربع (رقم)
+price      - السعر بالجنيه (رقم)
+view       - الإطلالة (حديقة، بحيرة، جولف، إلخ)
+finishing  - التشطيب (كور أند شيل، فل فنيشينج، نصف تشطيب)
+notes      - ملاحظات إضافية
+status     - available (متاح دائماً للمشاريع الجديدة)
+📋 تنسيق حقل description في المشاريع (مهم جداً)
+الحقل description بيحتوي على كل المعلومات الغنية بالصيغة دي بالترتيب:
+
+عن [اسم الكومباوند]:
+[وصف عربي للمشروع من الموقع أو مكتوب يدوياً]
+📋 أنظمة السداد:
+[خيار 1] | [خيار 2] | [خيار 3]
+مثال: 10% مقدم وتقسيط 8 سنوات | 20% مقدم وتقسيط 10 سنوات | كاش بخصم 5%
+🏠 أنواع الوحدات وأسعارها:
+[نوع 1]: [مساحة من X إلى Y م²] - [سعر من X إلى Y مليون]
+[نوع 2]: [مساحة من X إلى Y م²] - [سعر من X إلى Y مليون]
+مثال:
+شقة 2 غرف: 110 - 145 م² - 2.5 - 4.2 مليون ج
+شقة 3 غرف: 155 - 200 م² - 4.5 - 7.8 مليون ج
+فيلا: 300 - 450 م² - 12 - 25 مليون ج
+🔗 المصدر: https://www.nawy.com/ar/compound/[id]-[slug]
+ملاحظة مهمة: رابط المصدر في نهاية الـ description ضروري جداً لأن النظام بيستخدمه تلقائياً لجلب الصور من Nawy لاحقاً.
+
+🌐 كيف تجيب قائمة الكومباوندات في منطقة معينة من Nawy
+الخطوة 1: رابط قائمة الكومباوندات حسب المنطقة
+https://www.nawy.com/ar/compounds?location=[id-المنطقة]
+أو استخدم Nawy's Listing API (يرجع JSON مباشرة):
+
+GET https://www.nawy.com/_next/data/[BUILD_ID]/ar/compounds.json?location=[LOCATION_SLUG]
+طريقة أبسط: افتح صفحة المنطقة في المتصفح وجيب الـ __NEXT_DATA__ JSON مباشرة:
+
+افتح: https://www.nawy.com/ar/compounds?location=6th-october (مثال لأكتوبر)
+استخرج: <script id="__NEXT_DATA__"...> من الـ HTML
+ابحث داخل الـ JSON عن: props.pageProps.compounds أو props.pageProps.data.compounds
+روابط المناطق الشائعة على Nawy:
+العاصمة الإدارية: new-capital أو administrative-capital
+أكتوبر:          6th-of-october
+الشيخ زايد:     sheikh-zayed
+مدينة نصر:      nasr-city
+التجمع الخامس:  5th-settlement أو new-cairo
+مستقبل سيتي:    mostakbal-city
+بدر:             badr-city
+العبور:          obour
+بديل عملي: ادخل على https://www.nawy.com/ar/compounds وابحث عن المنطقة المطلوبة، وهتلاقي الـ slug في الـ URL.
+
+الخطوة 2: صفحة كل كومباوند
+رابط صفحة الكومباوند:
+
+https://www.nawy.com/ar/compound/[compound-id]-[compound-slug]
+مثال: https://www.nawy.com/ar/compound/1234-palm-hills-october
+
+🔍 كيف تستخرج البيانات من صفحة كل كومباوند
+الطريقة الأسهل والأموثوق: __NEXT_DATA__
+Nawy مبني بـ Next.js، يعني كل صفحة فيها JSON كامل جوه:
+
+// 1. جيب الـ HTML
+const html = await fetch("https://www.nawy.com/ar/compound/1234-palm-hills-october", {
+  headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
+}).then(r => r.text());
+// 2. استخرج الـ JSON
+const match = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
+const nextData = JSON.parse(match[1]);
+const compound = nextData.props.pageProps.compound;
+بيانات الكومباوند في الـ JSON (compound object):
+compound.name              // اسم الكومباوند (عربي)
+compound.nameEn            // اسم الكومباوند (إنجليزي)
+compound.description       // وصف المشروع
+compound.location          // المنطقة
+compound.address           // العنوان
+compound.deliveryYear      // سنة التسليم
+compound.minPrice          // أقل سعر
+compound.maxPrice          // أعلى سعر
+compound.totalUnits        // عدد الوحدات
+compound.status            // الحالة
+// الصور
+compound.images            // Array<{ id: number, url?: string }>
+compound.coverImageUrl     // صورة الغلاف (fallback)
+compound.imageUrl          // صورة رئيسية (fallback)
+// المميزات
+compound.amenities         // Array<string> أو Array<{ name: string }>
+compound.features          // ممكن يكون هنا كمان
+// أنظمة السداد
+compound.paymentPlans      // Array<{ downPayment, years, description }>
+// أو
+compound.installmentPlans
+// أنواع الوحدات
+compound.unitTypes         // Array<{ type, minArea, maxArea, minPrice, maxPrice }>
+// أو
+compound.propertySizes     // Array<{ bedrooms, minArea, maxArea, minPrice, maxPrice }>
+// المطور
+compound.developer.name
+compound.developer.logo
+compound.developer.website
+compound.developer.id
+ملاحظة: بعض الحقول ممكن تتغير اسمها أو تكون nested، فلازم تعمل console.log(compound) وتشوف الـ structure الفعلي.
+
+🖼️ روابط الصور
+CDN URL لصور الكومباوند:
+
+https://prod-images.nawy.com/processed/compound_image/image/[IMAGE_ID]/high.webp
+مثال: لو compound.images = [{ id: 5821 }, { id: 5822 }]
+
+https://prod-images.nawy.com/processed/compound_image/image/5821/high.webp
+https://prod-images.nawy.com/processed/compound_image/image/5822/high.webp
+📦 الـ Output المطلوب: JSON جاهز للاستيراد
+الـ script المطلوب يعمل ملف JSON بالشكل ده:
+
+{
+  "developers": [
+    {
+      "name": "بالم هيلز للتطوير",
+      "logo": "https://...",
+      "website": "https://palmhillsdevelopments.com",
+      "description": "..."
+    }
+  ],
+  "projects": [
+    {
+      "developerName": "بالم هيلز للتطوير",
+      "name": "Palm Hills October",
+      "type": "compound",
+      "location": "أكتوبر",
+      "address": "المحور المركزي، 6 أكتوبر",
+      "status": "under_construction",
+      "totalUnits": 3500,
+      "deliveryDate": "2027",
+      "minPrice": 4500000,
+      "maxPrice": 25000000,
+      "images": [
+        "https://prod-images.nawy.com/processed/compound_image/image/5821/high.webp",
+        "https://prod-images.nawy.com/processed/compound_image/image/5822/high.webp"
+      ],
+      "amenities": ["حمام سباحة", "جيم", "نادي اجتماعي", "مدارس", "حراسة 24/7"],
+      "description": "عن Palm Hills October:\nأحد أكبر المشاريع السكنية في أكتوبر...\n\n📋 أنظمة السداد:\n10% مقدم وتقسيط 8 سنوات | 20% مقدم وتقسيط 10 سنوات\n\n🏠 أنواع الوحدات وأسعارها:\nشقة 2 غرف: 120 - 160 م² - 4.5 - 7 مليون ج\nشقة 3 غرف: 170 - 220 م² - 7 - 12 مليون ج\nفيلا: 350 - 600 م² - 18 - 25 مليون ج\n\n🔗 المصدر: https://www.nawy.com/ar/compound/1234-palm-hills-october"
+    }
+  ],
+  "units": [
+    {
+      "projectName": "Palm Hills October",
+      "unitNumber": "شقة 2غ - 120م",
+      "type": "شقة",
+      "bedrooms": 2,
+      "bathrooms": 2,
+      "area": 120,
+      "price": 4500000,
+      "status": "available",
+      "finishing": "كور أند شيل"
+    }
+  ]
+}
+🤖 الـ Script الموصى به (Node.js / Python)
+خطوات العمل:
+جيب قائمة الكومباوندات للمنطقة:
+
+افتح https://www.nawy.com/ar/compounds?location=[SLUG]
+استخرج الـ __NEXT_DATA__
+جيب كل الـ compound IDs والـ slugs
+لكل كومباوند، افتح صفحته:
+
+https://www.nawy.com/ar/compound/[id]-[slug]
+استخرج الـ __NEXT_DATA__
+اجمع كل البيانات
+نظم المطورين (dedup):
+
+لو مطورين متكررين، اعمل واحد بس
+اكتب الـ JSON النهائي
+
+أضف delay بين الـ requests (500ms على الأقل لتجنب الحظر)
+
+// مثال في Node.js
+const delay = (ms) => new Promise(r => setTimeout(r, ms));
+async function scrapeRegion(locationSlug) {
+  const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+  
+  // جيب قائمة الكومباوندات
+  const listHtml = await fetch(`https://www.nawy.com/ar/compounds?location=${locationSlug}`, {
+    headers: { "User-Agent": USER_AGENT }
+  }).then(r => r.text());
+  
+  const listData = JSON.parse(
+    listHtml.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/)[1]
+  );
+  
+  // استخرج الـ compounds من القائمة
+  const compoundsList = listData.props.pageProps.compounds || 
+                        listData.props.pageProps.data?.compounds || [];
+  
+  const results = { developers: [], projects: [], units: [] };
+  const developerMap = {};
+  
+  for (const item of compoundsList) {
+    await delay(500);
+    
+    const compoundUrl = `https://www.nawy.com/ar/compound/${item.id}-${item.slug}`;
+    const html = await fetch(compoundUrl, {
+      headers: { "User-Agent": USER_AGENT }
+    }).then(r => r.text());
+    
+    const nextData = JSON.parse(
+      html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/)[1]
+    );
+    
+    const c = nextData.props.pageProps.compound;
+    
+    // المطور
+    const devName = c.developer?.name || "مطور غير معروف";
+    if (!developerMap[devName]) {
+      developerMap[devName] = {
+        name: devName,
+        logo: c.developer?.logo || null,
+        website: c.developer?.website || null,
+      };
+    }
+    
+    // الصور
+    const images = (c.images || []).map(img =>
+      `https://prod-images.nawy.com/processed/compound_image/image/${img.id}/high.webp`
+    );
+    if (images.length === 0 && c.coverImageUrl) images.push(c.coverImageUrl);
+    
+    // أنظمة السداد
+    const plans = (c.paymentPlans || c.installmentPlans || [])
+      .map(p => p.description || `${p.downPayment}% مقدم وتقسيط ${p.years} سنوات`)
+      .join(" | ");
+    
+    // أنواع الوحدات
+    const unitLines = (c.unitTypes || c.propertySizes || [])
+      .map(u => `${u.type || u.bedrooms + " غرف"}: ${u.minArea}-${u.maxArea} م² - ${u.minPrice}-${u.maxPrice} ج`)
+      .join("\n");
+    
+    // المميزات
+    const amenities = (c.amenities || []).map(a => typeof a === "string" ? a : a.name);
+    
+    // الـ description بالصيغة المطلوبة
+    const description = [
+      `عن ${c.name}:`,
+      c.description || "",
+      "",
+      plans ? `📋 أنظمة السداد:\n${plans}` : "",
+      unitLines ? `🏠 أنواع الوحدات وأسعارها:\n${unitLines}` : "",
+      `🔗 المصدر: ${compoundUrl}`
+    ].filter(Boolean).join("\n\n");
+    
+    results.projects.push({
+      developerName: devName,
+      name: c.name,
+      type: "compound",
+      location: c.location || locationSlug,
+      address: c.address || null,
+      status: c.status === "ready" ? "ready" : "under_construction",
+      totalUnits: c.totalUnits || 0,
+      deliveryDate: String(c.deliveryYear || ""),
+      minPrice: c.minPrice || null,
+      maxPrice: c.maxPrice || null,
+      images,
+      amenities,
+      description,
+    });
+    
+    // الوحدات
+    for (const ut of (c.unitTypes || c.propertySizes || [])) {
+      const bedroomsCount = ut.bedrooms || (ut.type?.includes("2") ? 2 : ut.type?.includes("3") ? 3 : null);
+      results.units.push({
+        projectName: c.name,
+        unitNumber: `${ut.type || bedroomsCount + " غرف"} - ${ut.minArea}م`,
+        type: ut.type || "شقة",
+        bedrooms: bedroomsCount,
+        bathrooms: bedroomsCount,
+        area: ut.minArea,
+        price: ut.minPrice,
+        status: "available",
+        finishing: "كور أند شيل",
+      });
+    }
+  }
+  
+  results.developers = Object.values(developerMap);
+  return results;
+}
+// استخدام:
+scrapeRegion("6th-of-october").then(data => {
+  require("fs").writeFileSync("october_data.json", JSON.stringify(data, null, 2));
+  console.log(`✅ ${data.developers.length} مطور | ${data.projects.length} مشروع | ${data.units.length} وحدة`);
+});
+⚠️ ملاحظات مهمة
+rate limiting: ضيف delay(500) على الأقل بين كل request وإلا Nawy هيحجبك
+
+User-Agent: لازم تبعت User-Agent ببراوزر حقيقي وإلا هيرجع لك 403
+
+NEXT_DATA structure قد يتغير: لو مش لاقي البيانات في المكان المتوقع، اعمل console.log(Object.keys(nextData.props.pageProps)) لتشوف الـ keys المتاحة
+
+HTTPS فقط: النظام بيقبل روابط https://www.nawy.com فقط في الـ description
+
+أسماء المناطق بالعربي: حط اسم المنطقة بالعربي في حقل location (مثل: "أكتوبر"، "الشيخ زايد") مش الـ slug
+
+الأسعار بالجنيه المصري: كل الأسعار رقم صحيح بالجنيه (مش بالمليون)
+
+🔗 روابط مرجعية
+Nawy للعرض: https://www.nawy.com/ar/compounds
+صفحة منطقة: https://www.nawy.com/ar/compounds?location=[SLUG]
+صفحة كومباوند: https://www.nawy.com/ar/compound/[ID]-[SLUG]
+CDN الصور: https://prod-images.nawy.com/processed/compound_image/image/[ID]/high.webp
