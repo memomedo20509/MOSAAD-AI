@@ -1,5 +1,6 @@
 import { storage } from "./storage";
 import { hashPassword } from "./auth";
+import { pool } from "./db";
 
 const DEFAULT_LEAD_STATES = [
   { name: "ليد جديد", color: "#3b82f6", order: 1 },
@@ -61,6 +62,39 @@ export async function seedDefaultLeadStates() {
     }
   } catch (error) {
     console.error("Error seeding default lead states:", error);
+  }
+}
+
+/**
+ * Backfill nameEn for developers seeded from Nawy data.
+ * Handles two cases:
+ *  1. nameEn is NULL or empty and the name column contains "English | Arabic" bilingual format
+ *  2. Developers that were scraped and have a nameEn already are left unchanged
+ */
+export async function backfillDeveloperNameEn() {
+  try {
+    const result = await pool.query(`
+      UPDATE developers
+      SET name_en = TRIM(SPLIT_PART(name, ' | ', 1))
+      WHERE (name_en IS NULL OR TRIM(name_en) = '')
+        AND name LIKE '% | %'
+        AND LENGTH(TRIM(SPLIT_PART(name, ' | ', 1))) > 0
+      RETURNING id, name, name_en
+    `);
+    if (result.rowCount && result.rowCount > 0) {
+      console.log(`Backfilled nameEn for ${result.rowCount} developers`);
+    }
+    // Report any developers still missing nameEn after backfill
+    const missing = await pool.query(`
+      SELECT COUNT(*) AS count FROM developers
+      WHERE name_en IS NULL OR TRIM(name_en) = ''
+    `);
+    const missingCount = parseInt(missing.rows[0]?.count || "0", 10);
+    if (missingCount > 0) {
+      console.log(`Note: ${missingCount} developer(s) still missing nameEn (likely Arabic-only entries without bilingual format)`);
+    }
+  } catch (error) {
+    console.error("Error backfilling developer nameEn:", error);
   }
 }
 

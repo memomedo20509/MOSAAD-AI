@@ -2,7 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { seedDefaultAdmin, seedDefaultLeadStates } from "./seed";
+import { seedDefaultAdmin, seedDefaultLeadStates, backfillDeveloperNameEn } from "./seed";
 import { pool } from "./db";
 
 const app = express();
@@ -174,6 +174,7 @@ app.use((req, res, next) => {
   
   await seedDefaultAdmin();
   await seedDefaultLeadStates();
+  await backfillDeveloperNameEn();
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

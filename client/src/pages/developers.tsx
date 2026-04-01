@@ -112,7 +112,7 @@ export default function DevelopersPage() {
         <Input value={formData.name || ""} onChange={e => setFormData({ ...formData, name: e.target.value })} required data-testid="input-developer-name" />
       </div>
       <div className="space-y-2">
-        <Label>رابط الشعار (URL)</Label>
+        <Label>{t.logoUrl}</Label>
         <Input value={formData.logo || ""} onChange={e => setFormData({ ...formData, logo: e.target.value })} placeholder="https://..." data-testid="input-developer-logo" />
         {formData.logo && (
           <img src={formData.logo} alt="logo preview" className="h-12 object-contain rounded border p-1" onError={e => (e.currentTarget.style.display = 'none')} />
@@ -164,7 +164,9 @@ export default function DevelopersPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold" data-testid="text-page-title">{t.developersTitle}</h1>
-            <p className="text-muted-foreground text-sm">{developers.length} مطور عقاري · {projects.length} مشروع</p>
+            <p className="text-muted-foreground text-sm" data-testid="text-developers-subtitle">
+              {developers.length} {language === "en" ? "developers" : "مطور عقاري"} · {projects.length} {language === "en" ? "projects" : "مشروع"}
+            </p>
           </div>
           {isAdmin && (
             <Dialog open={isAddOpen} onOpenChange={o => { setIsAddOpen(o); if (!o) resetForm(); }}>
@@ -183,7 +185,7 @@ export default function DevelopersPage() {
         <div className="relative">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="بحث باسم المطور..."
+            placeholder={t.searchByDeveloperName}
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="pr-10"
@@ -193,14 +195,12 @@ export default function DevelopersPage() {
 
         {/* Stats summary */}
         <div className="flex gap-3">
-          {[
-            { label: "مطور نشط", value: developers.filter(d => d.isActive).length, color: "bg-blue-50 text-blue-700 border-blue-200" },
-            { label: "لديهم مشاريع", value: Object.keys(projectCountByDev).length, color: "bg-purple-50 text-purple-700 border-purple-200" },
-          ].map(s => (
-            <div key={s.label} className={`px-3 py-1.5 rounded-lg border text-sm font-medium ${s.color}`}>
-              {s.value} {s.label}
-            </div>
-          ))}
+          <div className="px-3 py-1.5 rounded-lg border text-sm font-medium bg-blue-50 text-blue-700 border-blue-200">
+            {developers.filter(d => d.isActive).length} {t.activeDevelopersLabel}
+          </div>
+          <div className="px-3 py-1.5 rounded-lg border text-sm font-medium bg-purple-50 text-purple-700 border-purple-200">
+            {Object.keys(projectCountByDev).length} {t.withProjectsLabel}
+          </div>
         </div>
 
         {/* Developer grid */}
@@ -208,14 +208,14 @@ export default function DevelopersPage() {
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Building2 className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">لا يوجد مطورون مطابقون للبحث</p>
+              <p className="text-muted-foreground">{t.noDevelopersMatchSearch}</p>
             </CardContent>
           </Card>
         ) : (
           <div className="space-y-6">
             {activeDevelopers.length > 0 && (
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-3">المطورون النشطون ({activeDevelopers.length})</p>
+                <p className="text-sm font-medium text-muted-foreground mb-3">{t.activeDevelopersSection} ({activeDevelopers.length})</p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {activeDevelopers.map(dev => (
                     <DevCard key={dev.id} dev={dev} projectCount={projectCountByDev[dev.id] || 0}
@@ -229,7 +229,7 @@ export default function DevelopersPage() {
             )}
             {inactiveDevelopers.length > 0 && (
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-3">غير نشط ({inactiveDevelopers.length})</p>
+                <p className="text-sm font-medium text-muted-foreground mb-3">{t.inactiveDevelopersSection} ({inactiveDevelopers.length})</p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 opacity-60">
                   {inactiveDevelopers.map(dev => (
                     <DevCard key={dev.id} dev={dev} projectCount={projectCountByDev[dev.id] || 0}
@@ -249,7 +249,7 @@ export default function DevelopersPage() {
       {selectedDev && (
         <div className="w-96 border-r bg-muted/20 overflow-y-auto flex-shrink-0">
           <div className="sticky top-0 bg-background/95 backdrop-blur border-b p-4 flex items-center justify-between">
-            <h2 className="font-semibold text-base">تفاصيل المطور</h2>
+            <h2 className="font-semibold text-base">{t.developerDetails}</h2>
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedDev(null)}>
               ✕
             </Button>
@@ -292,7 +292,7 @@ export default function DevelopersPage() {
             {/* Contact info */}
             {(selectedDev.phone || selectedDev.email || selectedDev.address) && (
               <div className="rounded-xl border bg-card p-4 space-y-2.5">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">معلومات التواصل</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t.developerContactInfo}</p>
                 {selectedDev.phone && (
                   <div className="flex items-center gap-2 text-sm">
                     <Phone className="h-4 w-4 text-green-500 shrink-0" />
@@ -364,7 +364,7 @@ export default function DevelopersPage() {
             <div className="pt-1">
               <Button className="w-full" onClick={() => navigate(`/inventory/projects?developer=${selectedDev.id}`)}>
                 <FolderKanban className="h-4 w-4 ml-2" />
-                كل مشاريع الشركة
+                {t.allCompanyProjects}
               </Button>
             </div>
           </div>
