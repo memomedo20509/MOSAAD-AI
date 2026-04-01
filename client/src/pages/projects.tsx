@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -21,24 +22,23 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+  Popover, PopoverContent, PopoverTrigger,
+} from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Plus, Pencil, Trash2, FolderKanban, MapPin, Calendar, Home, Loader2,
+  Plus, FolderKanban, MapPin, Calendar, Home, Loader2,
   Search, Building2, DollarSign, Eye, ExternalLink, CheckCircle2,
-  CreditCard, X, LayoutGrid, List, ArrowUpDown,
+  CreditCard, X, LayoutGrid, List, ArrowUpDown, ChevronDown, Filter,
 } from "lucide-react";
 import type { Project, Developer, InsertProject } from "@shared/schema";
 import { useLanguage } from "@/lib/i18n";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
-  delivered:        { label: "تم التسليم", color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100", icon: "✅" },
-  under_construction: { label: "تحت الإنشاء", color: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100", icon: "🔨" },
-  near_delivery:    { label: "قريب التسليم", color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100", icon: "📅" },
-  coming_soon:      { label: "قريباً", color: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100", icon: "🚀" },
-  ready:            { label: "جاهز", color: "bg-green-100 text-green-800", icon: "✅" },
+  delivered:          { label: "تم التسليم",    color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100",  icon: "✅" },
+  under_construction: { label: "تحت الإنشاء",   color: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100", icon: "🔨" },
+  near_delivery:      { label: "قريب التسليم",  color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100",    icon: "📅" },
+  coming_soon:        { label: "قريباً",         color: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100", icon: "🚀" },
+  ready:              { label: "جاهز",           color: "bg-green-100 text-green-800", icon: "✅" },
 };
 
 const UNIT_TYPE_COLORS: Record<string, string> = {
@@ -53,6 +53,11 @@ const UNIT_TYPE_COLORS: Record<string, string> = {
   "تجاري":     "bg-gray-50 text-gray-700 border-gray-200",
 };
 
+const COMMON_AMENITIES = [
+  "مسبح", "جيم", "نادي رياضي", "مسجد", "مدرسة", "مول تجاري",
+  "ملاعب", "حديقة", "أمن 24 ساعة", "نادي اجتماعي", "منطقة ترفيهية",
+];
+
 function extractUnitTypes(description: string | null): string[] {
   if (!description) return [];
   const types = ["شقة","فيلا","توين هاوس","تاون هاوس","دوبلكس","بنتهاوس","إستوديو","لوفت","مكتب","شاليه","تجاري"];
@@ -63,6 +68,23 @@ function extractPaymentPlans(description: string | null): string {
   if (!description) return "";
   const m = description.match(/📋 أنظمة السداد:\n(.+?)(?:\n\n|$)/s);
   return m ? m[1].trim() : "";
+}
+
+function extractInstallmentOptions(description: string | null): { downPayments: number[]; years: number[] } {
+  const empty = { downPayments: [], years: [] };
+  if (!description) return empty;
+  const m = description.match(/📋 أنظمة السداد:\n(.+?)(?:\n\n|$)/s);
+  if (!m) return empty;
+  const plans = m[1].split(/\s*\|\s*/);
+  const downPayments: number[] = [];
+  const years: number[] = [];
+  for (const plan of plans) {
+    const dpMatch = plan.match(/(\d+)%\s*مقدم/);
+    if (dpMatch) downPayments.push(parseInt(dpMatch[1]));
+    const yrMatch = plan.match(/(\d+)\s*سنو/);
+    if (yrMatch) years.push(parseInt(yrMatch[1]));
+  }
+  return { downPayments, years };
 }
 
 function extractUnitRanges(description: string | null): Array<{type: string; range: string; price: string}> {
@@ -102,15 +124,7 @@ type SortOption = "newest" | "price_asc" | "price_desc" | "delivery" | "name";
 interface ProjectCardProps {
   project: Project;
   developerName: string;
-  isAdmin: boolean;
-  isSuperAdmin: boolean;
-  onEdit: (project: Project) => void;
-  onDelete: (id: string) => void;
   onViewDetails: () => void;
-  editingProject: Project | null;
-  resetForm: () => void;
-  ProjectForm: () => JSX.Element;
-  t: ReturnType<typeof useLanguage>["t"];
 }
 
 export default function ProjectsPage() {
@@ -122,7 +136,6 @@ export default function ProjectsPage() {
   const preselectedDev = urlParams.get("developer") || "all";
 
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [formData, setFormData] = useState<Partial<InsertProject>>({});
   const [filterDeveloper, setFilterDeveloper] = useState(preselectedDev);
   const [filterStatus, setFilterStatus] = useState("all");
@@ -131,53 +144,55 @@ export default function ProjectsPage() {
   const [filterLocation, setFilterLocation] = useState("all");
   const [filterMinPrice, setFilterMinPrice] = useState("");
   const [filterMaxPrice, setFilterMaxPrice] = useState("");
+  const [filterMaxDownPayment, setFilterMaxDownPayment] = useState("all");
+  const [filterMinYears, setFilterMinYears] = useState("all");
+  const [filterAmenities, setFilterAmenities] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [search, setSearch] = useState("");
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [amenitiesOpen, setAmenitiesOpen] = useState(false);
 
   const isAdmin = user?.role === "super_admin" || user?.role === "admin";
-  const isSuperAdmin = user?.role === "super_admin";
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<Project[]>({ queryKey: ["/api/projects"] });
   const { data: developers = [] } = useQuery<Developer[]>({ queryKey: ["/api/developers"] });
 
   const createMutation = useMutation({
     mutationFn: (data: InsertProject) => apiRequest("POST", "/api/projects", data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/projects"] }); setIsAddOpen(false); setFormData({}); toast({ title: t.projectCreatedSuccess }); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      setIsAddOpen(false);
+      setFormData({});
+      toast({ title: t.projectCreatedSuccess });
+    },
     onError: () => toast({ title: t.projectCreatedError, variant: "destructive" }),
-  });
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Project> }) => apiRequest("PATCH", `/api/projects/${id}`, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/projects"] }); setEditingProject(null); setFormData({}); toast({ title: t.projectUpdatedSuccess }); },
-    onError: () => toast({ title: t.projectUpdatedError, variant: "destructive" }),
-  });
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => apiRequest("DELETE", `/api/projects/${id}`),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/projects"] }); setSelectedProject(null); toast({ title: t.projectDeletedSuccess }); },
-    onError: () => toast({ title: t.projectDeletedError, variant: "destructive" }),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingProject) updateMutation.mutate({ id: editingProject.id, data: formData });
-    else createMutation.mutate(formData as InsertProject);
+    createMutation.mutate(formData as InsertProject);
   };
 
-  const openEditDialog = (project: Project) => {
-    setEditingProject(project);
-    setFormData({ name: project.name, developerId: project.developerId || undefined, type: project.type || "", location: project.location || "", address: project.address || "", description: project.description || "", status: project.status || "under_construction", totalUnits: project.totalUnits || 0, deliveryDate: project.deliveryDate || "", minPrice: project.minPrice || undefined, maxPrice: project.maxPrice || undefined, isActive: project.isActive ?? true });
-  };
-  const resetForm = () => { setFormData({}); setEditingProject(null); };
+  const resetForm = () => { setFormData({}); };
 
-  const getDeveloperName = (devId: string | null) => developers.find(d => d.id === devId)?.name || "غير محدد";
+  const getDeveloperName = (devId: string | null) =>
+    developers.find(d => d.id === devId)?.name || "غير محدد";
 
-  const locations = useMemo(() => [...new Set(projects.map(p => p.location).filter(Boolean))].sort() as string[], [projects]);
-  const deliveryYears = useMemo(() => [...new Set(projects.map(p => p.deliveryDate).filter(Boolean))].sort(), [projects]);
+  const locations = useMemo(
+    () => [...new Set(projects.map(p => p.location).filter(Boolean))].sort() as string[],
+    [projects]
+  );
+  const deliveryYears = useMemo(
+    () => [...new Set(projects.map(p => p.deliveryDate).filter(Boolean))].sort(),
+    [projects]
+  );
 
   const filteredProjects = useMemo(() => {
     const minP = filterMinPrice ? parseInt(filterMinPrice) * 1000000 : null;
     const maxP = filterMaxPrice ? parseInt(filterMaxPrice) * 1000000 : null;
+    const maxDP = filterMaxDownPayment !== "all" ? parseInt(filterMaxDownPayment) : null;
+    const minYrs = filterMinYears !== "all" ? parseInt(filterMinYears) : null;
 
     const result = projects.filter(p => {
       if (!p.isActive) return false;
@@ -198,19 +213,27 @@ export default function ProjectsPage() {
         if (!p.minPrice) return false;
         if (p.minPrice > maxP) return false;
       }
+      if (maxDP !== null) {
+        const { downPayments } = extractInstallmentOptions(p.description);
+        if (!downPayments.some(dp => dp <= maxDP)) return false;
+      }
+      if (minYrs !== null) {
+        const { years } = extractInstallmentOptions(p.description);
+        if (!years.some(y => y >= minYrs)) return false;
+      }
+      if (filterAmenities.length > 0) {
+        const pAmenities = p.amenities || [];
+        if (!filterAmenities.every(a => pAmenities.includes(a))) return false;
+      }
       return true;
     });
 
     return result.sort((a, b) => {
       switch (sortBy) {
-        case "price_asc":
-          return (a.minPrice || 0) - (b.minPrice || 0);
-        case "price_desc":
-          return (b.minPrice || 0) - (a.minPrice || 0);
-        case "delivery":
-          return (a.deliveryDate || "9999").localeCompare(b.deliveryDate || "9999");
-        case "name":
-          return a.name.localeCompare(b.name, "ar");
+        case "price_asc":  return (a.minPrice || 0) - (b.minPrice || 0);
+        case "price_desc": return (b.minPrice || 0) - (a.minPrice || 0);
+        case "delivery":   return (a.deliveryDate || "9999").localeCompare(b.deliveryDate || "9999");
+        case "name":       return a.name.localeCompare(b.name, "ar");
         default: {
           const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
           const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -218,7 +241,9 @@ export default function ProjectsPage() {
         }
       }
     });
-  }, [projects, search, filterDeveloper, filterStatus, filterDelivery, filterUnitType, filterLocation, filterMinPrice, filterMaxPrice, sortBy, developers]);
+  }, [projects, search, filterDeveloper, filterStatus, filterDelivery, filterUnitType,
+    filterLocation, filterMinPrice, filterMaxPrice, filterMaxDownPayment, filterMinYears,
+    filterAmenities, sortBy, developers]);
 
   const activeChips = useMemo(() => {
     const chips: { key: string; label: string; onRemove: () => void }[] = [];
@@ -230,14 +255,19 @@ export default function ProjectsPage() {
     if (filterLocation !== "all") chips.push({ key: "location", label: filterLocation, onRemove: () => setFilterLocation("all") });
     if (filterMinPrice) chips.push({ key: "minPrice", label: `من ${filterMinPrice} م`, onRemove: () => setFilterMinPrice("") });
     if (filterMaxPrice) chips.push({ key: "maxPrice", label: `إلى ${filterMaxPrice} م`, onRemove: () => setFilterMaxPrice("") });
+    if (filterMaxDownPayment !== "all") chips.push({ key: "downPayment", label: `مقدم ≤${filterMaxDownPayment}%`, onRemove: () => setFilterMaxDownPayment("all") });
+    if (filterMinYears !== "all") chips.push({ key: "years", label: `${filterMinYears}+ سنوات`, onRemove: () => setFilterMinYears("all") });
+    filterAmenities.forEach(a => chips.push({ key: `amenity-${a}`, label: a, onRemove: () => setFilterAmenities(prev => prev.filter(x => x !== a)) }));
     const sortLabels: Record<SortOption, string> = { newest: "الأحدث", price_asc: "السعر تصاعدي", price_desc: "السعر تنازلي", delivery: "سنة التسليم", name: "الاسم أبجدياً" };
     if (sortBy !== "newest") chips.push({ key: "sort", label: `ترتيب: ${sortLabels[sortBy]}`, onRemove: () => setSortBy("newest") });
     return chips;
-  }, [search, filterDeveloper, filterStatus, filterUnitType, filterDelivery, filterLocation, filterMinPrice, filterMaxPrice, sortBy, developers]);
+  }, [search, filterDeveloper, filterStatus, filterUnitType, filterDelivery, filterLocation,
+    filterMinPrice, filterMaxPrice, filterMaxDownPayment, filterMinYears, filterAmenities, sortBy, developers]);
 
   const clearAllFilters = () => {
     setSearch(""); setFilterDeveloper("all"); setFilterStatus("all"); setFilterUnitType("all");
     setFilterDelivery("all"); setFilterLocation("all"); setFilterMinPrice(""); setFilterMaxPrice("");
+    setFilterMaxDownPayment("all"); setFilterMinYears("all"); setFilterAmenities([]);
     setSortBy("newest");
   };
 
@@ -298,13 +328,17 @@ export default function ProjectsPage() {
         <Label>{t.active}</Label>
       </div>
       <DialogFooter>
-        <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending} data-testid="button-save-project">
-          {(createMutation.isPending || updateMutation.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {editingProject ? t.update : t.create}
+        <Button type="submit" disabled={createMutation.isPending} data-testid="button-save-project">
+          {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {t.create}
         </Button>
       </DialogFooter>
     </form>
   );
+
+  const activeProjectsCount = projects.filter(p => p.isActive).length;
+  const deliveredCount = filteredProjects.filter(p => p.status === "delivered").length;
+  const underConstructionCount = filteredProjects.filter(p => p.status === "under_construction").length;
 
   return (
     <div className="p-6 space-y-4">
@@ -313,7 +347,7 @@ export default function ProjectsPage() {
         <div>
           <h1 className="text-2xl font-bold" data-testid="text-page-title">{t.projectsTitle}</h1>
           <p className="text-muted-foreground text-sm">
-            {filteredProjects.length} من أصل {projects.filter(p => p.isActive).length} مشروع
+            {filteredProjects.length} من أصل {activeProjectsCount} مشروع
             {filterDeveloper !== "all" && ` • ${getDeveloperName(filterDeveloper)}`}
           </p>
         </div>
@@ -330,6 +364,18 @@ export default function ProjectsPage() {
         )}
       </div>
 
+      {/* Stats bar */}
+      <div className="flex gap-3 text-sm">
+        <span className="flex items-center gap-1.5 text-green-700 dark:text-green-400 font-medium">
+          <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+          {deliveredCount} تم التسليم
+        </span>
+        <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-medium">
+          <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+          {underConstructionCount} تحت الإنشاء
+        </span>
+      </div>
+
       {/* Search bar */}
       <div className="relative">
         <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -342,7 +388,7 @@ export default function ProjectsPage() {
         />
       </div>
 
-      {/* Always-visible filter bar — row 1: developer, status, unit type, delivery */}
+      {/* Filter row 1: developer, status, unit type, delivery */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <Select value={filterDeveloper} onValueChange={setFilterDeveloper}>
           <SelectTrigger className="h-9 text-sm" data-testid="filter-developer">
@@ -360,7 +406,9 @@ export default function ProjectsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">كل الحالات</SelectItem>
-            {Object.entries(STATUS_CONFIG).map(([v, c]) => <SelectItem key={v} value={v}>{c.label}</SelectItem>)}
+            {Object.entries(STATUS_CONFIG).map(([v, c]) => (
+              <SelectItem key={v} value={v}>{c.label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
@@ -370,7 +418,9 @@ export default function ProjectsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">كل الأنواع</SelectItem>
-            {["شقة","فيلا","توين هاوس","تاون هاوس","دوبلكس","بنتهاوس","إستوديو","مكتب","تجاري"].map(tp => <SelectItem key={tp} value={tp}>{tp}</SelectItem>)}
+            {["شقة","فيلا","توين هاوس","تاون هاوس","دوبلكس","بنتهاوس","إستوديو","مكتب","تجاري"].map(tp => (
+              <SelectItem key={tp} value={tp}>{tp}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
@@ -385,8 +435,8 @@ export default function ProjectsPage() {
         </Select>
       </div>
 
-      {/* Filter bar — row 2: location, price range, sort, view toggle */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+      {/* Filter row 2: location, down payment %, years, amenities */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <Select value={filterLocation} onValueChange={setFilterLocation}>
           <SelectTrigger className="h-9 text-sm" data-testid="filter-location">
             <MapPin className="h-3.5 w-3.5 ml-1 shrink-0 text-muted-foreground" />
@@ -398,27 +448,115 @@ export default function ProjectsPage() {
           </SelectContent>
         </Select>
 
+        <Select value={filterMaxDownPayment} onValueChange={setFilterMaxDownPayment}>
+          <SelectTrigger className="h-9 text-sm" data-testid="filter-down-payment">
+            <CreditCard className="h-3.5 w-3.5 ml-1 shrink-0 text-muted-foreground" />
+            <SelectValue placeholder="أقساط: المقدم" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">كل المقدمات</SelectItem>
+            <SelectItem value="5">مقدم ≤ 5%</SelectItem>
+            <SelectItem value="10">مقدم ≤ 10%</SelectItem>
+            <SelectItem value="15">مقدم ≤ 15%</SelectItem>
+            <SelectItem value="20">مقدم ≤ 20%</SelectItem>
+            <SelectItem value="25">مقدم ≤ 25%</SelectItem>
+            <SelectItem value="30">مقدم ≤ 30%</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={filterMinYears} onValueChange={setFilterMinYears}>
+          <SelectTrigger className="h-9 text-sm" data-testid="filter-years">
+            <Calendar className="h-3.5 w-3.5 ml-1 shrink-0 text-muted-foreground" />
+            <SelectValue placeholder="عدد السنوات" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">كل السنوات</SelectItem>
+            <SelectItem value="5">5 سنوات +</SelectItem>
+            <SelectItem value="6">6 سنوات +</SelectItem>
+            <SelectItem value="7">7 سنوات +</SelectItem>
+            <SelectItem value="8">8 سنوات +</SelectItem>
+            <SelectItem value="10">10 سنوات +</SelectItem>
+            <SelectItem value="12">12 سنة +</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Amenities multiselect */}
+        <Popover open={amenitiesOpen} onOpenChange={setAmenitiesOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className="h-9 text-sm justify-between font-normal w-full"
+              data-testid="filter-amenities"
+            >
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <Filter className="h-3.5 w-3.5" />
+                {filterAmenities.length > 0
+                  ? `${filterAmenities.length} مرفق محدد`
+                  : "المرافق"}
+              </span>
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-56 p-2" align="start">
+            <div className="space-y-1">
+              {COMMON_AMENITIES.map(amenity => (
+                <label
+                  key={amenity}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-muted cursor-pointer text-sm"
+                >
+                  <Checkbox
+                    checked={filterAmenities.includes(amenity)}
+                    onCheckedChange={checked => {
+                      setFilterAmenities(prev =>
+                        checked ? [...prev, amenity] : prev.filter(a => a !== amenity)
+                      );
+                    }}
+                    data-testid={`checkbox-amenity-${amenity}`}
+                  />
+                  {amenity}
+                </label>
+              ))}
+              {filterAmenities.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full h-7 text-xs mt-1"
+                  onClick={() => setFilterAmenities([])}
+                >
+                  مسح المرافق
+                </Button>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {/* Filter row 3: price range, sort, view toggles */}
+      <div className="flex flex-wrap gap-2 items-center">
         <div className="flex gap-1">
           <Input
             type="number"
-            placeholder="أقل (م)"
+            placeholder="أقل سعر (م)"
             value={filterMinPrice}
             onChange={e => setFilterMinPrice(e.target.value)}
-            className="h-9 text-sm"
+            className="h-9 text-sm w-28"
             data-testid="filter-min-price"
           />
           <Input
             type="number"
-            placeholder="أعلى (م)"
+            placeholder="أعلى سعر (م)"
             value={filterMaxPrice}
             onChange={e => setFilterMaxPrice(e.target.value)}
-            className="h-9 text-sm"
+            className="h-9 text-sm w-28"
             data-testid="filter-max-price"
           />
         </div>
 
-        <Select value={sortBy} onValueChange={v => { const valid: SortOption[] = ["newest","price_asc","price_desc","delivery","name"]; if (valid.includes(v as SortOption)) setSortBy(v as SortOption); }}>
-          <SelectTrigger className="h-9 text-sm" data-testid="filter-sort">
+        <Select value={sortBy} onValueChange={v => {
+          const valid: SortOption[] = ["newest","price_asc","price_desc","delivery","name"];
+          if (valid.includes(v as SortOption)) setSortBy(v as SortOption);
+        }}>
+          <SelectTrigger className="h-9 text-sm w-40" data-testid="filter-sort">
             <ArrowUpDown className="h-3.5 w-3.5 ml-1 shrink-0 text-muted-foreground" />
             <SelectValue placeholder="الترتيب" />
           </SelectTrigger>
@@ -431,7 +569,7 @@ export default function ProjectsPage() {
           </SelectContent>
         </Select>
 
-        <div className="flex gap-1 col-span-1 md:col-span-2 justify-end">
+        <div className="flex gap-1 mr-auto">
           <Button
             variant={viewMode === "grid" ? "default" : "outline"}
             size="icon"
@@ -462,40 +600,29 @@ export default function ProjectsPage() {
       {activeChips.length > 0 && (
         <div className="flex flex-wrap gap-1.5" data-testid="active-filter-chips">
           {activeChips.map(chip => (
-            <span
+            <Badge
               key={chip.key}
-              className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary rounded-full px-2.5 py-1 font-medium"
-              data-testid={`chip-filter-${chip.key}`}
+              variant="secondary"
+              className="text-xs gap-1 pl-2 cursor-pointer hover:bg-muted"
+              onClick={chip.onRemove}
+              data-testid={`chip-${chip.key}`}
             >
               {chip.label}
-              <button
-                onClick={chip.onRemove}
-                className="hover:text-destructive transition-colors ml-0.5"
-                data-testid={`remove-chip-${chip.key}`}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
+              <X className="h-3 w-3" />
+            </Badge>
           ))}
         </div>
       )}
 
-      {/* Stats bar */}
-      <div className="flex gap-4 text-xs text-muted-foreground flex-wrap">
-        {Object.entries(STATUS_CONFIG).map(([v, c]) => {
-          const count = filteredProjects.filter(p => p.status === v).length;
-          if (!count) return null;
-          return <span key={v}>{c.icon} {c.label}: <strong>{count}</strong></span>;
-        })}
-      </div>
-
-      {/* Projects display */}
+      {/* Results */}
       {filteredProjects.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <FolderKanban className="h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-muted-foreground font-medium">لا توجد مشاريع مطابقة</p>
-            <p className="text-muted-foreground text-sm mt-1">جرب تغيير الفلاتر أو البحث</p>
+          <CardContent className="flex flex-col items-center justify-center py-16 gap-3">
+            <FolderKanban className="h-12 w-12 text-muted-foreground/30" />
+            <p className="text-muted-foreground">{t.noProjectsFound}</p>
+            {activeChips.length > 0 && (
+              <Button variant="outline" size="sm" onClick={clearAllFilters}>{t.clearFilters}</Button>
+            )}
           </CardContent>
         </Card>
       ) : viewMode === "grid" ? (
@@ -505,15 +632,7 @@ export default function ProjectsPage() {
               key={project.id}
               project={project}
               developerName={getDeveloperName(project.developerId)}
-              isAdmin={isAdmin}
-              isSuperAdmin={isSuperAdmin}
-              onEdit={openEditDialog}
-              onDelete={id => deleteMutation.mutate(id)}
               onViewDetails={() => setSelectedProject(project)}
-              editingProject={editingProject}
-              resetForm={resetForm}
-              ProjectForm={ProjectForm}
-              t={t}
             />
           ))}
         </div>
@@ -524,15 +643,7 @@ export default function ProjectsPage() {
               key={project.id}
               project={project}
               developerName={getDeveloperName(project.developerId)}
-              isAdmin={isAdmin}
-              isSuperAdmin={isSuperAdmin}
-              onEdit={openEditDialog}
-              onDelete={id => deleteMutation.mutate(id)}
               onViewDetails={() => setSelectedProject(project)}
-              editingProject={editingProject}
-              resetForm={resetForm}
-              ProjectForm={ProjectForm}
-              t={t}
             />
           ))}
         </div>
@@ -541,18 +652,22 @@ export default function ProjectsPage() {
       {/* Project Detail Sheet */}
       <Sheet open={!!selectedProject} onOpenChange={o => { if (!o) setSelectedProject(null); }}>
         <SheetContent className="w-full sm:max-w-2xl overflow-y-auto" side="left">
-          {selectedProject && <ProjectDetailPanel project={selectedProject} developerName={getDeveloperName(selectedProject.developerId)} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} onEdit={() => { openEditDialog(selectedProject); setSelectedProject(null); }} onDelete={() => deleteMutation.mutate(selectedProject.id)} t={t} />}
+          {selectedProject && (
+            <ProjectDetailPanel
+              project={selectedProject}
+              developerName={getDeveloperName(selectedProject.developerId)}
+            />
+          )}
         </SheetContent>
       </Sheet>
     </div>
   );
 }
 
-function ProjectCard({ project, developerName, isAdmin, isSuperAdmin, onEdit, onDelete, onViewDetails, editingProject, resetForm, ProjectForm, t }: ProjectCardProps) {
+function ProjectCard({ project, developerName, onViewDetails }: ProjectCardProps) {
   const unitTypes = extractUnitTypes(project.description);
   const paymentPlans = extractPaymentPlans(project.description);
   const statusInfo = STATUS_CONFIG[project.status || "under_construction"] || STATUS_CONFIG.under_construction;
-  const nawyUrl = extractNawyUrl(project.description);
   const projectImage = project.images?.[0];
 
   return (
@@ -646,7 +761,10 @@ function ProjectCard({ project, developerName, isAdmin, isSuperAdmin, onEdit, on
         {paymentPlans && (
           <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
             <CreditCard className="h-3.5 w-3.5 mt-0.5 shrink-0 text-blue-500" />
-            <span className="line-clamp-2">{paymentPlans.split(' | ').slice(0, 2).join(' | ')}{paymentPlans.split(' | ').length > 2 ? ' ...' : ''}</span>
+            <span className="line-clamp-2">
+              {paymentPlans.split(' | ').slice(0, 2).join(' | ')}
+              {paymentPlans.split(' | ').length > 2 ? ' ...' : ''}
+            </span>
           </div>
         )}
 
@@ -656,7 +774,9 @@ function ProjectCard({ project, developerName, isAdmin, isSuperAdmin, onEdit, on
             {project.amenities.slice(0, 3).map((a: string) => (
               <span key={a} className="text-xs text-muted-foreground bg-muted rounded px-1.5 py-0.5">{a}</span>
             ))}
-            {project.amenities.length > 3 && <span className="text-xs text-muted-foreground">+{project.amenities.length - 3} مزايا</span>}
+            {project.amenities.length > 3 && (
+              <span className="text-xs text-muted-foreground">+{project.amenities.length - 3} مزايا</span>
+            )}
           </div>
         )}
       </CardContent>
@@ -670,43 +790,12 @@ function ProjectCard({ project, developerName, isAdmin, isSuperAdmin, onEdit, on
             <Home className="h-3.5 w-3.5 ml-1" />الوحدات
           </Button>
         </Link>
-        {isAdmin && (
-          <div className="flex gap-1">
-            <Dialog open={editingProject?.id === project.id} onOpenChange={o => { if (!o) resetForm(); }}>
-              <DialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(project)} data-testid={`button-edit-project-${project.id}`}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader><DialogTitle>{t.editProject}</DialogTitle></DialogHeader>
-                {editingProject?.id === project.id && <ProjectForm />}
-              </DialogContent>
-            </Dialog>
-            {isSuperAdmin && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-delete-project-${project.id}`}>
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader><AlertDialogTitle>حذف المشروع؟</AlertDialogTitle><AlertDialogDescription>سيتم حذف "{project.name}" نهائياً</AlertDialogDescription></AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => onDelete(project.id)} data-testid="button-confirm-delete-project">{t.delete}</AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )}
-          </div>
-        )}
       </div>
     </Card>
   );
 }
 
-function ProjectListRow({ project, developerName, isAdmin, isSuperAdmin, onEdit, onDelete, onViewDetails, editingProject, resetForm, ProjectForm, t }: ProjectCardProps) {
+function ProjectListRow({ project, developerName, onViewDetails }: ProjectCardProps) {
   const unitTypes = extractUnitTypes(project.description);
   const statusInfo = STATUS_CONFIG[project.status || "under_construction"] || STATUS_CONFIG.under_construction;
   const projectImage = project.images?.[0];
@@ -782,43 +871,12 @@ function ProjectListRow({ project, developerName, isAdmin, isSuperAdmin, onEdit,
             <Home className="h-3 w-3 ml-1" />الوحدات
           </Button>
         </Link>
-        {isAdmin && (
-          <>
-            <Dialog open={editingProject?.id === project.id} onOpenChange={o => { if (!o) resetForm(); }}>
-              <DialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(project)} data-testid={`button-row-edit-${project.id}`}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader><DialogTitle>{t.editProject}</DialogTitle></DialogHeader>
-                {editingProject?.id === project.id && <ProjectForm />}
-              </DialogContent>
-            </Dialog>
-            {isSuperAdmin && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" data-testid={`button-row-delete-${project.id}`}>
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader><AlertDialogTitle>حذف المشروع؟</AlertDialogTitle><AlertDialogDescription>سيتم حذف "{project.name}" نهائياً</AlertDialogDescription></AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => onDelete(project.id)}>{t.delete}</AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )}
-          </>
-        )}
       </div>
     </div>
   );
 }
 
-function ProjectDetailPanel({ project, developerName, isAdmin, isSuperAdmin, onEdit, onDelete, t }: any) {
+function ProjectDetailPanel({ project, developerName }: { project: Project; developerName: string }) {
   const unitRanges = extractUnitRanges(project.description);
   const paymentPlans = extractPaymentPlans(project.description);
   const aboutText = extractAboutText(project.description);
@@ -922,7 +980,7 @@ function ProjectDetailPanel({ project, developerName, isAdmin, isSuperAdmin, onE
         </div>
       )}
 
-      {/* Actions */}
+      {/* Actions - view only */}
       <div className="flex flex-wrap gap-2 pt-2">
         <Link href={`/inventory/projects/${project.id}/units`} className="flex-1">
           <Button className="w-full" data-testid="button-view-units-detail">
@@ -935,29 +993,6 @@ function ProjectDetailPanel({ project, developerName, isAdmin, isSuperAdmin, onE
               <ExternalLink className="h-4 w-4 ml-2" />عرض على nawy
             </Button>
           </a>
-        )}
-        {isAdmin && (
-          <>
-            <Button variant="outline" size="icon" onClick={onEdit} data-testid="button-edit-detail">
-              <Pencil className="h-4 w-4" />
-            </Button>
-            {isSuperAdmin && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="icon" data-testid="button-delete-detail">
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader><AlertDialogTitle>حذف المشروع؟</AlertDialogTitle><AlertDialogDescription>هذا الإجراء لا يمكن التراجع عنه</AlertDialogDescription></AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
-                    <AlertDialogAction onClick={onDelete}>{t.delete}</AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )}
-          </>
         )}
       </div>
     </div>
