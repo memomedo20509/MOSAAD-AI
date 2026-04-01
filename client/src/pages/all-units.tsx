@@ -125,13 +125,14 @@ function extractNawyUrl(desc: string | null): string {
 
 // ---------- Unit Detail Sheet ----------
 function UnitDetailSheet({
-  unit, project, developer, open, onClose,
+  unit, project, developer, open, onClose, isAdmin,
 }: {
   unit: Unit | null;
   project: Project | null;
   developer: Developer | null;
   open: boolean;
   onClose: () => void;
+  isAdmin: boolean;
 }) {
   const [showDesc, setShowDesc] = useState(false);
   const [showCalc, setShowCalc] = useState(false);
@@ -162,7 +163,7 @@ function UnitDetailSheet({
     <Sheet open={open} onOpenChange={o => { if (!o) onClose(); }}>
       <SheetContent side="left" className="w-full sm:w-[480px] overflow-y-auto p-0" data-testid="unit-detail-sheet">
         {/* Status header bar */}
-        <div className={`h-1.5 w-full ${si.color}`} />
+        <div className="h-1.5 w-full bg-primary/50" />
 
         <div className="p-5 space-y-5">
           {/* Title */}
@@ -170,7 +171,7 @@ function UnitDetailSheet({
             <div className="flex items-start justify-between gap-2">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <Badge className={`${si.color} text-white text-xs px-2`}>{si.label}</Badge>
+                  {isAdmin && <Badge className={`${si.color} text-white text-xs px-2`}>{si.label}</Badge>}
                   {unit.type && <span className="text-sm font-medium text-muted-foreground">{unit.type}</span>}
                 </div>
                 <SheetTitle className="text-xl">وحدة {unit.unitNumber}</SheetTitle>
@@ -198,9 +199,9 @@ function UnitDetailSheet({
           <div className="grid grid-cols-2 gap-3">
             {/* Price */}
             {unit.price && (
-              <div className={`col-span-2 rounded-xl p-4 ${si.bg} border ${si.border}`}>
+              <div className={`col-span-2 rounded-xl p-4 ${isAdmin ? `${si.bg} border ${si.border}` : "bg-muted/40 border border-border"}`}>
                 <p className="text-xs text-muted-foreground mb-0.5">السعر الإجمالي</p>
-                <p className={`text-2xl font-bold ${si.text}`}>{formatPriceFull(unit.price)}</p>
+                <p className={`text-2xl font-bold ${isAdmin ? si.text : "text-foreground"}`}>{formatPriceFull(unit.price)}</p>
                 {unit.area && unit.price && (
                   <p className="text-xs text-muted-foreground mt-0.5">{pricePerM2}</p>
                 )}
@@ -415,6 +416,7 @@ function UnitDetailSheet({
 // ---------- Main Page ----------
 export default function AllUnitsPage() {
   const { user } = useAuth();
+  const isAdmin = user?.role === "super_admin" || user?.role === "admin";
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
@@ -488,19 +490,26 @@ export default function AllUnitsPage() {
       </div>
 
       {/* Stats bar */}
-      <div className="grid grid-cols-4 gap-2">
-        {[
-          { label: "الإجمالي", value: stats.total, color: "text-foreground", bg: "bg-muted/50" },
-          { label: "متاحة", value: stats.available, color: "text-green-700 dark:text-green-300", bg: "bg-green-50 dark:bg-green-950" },
-          { label: "محجوزة", value: stats.reserved, color: "text-yellow-700 dark:text-yellow-300", bg: "bg-yellow-50 dark:bg-yellow-950" },
-          { label: "مباعة", value: stats.sold, color: "text-red-700 dark:text-red-300", bg: "bg-red-50 dark:bg-red-950" },
-        ].map(s => (
-          <div key={s.label} className={`rounded-xl p-3 text-center ${s.bg}`}>
-            <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
-            <p className="text-xs text-muted-foreground">{s.label}</p>
-          </div>
-        ))}
-      </div>
+      {isAdmin ? (
+        <div className="grid grid-cols-4 gap-2">
+          {[
+            { label: "الإجمالي", value: stats.total, color: "text-foreground", bg: "bg-muted/50" },
+            { label: "متاحة", value: stats.available, color: "text-green-700 dark:text-green-300", bg: "bg-green-50 dark:bg-green-950" },
+            { label: "محجوزة", value: stats.reserved, color: "text-yellow-700 dark:text-yellow-300", bg: "bg-yellow-50 dark:bg-yellow-950" },
+            { label: "مباعة", value: stats.sold, color: "text-red-700 dark:text-red-300", bg: "bg-red-50 dark:bg-red-950" },
+          ].map(s => (
+            <div key={s.label} className={`rounded-xl p-3 text-center ${s.bg}`}>
+              <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
+              <p className="text-xs text-muted-foreground">{s.label}</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-xl p-3 text-center bg-muted/50 inline-block">
+          <p className="text-xl font-bold text-foreground">{stats.total}</p>
+          <p className="text-xs text-muted-foreground">إجمالي الوحدات</p>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2">
@@ -527,19 +536,21 @@ export default function AllUnitsPage() {
           </SelectContent>
         </Select>
 
-        {/* Status filter pills */}
-        <div className="flex gap-1.5">
-          {UNIT_STATUSES.map(s => (
-            <button
-              key={s.value}
-              onClick={() => setFilterStatus(filterStatus === s.value ? "all" : s.value)}
-              className={`h-9 px-3 text-xs rounded-lg font-medium transition-colors border ${filterStatus === s.value ? `${s.color} text-white border-transparent` : `${s.bg} ${s.text} ${s.border}`}`}
-              data-testid={`filter-status-${s.value}`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
+        {/* Status filter pills — admins only */}
+        {isAdmin && (
+          <div className="flex gap-1.5">
+            {UNIT_STATUSES.map(s => (
+              <button
+                key={s.value}
+                onClick={() => setFilterStatus(filterStatus === s.value ? "all" : s.value)}
+                className={`h-9 px-3 text-xs rounded-lg font-medium transition-colors border ${filterStatus === s.value ? `${s.color} text-white border-transparent` : `${s.bg} ${s.text} ${s.border}`}`}
+                data-testid={`filter-status-${s.value}`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {unitTypes.length > 1 && (
           <Select value={filterType} onValueChange={setFilterType}>
@@ -600,7 +611,7 @@ export default function AllUnitsPage() {
             return (
               <Card
                 key={unit.id}
-                className={`overflow-hidden border-2 ${si.border} hover:shadow-lg transition-all cursor-pointer group`}
+                className="overflow-hidden border hover:shadow-lg transition-all cursor-pointer group"
                 onClick={() => setSelectedUnit(unit)}
                 data-testid={`card-unit-${unit.id}`}
               >
@@ -615,19 +626,22 @@ export default function AllUnitsPage() {
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
                     <div className="absolute bottom-2 right-2 left-2 flex items-center justify-between">
-                      <Badge className={`${si.color} text-white text-[10px] px-1.5`}>{si.label}</Badge>
+                      {isAdmin && <Badge className={`${si.color} text-white text-[10px] px-1.5`}>{si.label}</Badge>}
                       {unit.type && <span className="text-white text-[10px] font-medium bg-black/40 rounded px-1.5 py-0.5">{unit.type}</span>}
                     </div>
                   </div>
                 ) : (
-                  <div className={`h-1.5 w-full ${si.color}`} />
+                  <div className="h-1.5 w-full bg-primary/40" />
                 )}
 
                 <CardContent className="p-3 space-y-2">
-                  {/* Unit number + status (if no image) */}
+                  {/* Unit type (non-admin) or status + type (admin) */}
                   {!projImage && (
                     <div className="flex items-center justify-between">
-                      <Badge variant="outline" className={`text-xs ${si.text}`}>{si.label}</Badge>
+                      {isAdmin
+                        ? <Badge variant="outline" className={`text-xs ${si.text}`}>{si.label}</Badge>
+                        : <span />
+                      }
                       {unit.type && <span className="text-xs font-medium text-muted-foreground">{unit.type}</span>}
                     </div>
                   )}
@@ -660,8 +674,8 @@ export default function AllUnitsPage() {
 
                   {/* Price */}
                   {unit.price ? (
-                    <div className={`rounded-lg px-2.5 py-2 ${si.bg}`}>
-                      <p className={`font-bold text-sm ${si.text}`}>{formatPrice(unit.price)}</p>
+                    <div className={`rounded-lg px-2.5 py-2 ${isAdmin ? si.bg : "bg-muted/40"}`}>
+                      <p className={`font-bold text-sm ${isAdmin ? si.text : "text-foreground"}`}>{formatPrice(unit.price)}</p>
                       {pricePerM2 && <p className="text-[10px] text-muted-foreground">{pricePerM2} جم/م²</p>}
                     </div>
                   ) : null}
@@ -691,7 +705,7 @@ export default function AllUnitsPage() {
                   <th className="px-4 py-3 font-medium text-muted-foreground text-center">حمام</th>
                   <th className="px-4 py-3 font-medium text-muted-foreground">المساحة</th>
                   <th className="px-4 py-3 font-medium text-muted-foreground">السعر</th>
-                  <th className="px-4 py-3 font-medium text-muted-foreground">الحالة</th>
+                  {isAdmin && <th className="px-4 py-3 font-medium text-muted-foreground">الحالة</th>}
                 </tr>
               </thead>
               <tbody>
@@ -724,9 +738,11 @@ export default function AllUnitsPage() {
                       <td className="px-4 py-3 text-center">{unit.bathrooms ?? "-"}</td>
                       <td className="px-4 py-3">{unit.area ? `${unit.area} م²` : "-"}</td>
                       <td className="px-4 py-3 font-semibold">{unit.price ? `${unit.price.toLocaleString()} جم` : "-"}</td>
-                      <td className="px-4 py-3">
-                        <Badge className={`${si.color} text-white text-xs`}>{si.label}</Badge>
-                      </td>
+                      {isAdmin && (
+                        <td className="px-4 py-3">
+                          <Badge className={`${si.color} text-white text-xs`}>{si.label}</Badge>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -743,6 +759,7 @@ export default function AllUnitsPage() {
         developer={selectedDeveloper}
         open={!!selectedUnit}
         onClose={() => setSelectedUnit(null)}
+        isAdmin={isAdmin}
       />
     </div>
   );

@@ -313,14 +313,14 @@ export default function UnitsPage() {
         const si = getStatusInfo(unit.status);
         const pricePerM2 = unit.price && unit.area ? Math.round(unit.price / unit.area).toLocaleString() : null;
         return (
-          <Card key={unit.id} className={`overflow-hidden border-2 ${si.border} hover:shadow-md transition-shadow`} data-testid={`card-unit-${unit.id}`}>
-            {/* Color header based on status */}
-            <div className={`h-2 w-full ${si.color}`} />
+          <Card key={unit.id} className="overflow-hidden border hover:shadow-md transition-shadow" data-testid={`card-unit-${unit.id}`}>
+            {/* Color header — neutral for sales, status-colored for admin */}
+            <div className={`h-2 w-full ${isAdmin ? si.color : "bg-primary/40"}`} />
             <CardContent className="p-4 space-y-3">
               {/* Type + Status */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <Badge variant="outline" className={`text-xs font-semibold ${si.text}`}>{si.label}</Badge>
+                  {isAdmin && <Badge variant="outline" className={`text-xs font-semibold ${si.text}`}>{si.label}</Badge>}
                   {unit.type && <span className="text-sm font-semibold">{unit.type}</span>}
                 </div>
                 <span className="text-xs text-muted-foreground">#{unit.unitNumber}</span>
@@ -341,8 +341,8 @@ export default function UnitsPage() {
 
               {/* Price */}
               {unit.price && (
-                <div className={`rounded-lg px-3 py-2 ${si.bg}`}>
-                  <p className={`font-bold text-base ${si.text}`}>{unit.price.toLocaleString()} جم</p>
+                <div className={`rounded-lg px-3 py-2 ${isAdmin ? si.bg : "bg-muted/40"}`}>
+                  <p className={`font-bold text-base ${isAdmin ? si.text : "text-foreground"}`}>{unit.price.toLocaleString()} جم</p>
                   {pricePerM2 && <p className="text-xs text-muted-foreground">{pricePerM2} جم/م²</p>}
                 </div>
               )}
@@ -355,8 +355,7 @@ export default function UnitsPage() {
               </div>
 
               {/* Actions */}
-              {(isAdmin || true) && (
-                <div className="flex items-center justify-end gap-1 pt-1 border-t">
+              <div className="flex items-center justify-end gap-1 pt-1 border-t">
                   <Button variant="ghost" size="icon" className="h-7 w-7" title="حساب القسط" onClick={() => setCalcUnit(unit)} data-testid={`button-calc-${unit.id}`}>
                     <Calculator className="h-3.5 w-3.5" />
                   </Button>
@@ -370,7 +369,6 @@ export default function UnitsPage() {
                   {isAdmin && <UnitEditDialog unit={unit} />}
                   {isSuperAdmin && <UnitDeleteDialog unit={unit} />}
                 </div>
-              )}
             </CardContent>
           </Card>
         );
@@ -381,14 +379,16 @@ export default function UnitsPage() {
   // STACKING VIEW - floor plan grid (fixed: shows null-floor units too)
   const StackingPlanView = () => (
     <div className="space-y-2">
-      <div className="flex gap-4 mb-4">
-        {UNIT_STATUSES.map(s => (
-          <div key={s.value} className="flex items-center gap-2">
-            <div className={`w-4 h-4 rounded ${s.color}`} />
-            <span className="text-sm">{s.label}</span>
-          </div>
-        ))}
-      </div>
+      {isAdmin && (
+        <div className="flex gap-4 mb-4">
+          {UNIT_STATUSES.map(s => (
+            <div key={s.value} className="flex items-center gap-2">
+              <div className={`w-4 h-4 rounded ${s.color}`} />
+              <span className="text-sm">{s.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
       {floors.length === 0 && nullFloorUnits.length === 0 ? (
         <p className="text-muted-foreground text-center py-8">لا توجد وحدات</p>
       ) : (
@@ -403,11 +403,12 @@ export default function UnitsPage() {
                 <div className="flex-1 flex flex-wrap gap-2 p-3">
                   {floorUnits.map(unit => {
                     const si = getStatusInfo(unit.status);
+                    const cellColor = isAdmin ? si.color : "bg-primary";
                     return (
                       <Dialog key={unit.id} open={editingUnit?.id === unit.id} onOpenChange={o => { if (!o) resetForm(); }}>
                         <DialogTrigger asChild>
                           <button
-                            className={`w-20 h-20 rounded-lg flex flex-col items-center justify-center text-white text-xs font-medium cursor-pointer transition-all hover:scale-105 hover:shadow-md ${si.color}`}
+                            className={`w-20 h-20 rounded-lg flex flex-col items-center justify-center text-white text-xs font-medium cursor-pointer transition-all hover:scale-105 hover:shadow-md ${cellColor}`}
                             onClick={() => isAdmin && openEditDialog(unit)}
                             data-testid={`unit-cell-${unit.id}`}
                           >
@@ -437,11 +438,12 @@ export default function UnitsPage() {
               <div className="flex-1 flex flex-wrap gap-2 p-3">
                 {nullFloorUnits.map(unit => {
                   const si = getStatusInfo(unit.status);
+                  const cellColor = isAdmin ? si.color : "bg-primary";
                   return (
                     <Dialog key={unit.id} open={editingUnit?.id === unit.id} onOpenChange={o => { if (!o) resetForm(); }}>
                       <DialogTrigger asChild>
                         <button
-                          className={`w-20 h-20 rounded-lg flex flex-col items-center justify-center text-white text-xs font-medium cursor-pointer transition-all hover:scale-105 hover:shadow-md ${si.color}`}
+                          className={`w-20 h-20 rounded-lg flex flex-col items-center justify-center text-white text-xs font-medium cursor-pointer transition-all hover:scale-105 hover:shadow-md ${cellColor}`}
                           onClick={() => isAdmin && openEditDialog(unit)}
                           data-testid={`unit-cell-${unit.id}`}
                         >
@@ -485,7 +487,7 @@ export default function UnitsPage() {
             <TableHead>السعر</TableHead>
             <TableHead>سعر م²</TableHead>
             <TableHead>التشطيب</TableHead>
-            <TableHead>الحالة</TableHead>
+            {isAdmin && <TableHead>الحالة</TableHead>}
             <TableHead className="text-left">الإجراءات</TableHead>
           </TableRow>
         </TableHeader>
@@ -514,9 +516,11 @@ export default function UnitsPage() {
                 <TableCell className="font-semibold">{unit.price ? `${unit.price.toLocaleString()} جم` : "-"}</TableCell>
                 <TableCell className="text-muted-foreground text-sm">{pricePerM2}</TableCell>
                 <TableCell className="text-sm">{unit.finishing || "-"}</TableCell>
-                <TableCell>
-                  <Badge className={`${si.color} text-white text-xs`}>{si.label}</Badge>
-                </TableCell>
+                {isAdmin && (
+                  <TableCell>
+                    <Badge className={`${si.color} text-white text-xs`}>{si.label}</Badge>
+                  </TableCell>
+                )}
                 <TableCell>
                   <div className="flex items-center gap-1">
                     <Button variant="ghost" size="icon" className="h-7 w-7" title="حساب القسط" onClick={() => setCalcUnit(unit)} data-testid={`button-calc-unit-${unit.id}`}>
@@ -657,22 +661,24 @@ export default function UnitsPage() {
 
       {/* Stats + Filters */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-3 text-sm">
-          {UNIT_STATUSES.map(s => {
-            const count = filteredUnits.filter(u => u.status === s.value).length;
-            return (
-              <button
-                key={s.value}
-                onClick={() => setFilterStatus(filterStatus === s.value ? "all" : s.value)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${filterStatus === s.value ? `${s.color} text-white` : `${s.bg} ${s.text} border ${s.border}`}`}
-                data-testid={`filter-status-${s.value}`}
-              >
-                <span className={`w-2 h-2 rounded-full ${filterStatus === s.value ? 'bg-white' : s.color}`} />
-                {s.label} ({count})
-              </button>
-            );
-          })}
-        </div>
+        {isAdmin && (
+          <div className="flex gap-3 text-sm">
+            {UNIT_STATUSES.map(s => {
+              const count = filteredUnits.filter(u => u.status === s.value).length;
+              return (
+                <button
+                  key={s.value}
+                  onClick={() => setFilterStatus(filterStatus === s.value ? "all" : s.value)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${filterStatus === s.value ? `${s.color} text-white` : `${s.bg} ${s.text} border ${s.border}`}`}
+                  data-testid={`filter-status-${s.value}`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${filterStatus === s.value ? 'bg-white' : s.color}`} />
+                  {s.label} ({count})
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {unitTypes.length > 1 && (
           <Select value={filterType} onValueChange={setFilterType}>
