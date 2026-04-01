@@ -31,7 +31,7 @@ import {
   BedDouble, Bath, Ruler, Tag, Home,
 } from "lucide-react";
 import type { Unit, Project, Developer, InsertUnit } from "@shared/schema";
-import { useLanguage } from "@/lib/i18n";
+import { useLanguage, getLocalizedName } from "@/lib/i18n";
 import { InstallmentCalculator } from "@/components/installment-calculator";
 import { UnitCompare } from "@/components/unit-compare";
 
@@ -118,8 +118,17 @@ export default function UnitsPage() {
   const { data: developers = [] } = useQuery<Developer[]>({ queryKey: ["/api/developers"] });
   const developer = useMemo(() => developers.find(d => d.id === project?.developerId), [developers, project]);
 
+  const projectDisplayName = useMemo(() => getLocalizedName(project?.name || "", project?.nameEn, language), [project, language]);
+  const developerDisplayName = useMemo(() => getLocalizedName(developer?.name || "", developer?.nameEn, language), [developer, language]);
   const paymentPlans = useMemo(() => extractPaymentPlans(project?.description || null), [project]);
-  const aboutText = useMemo(() => extractAboutText(project?.description || null), [project]);
+  const aboutText = useMemo(() => {
+    if (language === "en" && project?.descriptionEn) return project.descriptionEn;
+    return extractAboutText(project?.description || null);
+  }, [project, language]);
+  const amenitiesDisplay = useMemo(() => {
+    if (language === "en" && project?.amenitiesEn?.length) return project.amenitiesEn;
+    return project?.amenities || [];
+  }, [project, language]);
   const nawyUrl = useMemo(() => extractNawyUrl(project?.description || null), [project]);
   const projectImage = useMemo(() => project?.images?.[0] || null, [project]);
 
@@ -424,7 +433,7 @@ export default function UnitsPage() {
                             data-testid={`unit-cell-${unit.id}`}
                           >
                             <span className="font-bold">{unit.unitNumber}</span>
-                            {unit.type && <span className="text-[10px] opacity-90">{unit.type}</span>}
+                            {unit.type && <span className="text-[10px] opacity-90">{getUnitTypeDisplay(unit, language)}</span>}
                             {unit.area && <span className="text-[10px] opacity-80">{unit.area} م²</span>}
                           </button>
                         </DialogTrigger>
@@ -459,7 +468,7 @@ export default function UnitsPage() {
                           data-testid={`unit-cell-${unit.id}`}
                         >
                           <span className="font-bold">{unit.unitNumber}</span>
-                          {unit.type && <span className="text-[10px] opacity-90">{unit.type}</span>}
+                          {unit.type && <span className="text-[10px] opacity-90">{getUnitTypeDisplay(unit, language)}</span>}
                           {unit.area && <span className="text-[10px] opacity-80">{unit.area} م²</span>}
                         </button>
                       </DialogTrigger>
@@ -519,7 +528,7 @@ export default function UnitsPage() {
                   />
                 </TableCell>
                 <TableCell className="font-medium">{unit.unitNumber}</TableCell>
-                <TableCell>{unit.type || "-"}</TableCell>
+                <TableCell>{getUnitTypeDisplay(unit, language) || "-"}</TableCell>
                 <TableCell>{unit.floor !== null && unit.floor !== undefined ? unit.floor : "-"}</TableCell>
                 <TableCell className="text-center">{unit.bedrooms ?? "-"}</TableCell>
                 <TableCell className="text-center">{unit.bathrooms ?? "-"}</TableCell>
@@ -529,7 +538,7 @@ export default function UnitsPage() {
                 <TableCell className="text-sm">{unit.finishing || "-"}</TableCell>
                 {isAdmin && (
                   <TableCell>
-                    <Badge className={`${si.color} text-white text-xs`}>{si.label}</Badge>
+                    <Badge className={`${si.color} text-white text-xs`}>{language === "en" ? si.labelEn : si.label}</Badge>
                   </TableCell>
                 )}
                 <TableCell>
@@ -559,8 +568,8 @@ export default function UnitsPage() {
           </Button>
         </Link>
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold truncate" data-testid="text-page-title">{project?.name || "الوحدات"}</h1>
-          <p className="text-muted-foreground text-sm">{units.length} وحدة • {developer?.name || ""}</p>
+          <h1 className="text-xl font-bold truncate" data-testid="text-page-title">{projectDisplayName || (language === "en" ? "Units" : "الوحدات")}</h1>
+          <p className="text-muted-foreground text-sm">{units.length} {language === "en" ? "units" : "وحدة"} • {developerDisplayName}</p>
         </div>
         <div className="flex gap-1 border rounded-lg p-0.5">
           {[
@@ -595,7 +604,7 @@ export default function UnitsPage() {
               <div className="md:w-48 md:h-36 h-44 shrink-0 overflow-hidden">
                 <img
                   src={projectImage}
-                  alt={project.name}
+                  alt={projectDisplayName}
                   className="w-full h-full object-cover"
                   onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
@@ -606,7 +615,7 @@ export default function UnitsPage() {
                 <div>
                   {developer && (
                     <p className="text-sm flex items-center gap-1.5 text-muted-foreground">
-                      <Building2 className="h-3.5 w-3.5" />{developer.name}
+                      <Building2 className="h-3.5 w-3.5" />{developerDisplayName}
                     </p>
                   )}
                   {(project.minPrice || project.maxPrice) && (
@@ -645,13 +654,13 @@ export default function UnitsPage() {
               )}
 
               {/* Amenities */}
-              {project.amenities && project.amenities.length > 0 && (
+              {amenitiesDisplay.length > 0 && (
                 <div className="flex gap-1.5 flex-wrap">
-                  {project.amenities.slice(0, 5).map((a: string) => (
+                  {amenitiesDisplay.slice(0, 5).map((a: string) => (
                     <span key={a} className="text-xs bg-muted rounded-full px-2 py-0.5">{a}</span>
                   ))}
-                  {project.amenities.length > 5 && (
-                    <span className="text-xs text-muted-foreground">+{project.amenities.length - 5}</span>
+                  {amenitiesDisplay.length > 5 && (
+                    <span className="text-xs text-muted-foreground">+{amenitiesDisplay.length - 5}</span>
                   )}
                 </div>
               )}
@@ -684,7 +693,7 @@ export default function UnitsPage() {
                   data-testid={`filter-status-${s.value}`}
                 >
                   <span className={`w-2 h-2 rounded-full ${filterStatus === s.value ? 'bg-white' : s.color}`} />
-                  {s.label} ({count})
+                  {language === "en" ? s.labelEn : s.label} ({count})
                 </button>
               );
             })}
