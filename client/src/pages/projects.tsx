@@ -392,9 +392,24 @@ function ProjectCard({ project, developerName, isAdmin, isSuperAdmin, onEdit, on
   const paymentPlans = extractPaymentPlans(project.description);
   const statusInfo = STATUS_CONFIG[project.status || "under_construction"] || STATUS_CONFIG.under_construction;
   const nawyUrl = extractNawyUrl(project.description);
+  const projectImage = project.images?.[0];
 
   return (
-    <Card className="flex flex-col hover:shadow-md transition-shadow group" data-testid={`card-project-${project.id}`}>
+    <Card className="flex flex-col hover:shadow-md transition-shadow group overflow-hidden" data-testid={`card-project-${project.id}`}>
+      {/* Project image */}
+      {projectImage && (
+        <div className="h-36 overflow-hidden bg-muted relative">
+          <img
+            src={projectImage}
+            alt={project.name}
+            className="w-full h-full object-cover transition-transform group-hover:scale-105"
+            onError={e => { (e.target as HTMLImageElement).parentElement!.style.display = 'none'; }}
+          />
+          <div className="absolute top-2 left-2">
+            <Badge className={`text-xs border-0 ${statusInfo.color}`}>{statusInfo.icon} {statusInfo.label}</Badge>
+          </div>
+        </div>
+      )}
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
@@ -410,9 +425,11 @@ function ProjectCard({ project, developerName, isAdmin, isSuperAdmin, onEdit, on
               )}
             </div>
           </div>
-          <div className="flex gap-1 shrink-0">
-            <Badge className={`text-xs border-0 ${statusInfo.color}`}>{statusInfo.icon} {statusInfo.label}</Badge>
-          </div>
+          {!projectImage && (
+            <div className="flex gap-1 shrink-0">
+              <Badge className={`text-xs border-0 ${statusInfo.color}`}>{statusInfo.icon} {statusInfo.label}</Badge>
+            </div>
+          )}
         </div>
       </CardHeader>
 
