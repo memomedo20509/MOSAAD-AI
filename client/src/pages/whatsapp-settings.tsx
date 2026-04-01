@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { ArrowLeft, Wifi, WifiOff, RefreshCw, SmartphoneNfc, CheckCircle2, AlertCircle, XCircle, Trash2, Bot, Clock, MessageSquare, Save, Building2, User, Sparkles, AlarmClock, ImageIcon } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 
 type WaStatus = "disconnected" | "connecting" | "qr" | "connected";
 
@@ -46,6 +47,7 @@ interface Project {
 
 export default function WhatsAppSettingsPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [botForm, setBotForm] = useState<ChatbotSettings>({
@@ -706,7 +708,7 @@ export default function WhatsAppSettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      {(user?.role === "admin" || user?.role === "super_admin") && <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <ImageIcon className="h-4 w-4 text-blue-500" />
@@ -744,7 +746,7 @@ export default function WhatsAppSettingsPage() {
             </Button>
           </div>
         </CardContent>
-      </Card>
+      </Card>}
 
       <Card>
         <CardHeader>

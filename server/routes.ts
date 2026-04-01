@@ -823,9 +823,10 @@ export async function registerRoutes(
         let nawyUrl: string;
         try {
           const parsed = new URL(rawUrl);
+          const validProtocol = parsed.protocol === "https:";
           const validHost = parsed.host === "www.nawy.com" || parsed.host === "nawy.com";
           const validPath = parsed.pathname.startsWith("/ar/compound/");
-          if (!validHost || !validPath) {
+          if (!validProtocol || !validHost || !validPath) {
             console.warn(`[sync-images] Skipping invalid URL for project ${project.id}: ${rawUrl}`);
             skipped++;
             continue;
