@@ -132,6 +132,21 @@ Preferred communication style: Simple, everyday language.
 - **Ban Avoidance**: Random 2-5s delay before sending, session persistence avoids re-scan
 - **Privacy**: Manager can see WhatsApp activity count in lead history without seeing message content
 
+### Nawy.com Data Import & Inventory
+- **Data Source**: Scraped nawy.com for العاصمة الإدارية الجديدة (New Capital City, Egypt)
+- **Stats**: 78 developers, 144 projects (compounds), 615 units imported
+- **Data Enrichment**: Each compound enriched with Arabic description, payment plans, unit type size/price ranges, amenities (from nawy.com pages)
+- **Data format in `description` field**:
+  - `عن [COMPOUND]:` Arabic description text
+  - `📋 أنظمة السداد:` Payment plan options (pipe-separated)
+  - `🏠 أنواع الوحدات وأسعارها:` Unit types with area ranges and price ranges
+  - `🔗 المصدر:` Source nawy.com URL
+
+### Inventory UI (Rebuilt)
+- **Developers page** (`client/src/pages/developers.tsx`): Search bar, project count badges per developer, click → filter projects
+- **Projects page** (`client/src/pages/projects.tsx`): Rich cards (price range, unit type badges, payment plans, amenities preview), filter panel (developer/status/unit type/delivery year), project detail sheet (full description, unit ranges, payment plans, nawy link)
+- **Units page** (`client/src/pages/units.tsx`): Compound info panel (developer, price range, payment plans, amenities, nawy link)
+
 ### Planned/Available Integrations (based on build config)
 - **OpenAI / Google Generative AI**: AI capabilities
 - **Stripe**: Payment processing

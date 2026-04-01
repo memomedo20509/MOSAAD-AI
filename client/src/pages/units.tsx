@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -45,8 +45,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Home, ArrowLeft, Loader2, LayoutGrid, List, Calculator, GitCompare, X } from "lucide-react";
-import type { Unit, Project, InsertUnit } from "@shared/schema";
+import { Plus, Pencil, Trash2, Home, ArrowLeft, Loader2, LayoutGrid, List, Calculator, GitCompare, X, Building2, CreditCard, CheckCircle2, ExternalLink, DollarSign } from "lucide-react";
+import type { Unit, Project, Developer, InsertUnit } from "@shared/schema";
 import { useLanguage } from "@/lib/i18n";
 import { InstallmentCalculator } from "@/components/installment-calculator";
 import { UnitCompare } from "@/components/unit-compare";
@@ -81,6 +81,21 @@ export default function UnitsPage() {
     queryKey: ["/api/projects", projectId],
     enabled: !!projectId,
   });
+
+  const { data: developers = [] } = useQuery<Developer[]>({ queryKey: ["/api/developers"] });
+  const developer = useMemo(() => developers.find(d => d.id === project?.developerId), [developers, project]);
+
+  const paymentPlans = useMemo(() => {
+    if (!project?.description) return "";
+    const m = project.description.match(/📋 أنظمة السداد:\n(.+?)(?:\n\n|$)/s);
+    return m ? m[1].trim() : "";
+  }, [project]);
+
+  const nawyUrl = useMemo(() => {
+    if (!project?.description) return "";
+    const m = project.description.match(/🔗 المصدر: (https?:\/\/[^\n]+)/);
+    return m ? m[1].trim() : "";
+  }, [project]);
 
   const { data: units = [], isLoading } = useQuery<Unit[]>({
     queryKey: ["/api/projects", projectId, "units"],
@@ -547,6 +562,50 @@ export default function UnitsPage() {
           </Dialog>
         )}
       </div>
+
+      {/* Compound Info Panel */}
+      {project && (
+        <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+          {/* Developer + Price */}
+          <div className="bg-muted/40 rounded-lg px-4 py-3 space-y-1">
+            <p className="text-xs text-muted-foreground">المطور</p>
+            <p className="font-semibold text-sm flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" />{developer?.name || "—"}</p>
+            {(project.minPrice || project.maxPrice) && (
+              <p className="text-sm text-green-700 dark:text-green-300 font-medium flex items-center gap-1.5">
+                <DollarSign className="h-3.5 w-3.5" />
+                {project.minPrice ? `${(project.minPrice/1e6).toFixed(1)} م` : ""}{project.minPrice && project.maxPrice && project.minPrice !== project.maxPrice ? ` – ${(project.maxPrice/1e6).toFixed(1)} م` : ""} جم
+              </p>
+            )}
+          </div>
+
+          {/* Payment Plans */}
+          {paymentPlans ? (
+            <div className="bg-blue-50/50 dark:bg-blue-950/30 rounded-lg px-4 py-3">
+              <p className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1"><CreditCard className="h-3 w-3" />أنظمة السداد</p>
+              <div className="flex flex-wrap gap-1">
+                {paymentPlans.split(' | ').map((plan, i) => (
+                  <span key={i} className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100 rounded px-1.5 py-0.5">{plan}</span>
+                ))}
+              </div>
+            </div>
+          ) : <div />}
+
+          {/* Amenities + nawy link */}
+          <div className="bg-muted/40 rounded-lg px-4 py-3">
+            <p className="text-xs text-muted-foreground mb-1.5">المميزات</p>
+            <div className="flex flex-wrap gap-1">
+              {(project.amenities || []).slice(0, 4).map((a: string) => (
+                <span key={a} className="text-xs bg-muted rounded px-1.5 py-0.5">{a}</span>
+              ))}
+            </div>
+            {nawyUrl && (
+              <a href={nawyUrl} target="_blank" rel="noopener noreferrer" className="mt-2 flex items-center gap-1 text-xs text-primary hover:underline">
+                <ExternalLink className="h-3 w-3" />عرض على nawy.com
+              </a>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-4 mb-4 flex-wrap items-center">
         <Select value={filterStatus} onValueChange={setFilterStatus}>
