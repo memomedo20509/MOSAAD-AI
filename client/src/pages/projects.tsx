@@ -113,10 +113,10 @@ function extractAboutText(description: string | null): string {
   return about.startsWith('عن ') ? about : about;
 }
 
-function formatPrice(p: number | null): string {
+function formatPrice(p: number | null, lang: "ar" | "en" = "ar"): string {
   if (!p) return "";
-  if (p >= 1000000) return `${(p / 1000000).toFixed(1)} م`;
-  return p.toLocaleString();
+  const currency = lang === "ar" ? "جنيه" : "EGP";
+  return `${p.toLocaleString()} ${currency}`;
 }
 
 type SortOption = "newest" | "price_asc" | "price_desc" | "delivery" | "name";
@@ -682,11 +682,11 @@ export default function ProjectsPage() {
 }
 
 function ProjectCard({ project, developerName, displayName, displayLocation, onViewDetails }: ProjectCardProps) {
+  const { language } = useLanguage();
   const unitTypes = extractUnitTypes(project.description);
   const paymentPlans = extractPaymentPlans(project.description);
   const statusInfo = STATUS_CONFIG[project.status || "under_construction"] || STATUS_CONFIG.under_construction;
   const projectImage = project.images?.[0];
-  const { language } = useLanguage();
   const amenitiesDisplay = (language === "en" && project.amenitiesEn?.length ? project.amenitiesEn : project.amenities) || [];
 
   return (
@@ -751,9 +751,9 @@ function ProjectCard({ project, developerName, displayName, displayLocation, onV
           <div className="flex items-center gap-1.5 bg-green-50 dark:bg-green-950 rounded-md px-2.5 py-1.5">
             <DollarSign className="h-3.5 w-3.5 text-green-600 shrink-0" />
             <span className="text-sm font-semibold text-green-700 dark:text-green-300">
-              {project.minPrice ? `${formatPrice(project.minPrice)} جم` : ""}
+              {project.minPrice ? formatPrice(project.minPrice, language) : ""}
               {project.minPrice && project.maxPrice ? " – " : ""}
-              {project.maxPrice && project.maxPrice !== project.minPrice ? `${formatPrice(project.maxPrice)} جم` : ""}
+              {project.maxPrice && project.maxPrice !== project.minPrice ? formatPrice(project.maxPrice, language) : ""}
             </span>
           </div>
         )}
@@ -815,6 +815,7 @@ function ProjectCard({ project, developerName, displayName, displayLocation, onV
 }
 
 function ProjectListRow({ project, developerName, displayName, displayLocation, onViewDetails }: ProjectCardProps) {
+  const { language } = useLanguage();
   const unitTypes = extractUnitTypes(project.description);
   const statusInfo = STATUS_CONFIG[project.status || "under_construction"] || STATUS_CONFIG.under_construction;
   const projectImage = project.images?.[0];
@@ -849,13 +850,12 @@ function ProjectListRow({ project, developerName, displayName, displayLocation, 
       </div>
 
       {/* Price */}
-      <div className="hidden md:block w-28 shrink-0 text-right">
+      <div className="hidden md:block w-40 shrink-0 text-right">
         {(project.minPrice || project.maxPrice) ? (
           <p className="text-sm font-semibold text-green-700 dark:text-green-300">
-            {project.minPrice ? formatPrice(project.minPrice) : ""}
-            {project.minPrice && project.maxPrice ? "–" : ""}
-            {project.maxPrice && project.maxPrice !== project.minPrice ? formatPrice(project.maxPrice) : ""}
-            <span className="text-xs font-normal text-muted-foreground"> جم</span>
+            {project.minPrice ? formatPrice(project.minPrice, language) : ""}
+            {project.minPrice && project.maxPrice ? " – " : ""}
+            {project.maxPrice && project.maxPrice !== project.minPrice ? formatPrice(project.maxPrice, language) : ""}
           </p>
         ) : (
           <p className="text-xs text-muted-foreground">—</p>
@@ -930,9 +930,9 @@ function ProjectDetailPanel({ project, developerName }: { project: Project; deve
           <div>
             <p className="text-xs text-muted-foreground">{language === "en" ? "Price Range" : "نطاق الأسعار"}</p>
             <p className="font-bold text-green-700 dark:text-green-300">
-              {project.minPrice ? `${formatPrice(project.minPrice)} ${language === "en" ? "EGP" : "جم"}` : ""}
+              {project.minPrice ? formatPrice(project.minPrice, language) : ""}
               {project.minPrice && project.maxPrice ? " — " : ""}
-              {project.maxPrice ? `${formatPrice(project.maxPrice)} ${language === "en" ? "EGP" : "جم"}` : ""}
+              {project.maxPrice && project.maxPrice !== project.minPrice ? formatPrice(project.maxPrice, language) : ""}
             </p>
           </div>
           {project.deliveryDate && (

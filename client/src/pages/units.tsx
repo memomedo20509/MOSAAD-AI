@@ -1,6 +1,9 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle,
+} from "@/components/ui/sheet";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -60,15 +63,16 @@ function getStatusInfo(status: string | null) {
   return UNIT_STATUSES.find(s => s.value === status) || UNIT_STATUSES[0];
 }
 
-function formatPrice(p: number | null | undefined): string {
+function formatPrice(p: number | null | undefined, lang: "ar" | "en" = "ar"): string {
   if (!p) return "-";
-  if (p >= 1000000) return `${(p / 1000000).toFixed(1)} م جم`;
-  return `${p.toLocaleString()} جم`;
+  const currency = lang === "ar" ? "جنيه" : "EGP";
+  return `${p.toLocaleString()} ${currency}`;
 }
 
-function calcPricePerM2(price: number | null | undefined, area: number | null | undefined): string {
+function calcPricePerM2(price: number | null | undefined, area: number | null | undefined, lang: "ar" | "en" = "ar"): string {
   if (!price || !area || area === 0) return "-";
-  return `${Math.round(price / area).toLocaleString()} جم/م²`;
+  const unit = lang === "ar" ? "جنيه/م²" : "EGP/m²";
+  return `${Math.round(price / area).toLocaleString()} ${unit}`;
 }
 
 function extractPaymentPlans(desc: string | null): string[] {
@@ -110,6 +114,7 @@ export default function UnitsPage() {
   const [calcUnit, setCalcUnit] = useState<Unit | null>(null);
   const [isCompareOpen, setIsCompareOpen] = useState(false);
   const [showDescription, setShowDescription] = useState(false);
+  const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
 
   const isAdmin = user?.role === "super_admin" || user?.role === "admin";
   const isSuperAdmin = user?.role === "super_admin";
@@ -331,9 +336,14 @@ export default function UnitsPage() {
         </div>
       ) : filteredUnits.map(unit => {
         const si = getStatusInfo(unit.status);
-        const pricePerM2 = unit.price && unit.area ? Math.round(unit.price / unit.area).toLocaleString() : null;
+        const pricePerM2 = unit.price && unit.area ? calcPricePerM2(unit.price, unit.area, language) : null;
         return (
-          <Card key={unit.id} className="overflow-hidden border hover:shadow-md transition-shadow" data-testid={`card-unit-${unit.id}`}>
+          <Card
+            key={unit.id}
+            className="overflow-hidden border hover:shadow-md transition-shadow cursor-pointer"
+            data-testid={`card-unit-${unit.id}`}
+            onClick={() => setSelectedUnit(unit)}
+          >
             {/* Color header — neutral for sales, status-colored for admin */}
             <div className={`h-2 w-full ${isAdmin ? si.color : "bg-primary/40"}`} />
             <CardContent className="p-4 space-y-3">
@@ -362,8 +372,8 @@ export default function UnitsPage() {
               {/* Price */}
               {unit.price && (
                 <div className={`rounded-lg px-3 py-2 ${isAdmin ? si.bg : "bg-muted/40"}`}>
-                  <p className={`font-bold text-base ${isAdmin ? si.text : "text-foreground"}`}>{unit.price.toLocaleString()} جم</p>
-                  {pricePerM2 && <p className="text-xs text-muted-foreground">{pricePerM2} جم/م²</p>}
+                  <p className={`font-bold text-base ${isAdmin ? si.text : "text-foreground"}`}>{formatPrice(unit.price, language)}</p>
+                  {pricePerM2 && <p className="text-xs text-muted-foreground">{pricePerM2}</p>}
                 </div>
               )}
 
@@ -375,7 +385,7 @@ export default function UnitsPage() {
               </div>
 
               {/* Actions */}
-              <div className="flex items-center justify-end gap-1 pt-1 border-t">
+              <div className="flex items-center justify-end gap-1 pt-1 border-t" onClick={e => e.stopPropagation()}>
                   <Button variant="ghost" size="icon" className="h-7 w-7" title="حساب القسط" onClick={() => setCalcUnit(unit)} data-testid={`button-calc-${unit.id}`}>
                     <Calculator className="h-3.5 w-3.5" />
                   </Button>
@@ -533,8 +543,8 @@ export default function UnitsPage() {
                 <TableCell className="text-center">{unit.bedrooms ?? "-"}</TableCell>
                 <TableCell className="text-center">{unit.bathrooms ?? "-"}</TableCell>
                 <TableCell>{unit.area ? `${unit.area} م²` : "-"}</TableCell>
-                <TableCell className="font-semibold">{unit.price ? `${unit.price.toLocaleString()} جم` : "-"}</TableCell>
-                <TableCell className="text-muted-foreground text-sm">{pricePerM2}</TableCell>
+                <TableCell className="font-semibold">{unit.price ? formatPrice(unit.price, language) : "-"}</TableCell>
+                <TableCell className="text-muted-foreground text-sm">{unit.price && unit.area ? calcPricePerM2(unit.price, unit.area, language) : "-"}</TableCell>
                 <TableCell className="text-sm">{unit.finishing || "-"}</TableCell>
                 {isAdmin && (
                   <TableCell>
@@ -621,8 +631,8 @@ export default function UnitsPage() {
                   {(project.minPrice || project.maxPrice) && (
                     <p className="font-bold text-green-700 dark:text-green-300 flex items-center gap-1.5 mt-1">
                       <DollarSign className="h-4 w-4" />
-                      {project.minPrice ? `${(project.minPrice/1e6).toFixed(1)} م` : ""}
-                      {project.minPrice && project.maxPrice && project.minPrice !== project.maxPrice ? ` – ${(project.maxPrice/1e6).toFixed(1)} م` : ""} جم
+                      {project.minPrice ? formatPrice(project.minPrice, language) : ""}
+                      {project.minPrice && project.maxPrice && project.minPrice !== project.maxPrice ? ` – ${formatPrice(project.maxPrice, language)}` : ""}
                     </p>
                   )}
                 </div>
@@ -742,6 +752,169 @@ export default function UnitsPage() {
       {isCompareOpen && selectedUnits.length >= 2 && (
         <UnitCompare units={selectedUnits} onClose={() => { setIsCompareOpen(false); setSelectedUnitIds(new Set()); }} />
       )}
+
+      {/* Unit Detail Sheet (for card click) */}
+      <Sheet open={!!selectedUnit} onOpenChange={o => { if (!o) setSelectedUnit(null); }}>
+        <SheetContent side="left" className="w-full sm:w-[480px] overflow-y-auto p-0" data-testid="unit-detail-sheet">
+          <div className="h-1.5 w-full bg-primary/50" />
+          {selectedUnit && (() => {
+            const si = getStatusInfo(selectedUnit.status);
+            const pricePerM2 = calcPricePerM2(selectedUnit.price, selectedUnit.area, language);
+            const paymentPlans = extractPaymentPlans(project?.description || null);
+            const aboutText = extractAboutText(project?.description || null);
+            const nawyUrl = extractNawyUrl(project?.description || null);
+            return (
+              <div className="p-5 space-y-5">
+                <SheetHeader className="pb-0">
+                  <div className="flex items-start gap-2">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        {isAdmin && <Badge className={`${si.color} text-white text-xs px-2`}>{si.label}</Badge>}
+                        {selectedUnit.type && <span className="text-sm font-medium text-muted-foreground">{selectedUnit.type}</span>}
+                      </div>
+                      <SheetTitle className="text-xl">وحدة {selectedUnit.unitNumber}</SheetTitle>
+                      {project && (
+                        <p className="text-sm text-primary flex items-center gap-1 mt-1">
+                          <Building2 className="h-3.5 w-3.5" />{project.name}
+                        </p>
+                      )}
+                      {developer && <p className="text-xs text-muted-foreground">{developer.name}</p>}
+                    </div>
+                  </div>
+                </SheetHeader>
+
+                {projectImage && (
+                  <div className="rounded-xl overflow-hidden h-44 bg-muted">
+                    <img src={projectImage} alt={project?.name} className="w-full h-full object-cover" />
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  {selectedUnit.price && (
+                    <div className={`col-span-2 rounded-xl p-4 ${isAdmin ? `${si.bg} border ${si.border}` : "bg-muted/40 border border-border"}`}>
+                      <p className="text-xs text-muted-foreground mb-0.5">السعر الإجمالي</p>
+                      <p className={`text-2xl font-bold ${isAdmin ? si.text : "text-foreground"}`}>{formatPrice(selectedUnit.price, language)}</p>
+                      {selectedUnit.area && selectedUnit.price && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{pricePerM2}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {selectedUnit.bedrooms !== null && selectedUnit.bedrooms !== undefined && (
+                    <div className="rounded-xl border bg-muted/30 p-3 flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center shrink-0">
+                        <BedDouble className="h-4 w-4 text-blue-600 dark:text-blue-300" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">غرف النوم</p>
+                        <p className="font-bold text-lg leading-tight">{selectedUnit.bedrooms}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedUnit.bathrooms !== null && selectedUnit.bathrooms !== undefined && (
+                    <div className="rounded-xl border bg-muted/30 p-3 flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-cyan-100 dark:bg-cyan-900 flex items-center justify-center shrink-0">
+                        <Bath className="h-4 w-4 text-cyan-600 dark:text-cyan-300" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">الحمامات</p>
+                        <p className="font-bold text-lg leading-tight">{selectedUnit.bathrooms}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedUnit.area && (
+                    <div className="rounded-xl border bg-muted/30 p-3 flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-purple-100 dark:bg-purple-900 flex items-center justify-center shrink-0">
+                        <Ruler className="h-4 w-4 text-purple-600 dark:text-purple-300" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">المساحة</p>
+                        <p className="font-bold text-lg leading-tight">{selectedUnit.area} م²</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedUnit.floor !== null && selectedUnit.floor !== undefined && (
+                    <div className="rounded-xl border bg-muted/30 p-3 flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-orange-100 dark:bg-orange-900 flex items-center justify-center shrink-0">
+                        <Home className="h-4 w-4 text-orange-600 dark:text-orange-300" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">الطابق</p>
+                        <p className="font-bold text-lg leading-tight">{selectedUnit.floor}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {(selectedUnit.finishing || selectedUnit.view || selectedUnit.building) && (
+                  <div className="space-y-2">
+                    {selectedUnit.finishing && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Tag className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span className="text-muted-foreground">التشطيب:</span>
+                        <span className="font-medium">{selectedUnit.finishing}</span>
+                      </div>
+                    )}
+                    {selectedUnit.view && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span className="text-muted-foreground">الإطلالة:</span>
+                        <span className="font-medium">{selectedUnit.view}</span>
+                      </div>
+                    )}
+                    {selectedUnit.building && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span className="text-muted-foreground">المبنى:</span>
+                        <span className="font-medium">{selectedUnit.building}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {selectedUnit.notes && (
+                  <div className="rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">
+                    {selectedUnit.notes}
+                  </div>
+                )}
+
+                {paymentPlans.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <CreditCard className="h-3.5 w-3.5" />أنظمة السداد
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {paymentPlans.map((plan, i) => (
+                        <span key={i} className="text-xs bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-200 rounded-lg px-2.5 py-1 border border-blue-100 dark:border-blue-800 font-medium">
+                          {plan}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button className="flex-1" variant="outline" size="sm" onClick={() => { setSelectedUnit(null); setCalcUnit(selectedUnit); }}>
+                    <Calculator className="h-4 w-4 ml-2" />
+                    احسب القسط
+                  </Button>
+                  {nawyUrl && (
+                    <a href={nawyUrl} target="_blank" rel="noopener noreferrer" className="flex-1">
+                      <Button variant="outline" className="w-full text-xs" size="sm">
+                        <ExternalLink className="h-3.5 w-3.5 ml-1" />
+                        nawy.com
+                      </Button>
+                    </a>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

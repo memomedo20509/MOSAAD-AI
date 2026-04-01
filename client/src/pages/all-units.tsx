@@ -24,16 +24,17 @@ import type { Unit, Project, Developer } from "@shared/schema";
 import { useLanguage, getLocalizedName } from "@/lib/i18n";
 
 // Inline mini installment calculator for the sheet
-function MiniCalc({ price }: { price: number }) {
+function MiniCalc({ price, lang }: { price: number; lang: "ar" | "en" }) {
   const [years, setYears] = useState(7);
   const [downPct, setDownPct] = useState(10);
   const loan = price * (1 - downPct / 100);
   const monthly = loan / (years * 12);
+  const currency = lang === "ar" ? "جنيه" : "EGP";
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-xs text-muted-foreground">المقدم %</label>
+          <label className="text-xs text-muted-foreground">{lang === "ar" ? "المقدم %" : "Down Payment %"}</label>
           <div className="flex gap-1 mt-1">
             {[5, 10, 15, 20].map(p => (
               <button key={p} onClick={() => setDownPct(p)}
@@ -44,7 +45,7 @@ function MiniCalc({ price }: { price: number }) {
           </div>
         </div>
         <div>
-          <label className="text-xs text-muted-foreground">سنوات السداد</label>
+          <label className="text-xs text-muted-foreground">{lang === "ar" ? "سنوات السداد" : "Payment Years"}</label>
           <div className="flex gap-1 mt-1">
             {[5, 7, 10, 12].map(y => (
               <button key={y} onClick={() => setYears(y)}
@@ -56,9 +57,14 @@ function MiniCalc({ price }: { price: number }) {
         </div>
       </div>
       <div className="rounded-xl bg-primary/5 border border-primary/20 p-3 text-center">
-        <p className="text-xs text-muted-foreground">القسط الشهري التقريبي</p>
-        <p className="text-xl font-bold text-primary">{Math.round(monthly).toLocaleString()} جم</p>
-        <p className="text-xs text-muted-foreground mt-0.5">مقدم {downPct}% ({Math.round(price * downPct / 100).toLocaleString()} جم) × {years} سنة</p>
+        <p className="text-xs text-muted-foreground">{lang === "ar" ? "القسط الشهري التقريبي" : "Approx. Monthly Installment"}</p>
+        <p className="text-xl font-bold text-primary">{Math.round(monthly).toLocaleString()} {currency}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          {lang === "ar"
+            ? `مقدم ${downPct}% (${Math.round(price * downPct / 100).toLocaleString()} ${currency}) × ${years} سنة`
+            : `Down ${downPct}% (${Math.round(price * downPct / 100).toLocaleString()} ${currency}) × ${years} years`
+          }
+        </p>
       </div>
     </div>
   );
@@ -101,21 +107,16 @@ function getStatusInfo(status: string | null) {
   return UNIT_STATUSES.find(s => s.value === status) || UNIT_STATUSES[0];
 }
 
-function formatPrice(p: number | null | undefined): string {
+function formatPrice(p: number | null | undefined, lang: "ar" | "en" = "ar"): string {
   if (!p) return "-";
-  if (p >= 1_000_000) return `${(p / 1_000_000).toFixed(2).replace(/\.?0+$/, "")} م جم`;
-  if (p >= 1_000) return `${(p / 1_000).toFixed(0)} ألف جم`;
-  return `${p.toLocaleString()} جم`;
+  const currency = lang === "ar" ? "جنيه" : "EGP";
+  return `${p.toLocaleString()} ${currency}`;
 }
 
-function formatPriceFull(p: number | null | undefined): string {
-  if (!p) return "-";
-  return `${p.toLocaleString()} جم`;
-}
-
-function calcPricePerM2(price: number | null | undefined, area: number | null | undefined): string {
+function calcPricePerM2(price: number | null | undefined, area: number | null | undefined, lang: "ar" | "en" = "ar"): string {
   if (!price || !area || area === 0) return "-";
-  return `${Math.round(price / area).toLocaleString()} جم/م²`;
+  const unit = lang === "ar" ? "جنيه/م²" : "EGP/m²";
+  return `${Math.round(price / area).toLocaleString()} ${unit}`;
 }
 
 function extractPaymentPlans(desc: string | null): string[] {
@@ -147,9 +148,9 @@ function UnitDetailSheet({
   onClose: () => void;
   isAdmin: boolean;
 }) {
+  const { language } = useLanguage();
   const [showDesc, setShowDesc] = useState(false);
   const [showCalc, setShowCalc] = useState(false);
-  const { language } = useLanguage();
 
   if (!unit) return null;
 
@@ -159,7 +160,7 @@ function UnitDetailSheet({
   const aboutText = extractAboutText(project?.description || null);
   const nawyUrl = extractNawyUrl(project?.description || null);
   const projectImage = project?.images?.[0];
-  const pricePerM2 = calcPricePerM2(unit.price, unit.area);
+  const pricePerM2 = calcPricePerM2(unit.price, unit.area, language);
 
   const whatsappText = encodeURIComponent(
     `🏠 وحدة للبيع\n` +
@@ -168,7 +169,7 @@ function UnitDetailSheet({
     `🔢 رقم الوحدة: ${unit.unitNumber}\n` +
     `🛏 ${unit.bedrooms || "-"} غرف | 🚿 ${unit.bathrooms || "-"} حمام\n` +
     `📐 المساحة: ${unit.area ? unit.area + " م²" : "-"}\n` +
-    `💰 السعر: ${formatPriceFull(unit.price)}\n` +
+    `💰 السعر: ${formatPrice(unit.price, language)}\n` +
     (paymentPlans.length ? `💳 السداد: ${paymentPlans[0]}\n` : "") +
     (nawyUrl ? `🔗 ${nawyUrl}` : "")
   );
@@ -215,7 +216,7 @@ function UnitDetailSheet({
             {unit.price && (
               <div className={`col-span-2 rounded-xl p-4 ${isAdmin ? `${si.bg} border ${si.border}` : "bg-muted/40 border border-border"}`}>
                 <p className="text-xs text-muted-foreground mb-0.5">السعر الإجمالي</p>
-                <p className={`text-2xl font-bold ${isAdmin ? si.text : "text-foreground"}`}>{formatPriceFull(unit.price)}</p>
+                <p className={`text-2xl font-bold ${isAdmin ? si.text : "text-foreground"}`}>{formatPrice(unit.price, language)}</p>
                 {unit.area && unit.price && (
                   <p className="text-xs text-muted-foreground mt-0.5">{pricePerM2}</p>
                 )}
@@ -317,8 +318,8 @@ function UnitDetailSheet({
                   <DollarSign className="h-3.5 w-3.5 text-green-600 shrink-0" />
                   <span className="text-muted-foreground">نطاق الأسعار:</span>
                   <span className="font-medium text-green-700 dark:text-green-300">
-                    {project.minPrice ? `${(project.minPrice / 1e6).toFixed(1)}` : ""}
-                    {project.minPrice && project.maxPrice && project.minPrice !== project.maxPrice ? ` – ${(project.maxPrice / 1e6).toFixed(1)}` : ""} م جم
+                    {project.minPrice ? formatPrice(project.minPrice, language) : ""}
+                    {project.minPrice && project.maxPrice && project.minPrice !== project.maxPrice ? ` – ${formatPrice(project.maxPrice, language)}` : ""}
                   </span>
                 </div>
               )}
@@ -416,9 +417,9 @@ function UnitDetailSheet({
           {showCalc && unit?.price && (
             <div className="border rounded-xl p-4 bg-muted/10 space-y-2">
               <p className="text-sm font-semibold flex items-center gap-2">
-                <Calculator className="h-4 w-4 text-primary" />حاسبة القسط الشهري
+                <Calculator className="h-4 w-4 text-primary" />{language === "ar" ? "حاسبة القسط الشهري" : "Installment Calculator"}
               </p>
-              <MiniCalc price={unit.price} />
+              <MiniCalc price={unit.price} lang={language} />
             </div>
           )}
         </div>
@@ -622,7 +623,7 @@ export default function AllUnitsPage() {
             const proj = projectMap[unit.projectId];
             const dev = proj ? developerMap[proj.developerId] : null;
             const projImage = proj?.images?.[0];
-            const pricePerM2 = unit.price && unit.area ? Math.round(unit.price / unit.area).toLocaleString() : null;
+            const pricePerM2 = unit.price && unit.area ? calcPricePerM2(unit.price, unit.area, language) : null;
 
             return (
               <Card
@@ -691,8 +692,8 @@ export default function AllUnitsPage() {
                   {/* Price */}
                   {unit.price ? (
                     <div className={`rounded-lg px-2.5 py-2 ${isAdmin ? si.bg : "bg-muted/40"}`}>
-                      <p className={`font-bold text-sm ${isAdmin ? si.text : "text-foreground"}`}>{formatPrice(unit.price)}</p>
-                      {pricePerM2 && <p className="text-[10px] text-muted-foreground">{pricePerM2} جم/م²</p>}
+                      <p className={`font-bold text-sm ${isAdmin ? si.text : "text-foreground"}`}>{formatPrice(unit.price, language)}</p>
+                      {pricePerM2 && <p className="text-[10px] text-muted-foreground">{pricePerM2}</p>}
                     </div>
                   ) : null}
 
@@ -753,7 +754,7 @@ export default function AllUnitsPage() {
                       <td className="px-4 py-3 text-center">{unit.bedrooms ?? "-"}</td>
                       <td className="px-4 py-3 text-center">{unit.bathrooms ?? "-"}</td>
                       <td className="px-4 py-3">{unit.area ? `${unit.area} م²` : "-"}</td>
-                      <td className="px-4 py-3 font-semibold">{unit.price ? `${unit.price.toLocaleString()} جم` : "-"}</td>
+                      <td className="px-4 py-3 font-semibold">{unit.price ? formatPrice(unit.price, language) : "-"}</td>
                       {isAdmin && (
                         <td className="px-4 py-3">
                           <Badge className={`${si.color} text-white text-xs`}>{language === "en" ? si.labelEn : si.label}</Badge>
