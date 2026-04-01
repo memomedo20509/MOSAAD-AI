@@ -64,6 +64,18 @@ function MiniCalc({ price }: { price: number }) {
   );
 }
 
+const AR_TO_EN_TYPE: Record<string, string> = {
+  "شقة": "Apartment", "فيلا": "Villa", "توين هاوس": "Twin House",
+  "تاون هاوس": "Townhouse", "دوبلكس": "Duplex", "بنتهاوس": "Penthouse",
+  "إستوديو": "Studio", "لوفت": "Loft", "مكتب": "Office",
+  "شاليه": "Chalet", "تجاري": "Commercial",
+};
+function getUnitTypeDisplay(unit: { type: string | null; typeEn: string | null }, lang: string): string | null {
+  if (!unit.type) return null;
+  if (lang !== "en") return unit.type;
+  return unit.typeEn || AR_TO_EN_TYPE[unit.type] || unit.type;
+}
+
 const UNIT_STATUSES = [
   {
     value: "available", label: "متاحة", labelEn: "Available",
@@ -174,7 +186,7 @@ function UnitDetailSheet({
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   {isAdmin && <Badge className={`${si.color} text-white text-xs px-2`}>{language === "en" ? si.labelEn : si.label}</Badge>}
-                  {unit.type && <span className="text-sm font-medium text-muted-foreground">{(language === "en" && (unit as any).typeEn) ? (unit as any).typeEn : unit.type}</span>}
+                  {unit.type && <span className="text-sm font-medium text-muted-foreground">{getUnitTypeDisplay(unit, language)}</span>}
                 </div>
                 <SheetTitle className="text-xl">وحدة {unit.unitNumber}</SheetTitle>
                 {project && (
@@ -631,7 +643,7 @@ export default function AllUnitsPage() {
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
                     <div className="absolute bottom-2 right-2 left-2 flex items-center justify-between">
                       {isAdmin && <Badge className={`${si.color} text-white text-[10px] px-1.5`}>{language === "en" ? si.labelEn : si.label}</Badge>}
-                      {unit.type && <span className="text-white text-[10px] font-medium bg-black/40 rounded px-1.5 py-0.5">{(language === "en" && (unit as any).typeEn) ? (unit as any).typeEn : unit.type}</span>}
+                      {unit.type && <span className="text-white text-[10px] font-medium bg-black/40 rounded px-1.5 py-0.5">{getUnitTypeDisplay(unit, language)}</span>}
                     </div>
                   </div>
                 ) : (
@@ -646,14 +658,14 @@ export default function AllUnitsPage() {
                         ? <Badge variant="outline" className={`text-xs ${si.text}`}>{language === "en" ? si.labelEn : si.label}</Badge>
                         : <span />
                       }
-                      {unit.type && <span className="text-xs font-medium text-muted-foreground">{(language === "en" && (unit as any).typeEn) ? (unit as any).typeEn : unit.type}</span>}
+                      {unit.type && <span className="text-xs font-medium text-muted-foreground">{getUnitTypeDisplay(unit, language)}</span>}
                     </div>
                   )}
 
                   {/* Project name */}
                   {proj && (
-                    <p className="text-xs font-semibold truncate" title={getLocalizedName(proj.name, (proj as any).nameEn, language)}>
-                      {getLocalizedName(proj.name, (proj as any).nameEn, language)}
+                    <p className="text-xs font-semibold truncate" title={getLocalizedName(proj.name, proj.nameEn, language)}>
+                      {getLocalizedName(proj.name, proj.nameEn, language)}
                     </p>
                   )}
 
@@ -733,11 +745,11 @@ export default function AllUnitsPage() {
                               onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
                             />
                           ) : <div className="w-8 h-8 rounded bg-muted shrink-0 flex items-center justify-center"><Building2 className="h-4 w-4 text-muted-foreground" /></div>}
-                          <span className="font-medium truncate max-w-[140px]" title={getLocalizedName(proj?.name, (proj as any)?.nameEn, language)}>{getLocalizedName(proj?.name || "", (proj as any)?.nameEn, language) || "-"}</span>
+                          <span className="font-medium truncate max-w-[140px]" title={getLocalizedName(proj?.name, proj?.nameEn, language)}>{getLocalizedName(proj?.name || "", proj?.nameEn, language) || "-"}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3 font-bold">{unit.unitNumber}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{(language === "en" && (unit as any).typeEn) ? (unit as any).typeEn : (unit.type || "-")}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{getUnitTypeDisplay(unit, language) || "-"}</td>
                       <td className="px-4 py-3 text-center">{unit.bedrooms ?? "-"}</td>
                       <td className="px-4 py-3 text-center">{unit.bathrooms ?? "-"}</td>
                       <td className="px-4 py-3">{unit.area ? `${unit.area} م²` : "-"}</td>

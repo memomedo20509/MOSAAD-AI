@@ -261,22 +261,20 @@ async function updateDevelopersEnglish() {
     const devName = dev.name;
 
     let nameEn = null;
-    let descEn = null;
 
     // If name is already English
     if (/^[A-Za-z0-9\s&'.,()-]+$/.test(devName)) {
       nameEn = devName.trim();
     } else if (devName.includes(' | ')) {
-      const [en, ar] = devName.split(' | ');
+      const [en] = devName.split(' | ');
       nameEn = en.trim();
     }
 
-    // Set English description if we have the name
+    // Only store the English name sourced from bilingual format — no synthetic descriptions
     if (nameEn) {
-      descEn = `${nameEn} is a leading real estate developer in Egypt specializing in residential and commercial projects.`;
       await pool.query(
-        'UPDATE developers SET name_en = $1, description_en = $2 WHERE id = $3',
-        [nameEn, descEn, dev.id]
+        'UPDATE developers SET name_en = $1 WHERE id = $2',
+        [nameEn, dev.id]
       );
       updated++;
     }

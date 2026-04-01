@@ -37,6 +37,17 @@ import { UnitCompare } from "@/components/unit-compare";
 
 const UNIT_TYPES_AR = ["شقة","فيلا","توين هاوس","تاون هاوس","دوبلكس","بنتهاوس","إستوديو","لوفت","مكتب","شاليه","تجاري"];
 const UNIT_TYPES_EN = ["Apartment","Studio","Duplex","Penthouse","Villa","Townhouse","Office","Shop","Warehouse"];
+const AR_TO_EN_TYPE: Record<string, string> = {
+  "شقة": "Apartment", "فيلا": "Villa", "توين هاوس": "Twin House",
+  "تاون هاوس": "Townhouse", "دوبلكس": "Duplex", "بنتهاوس": "Penthouse",
+  "إستوديو": "Studio", "لوفت": "Loft", "مكتب": "Office",
+  "شاليه": "Chalet", "تجاري": "Commercial",
+};
+function getUnitTypeDisplay(unit: { type: string | null; typeEn: string | null }, lang: string): string | null {
+  if (!unit.type) return null;
+  if (lang !== "en") return unit.type;
+  return unit.typeEn || AR_TO_EN_TYPE[unit.type] || unit.type;
+}
 const UNIT_STATUSES = [
   { value: "available", label: "متاحة", labelEn: "Available", color: "bg-green-500", text: "text-green-700", bg: "bg-green-50 dark:bg-green-950", border: "border-green-200" },
   { value: "reserved", label: "محجوزة", labelEn: "Reserved", color: "bg-yellow-500", text: "text-yellow-700", bg: "bg-yellow-50 dark:bg-yellow-950", border: "border-yellow-200" },
@@ -321,7 +332,7 @@ export default function UnitsPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   {isAdmin && <Badge variant="outline" className={`text-xs font-semibold ${si.text}`}>{language === "en" ? si.labelEn : si.label}</Badge>}
-                  {unit.type && <span className="text-sm font-semibold">{(language === "en" && (unit as any).typeEn) ? (unit as any).typeEn : unit.type}</span>}
+                  {unit.type && <span className="text-sm font-semibold">{getUnitTypeDisplay(unit, language)}</span>}
                 </div>
                 <span className="text-xs text-muted-foreground">#{unit.unitNumber}</span>
               </div>

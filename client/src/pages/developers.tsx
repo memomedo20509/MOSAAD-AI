@@ -340,8 +340,8 @@ export default function DevelopersPage() {
                       className="w-full text-right flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors group"
                       data-testid={`link-project-${p.id}`}
                     >
-                      {(p as any).images?.[0] ? (
-                        <img src={(p as any).images[0]} alt={getLocalizedName(p.name, p.nameEn, language)} className="w-10 h-10 rounded-lg object-cover shrink-0 border" />
+                      {p.images?.[0] ? (
+                        <img src={p.images[0]} alt={getLocalizedName(p.name, p.nameEn, language)} className="w-10 h-10 rounded-lg object-cover shrink-0 border" />
                       ) : (
                         <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 border">
                           <Building2 className="h-4 w-4 text-primary/40" />
