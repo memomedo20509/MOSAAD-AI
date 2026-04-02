@@ -6,3 +6,9 @@ id = "IEziuvaKTkeJnODzQ9W9Y"
 uri = "file://.local/tasks/mobile-crm-prd.md"
 type = "text"
 title = "HomeAdvisor CRM — Mobile App PRD"
+
+[[outputs]]
+id = "MNXypi4hs50lpl-TjGvoO"
+uri = "file://docs/whatsapp-ai-crm-prd.md"
+type = "text"
+title = "PRD — نظام واتساب + AI لإدارة العملاء"
