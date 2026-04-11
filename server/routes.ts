@@ -496,7 +496,7 @@ export async function registerRoutes(
   app.post("/api/leads/:id/transfer", isAuthenticated, requirePermission("canTransferLeads"), async (req, res) => {
     try {
       const id = req.params.id as string;
-      const { toUserId } = req.body;
+      const { toUserId, showHistoryToNew, transferNote, resetState } = req.body;
       if (!toUserId) {
         return res.status(400).json({ error: "toUserId is required" });
       }
@@ -504,7 +504,24 @@ export async function registerRoutes(
       const performedByName = user
         ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.username
         : "System";
-      const lead = await storage.transferLead(id, toUserId, performedByName);
+
+      const currentLead = await storage.getLead(id);
+      const fromUserId = currentLead?.assignedTo || null;
+      let fromUserName: string | undefined;
+      if (fromUserId) {
+        const fromUser = await storage.getUser(fromUserId);
+        if (fromUser) {
+          fromUserName = `${fromUser.firstName ?? ""} ${fromUser.lastName ?? ""}`.trim() || fromUser.username;
+        }
+      }
+
+      const lead = await storage.transferLead(id, toUserId, performedByName, {
+        showHistoryToNew: showHistoryToNew !== false,
+        transferNote: transferNote || undefined,
+        resetState: resetState === true,
+        fromUserId: fromUserId || undefined,
+        fromUserName,
+      });
       if (!lead) {
         return res.status(404).json({ error: "Lead or target user not found" });
       }
@@ -538,6 +555,21 @@ export async function registerRoutes(
         return res.status(403).json({ error: "Access denied" });
       }
       const history = await storage.getHistoryByLeadId(leadId);
+      const userRole = req.user?.role || "";
+      const isAdmin = ["super_admin", "company_owner", "admin", "sales_admin", "sales_manager", "team_leader"].includes(userRole);
+
+      if (!isAdmin) {
+        const lead = await storage.getLead(leadId);
+        if (lead && lead.historyVisibleToAssigned === false) {
+          const lastReassignIdx = [...history].reverse().findIndex((h) => h.action === "reassignment");
+          if (lastReassignIdx !== -1) {
+            const actualIdx = history.length - 1 - lastReassignIdx;
+            const filtered = history.slice(actualIdx);
+            return res.json(filtered);
+          }
+        }
+      }
+
       res.json(history);
     } catch (error) {
       console.error("Error fetching history:", error);
@@ -553,6 +585,17 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching all history:", error);
       res.status(500).json({ error: "Failed to fetch history" });
+    }
+  });
+
+  // Reassignment Report
+  app.get("/api/reports/reassignments", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager", "sales_admin"), async (req, res) => {
+    try {
+      const report = await storage.getReassignmentReport();
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching reassignment report:", error);
+      res.status(500).json({ error: "Failed to fetch reassignment report" });
     }
   });
 

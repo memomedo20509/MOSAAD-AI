@@ -65,6 +65,8 @@ export const leads = pgTable("leads", {
   botStage: text("bot_stage").default("greeting"),
   preferredProject: text("preferred_project"),
   timeline: text("timeline"),
+  historyVisibleToAssigned: boolean("history_visible_to_assigned").default(true),
+  previousAssignedTo: text("previous_assigned_to"),
 });
 
 export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true, firstContactAt: true, responseTimeMinutes: true, aiAnalyzedAt: true }).extend({
@@ -115,7 +117,7 @@ export type UpdateTask = z.infer<typeof updateTaskSchema>;
 export type Task = typeof tasks.$inferSelect;
 
 // Lead History/Actions
-export const LEAD_HISTORY_TYPES = ["created", "state_change", "assignment", "call", "whatsapp", "note", "other"] as const;
+export const LEAD_HISTORY_TYPES = ["created", "state_change", "assignment", "reassignment", "call", "whatsapp", "note", "other"] as const;
 export type LeadHistoryType = typeof LEAD_HISTORY_TYPES[number];
 
 export const leadHistory = pgTable("lead_history", {
@@ -125,11 +127,9 @@ export const leadHistory = pgTable("lead_history", {
   description: text("description"),
   performedBy: text("performed_by"),
   type: text("type").default("other"),
-  fromStateId: varchar("from_state_id"),
-  toStateId: varchar("to_state_id"),
-  createdAt: timestamp("created_at").defaultNow(),
   fromStateId: varchar("from_state_id").references(() => leadStates.id),
   toStateId: varchar("to_state_id").references(() => leadStates.id),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const insertLeadHistorySchema = createInsertSchema(leadHistory).omit({ id: true, createdAt: true });

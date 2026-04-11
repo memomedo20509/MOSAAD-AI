@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -127,6 +128,9 @@ export function LeadDetailPanel({
   const [newTask, setNewTask] = useState({ title: "", type: "", description: "", dueDate: "" });
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [transferToUserId, setTransferToUserId] = useState("");
+  const [transferShowHistory, setTransferShowHistory] = useState(false);
+  const [transferResetState, setTransferResetState] = useState(false);
+  const [transferNote, setTransferNote] = useState("");
   const [showManagerNoteInput, setShowManagerNoteInput] = useState(false);
   const [managerNoteContent, setManagerNoteContent] = useState("");
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -240,14 +244,18 @@ export function LeadDetailPanel({
   // ── Mutations ──────────────────────────────────────────────────────────────
 
   const transferMutation = useMutation({
-    mutationFn: async ({ leadId, toUserId }: { leadId: string; toUserId: string }) => {
-      const res = await apiRequest("POST", `/api/leads/${leadId}/transfer`, { toUserId });
+    mutationFn: async ({ leadId, toUserId, showHistoryToNew, transferNote: note, resetState }: { leadId: string; toUserId: string; showHistoryToNew: boolean; transferNote: string; resetState: boolean }) => {
+      const res = await apiRequest("POST", `/api/leads/${leadId}/transfer`, { toUserId, showHistoryToNew, transferNote: note, resetState });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", lead?.id, "history"] });
       setShowTransferDialog(false);
       setTransferToUserId("");
+      setTransferShowHistory(false);
+      setTransferResetState(false);
+      setTransferNote("");
       toast({ title: t.transferLeadSuccess });
     },
     onError: () => {
@@ -1859,29 +1867,95 @@ export function LeadDetailPanel({
       </SheetContent>
     </Sheet>
 
-    {/* Transfer Dialog */}
-    <Dialog open={showTransferDialog} onOpenChange={setShowTransferDialog}>
-      <DialogContent>
+    {/* Reassignment Dialog */}
+    <Dialog open={showTransferDialog} onOpenChange={(open) => {
+      setShowTransferDialog(open);
+      if (!open) {
+        setTransferToUserId("");
+        setTransferShowHistory(false);
+        setTransferResetState(false);
+        setTransferNote("");
+      }
+    }}>
+      <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{t.transferLead || "تحويل الليد"}</DialogTitle>
+          <DialogTitle>{t.transferLead || "تحويل لسيلز آخر"}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3 py-2">
-          <Select value={transferToUserId} onValueChange={setTransferToUserId}>
-            <SelectTrigger data-testid="select-transfer-agent">
-              <SelectValue placeholder="اختر السيلز" />
-            </SelectTrigger>
-            <SelectContent>
-              {(salesAgents || []).map((agent) => (
-                <SelectItem key={agent.id} value={agent.id}>
-                  {agent.fullName || agent.username}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label>السيلز الجديد</Label>
+            <Select value={transferToUserId} onValueChange={setTransferToUserId}>
+              <SelectTrigger data-testid="select-transfer-agent">
+                <SelectValue placeholder="اختر السيلز" />
+              </SelectTrigger>
+              <SelectContent>
+                {(salesAgents || []).map((agent) => (
+                  <SelectItem key={agent.id} value={agent.id}>
+                    {agent.fullName || agent.username}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/30">
+            <div className="space-y-0.5">
+              <Label htmlFor="toggle-show-history" className="text-sm font-medium cursor-pointer">
+                إظهار التاريخ الكامل للسيلز الجديد
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {transferShowHistory ? "السيلز الجديد سيشوف كل التاريخ" : "السيلز الجديد لن يرى الأكشنز السابقة"}
+              </p>
+            </div>
+            <Switch
+              id="toggle-show-history"
+              checked={transferShowHistory}
+              onCheckedChange={setTransferShowHistory}
+              data-testid="switch-show-history"
+            />
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border p-3 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+            <div className="space-y-0.5">
+              <Label htmlFor="toggle-reset-state" className="text-sm font-medium cursor-pointer">
+                إعادة ضبط الحالة لـ Fresh Lead
+              </Label>
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                تحذير: سيتم تغيير حالة الليد للحالة الأولى
+              </p>
+            </div>
+            <Switch
+              id="toggle-reset-state"
+              checked={transferResetState}
+              onCheckedChange={setTransferResetState}
+              data-testid="switch-reset-state"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>ملاحظة التحويل (اختياري)</Label>
+            <Textarea
+              placeholder="سبب التحويل أو أي ملاحظات..."
+              value={transferNote}
+              onChange={(e) => setTransferNote(e.target.value)}
+              rows={3}
+              data-testid="input-transfer-note"
+            />
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setShowTransferDialog(false)}>{t.cancel || "إلغاء"}</Button>
-          <Button onClick={() => lead && transferToUserId && transferMutation.mutate({ leadId: lead.id, toUserId: transferToUserId })} disabled={!transferToUserId || transferMutation.isPending} data-testid="button-confirm-transfer">
+          <Button
+            onClick={() => lead && transferToUserId && transferMutation.mutate({
+              leadId: lead.id,
+              toUserId: transferToUserId,
+              showHistoryToNew: transferShowHistory,
+              transferNote,
+              resetState: transferResetState,
+            })}
+            disabled={!transferToUserId || transferMutation.isPending}
+            data-testid="button-confirm-transfer"
+          >
             {transferMutation.isPending ? "جاري التحويل..." : t.transferLead || "تحويل"}
           </Button>
         </DialogFooter>

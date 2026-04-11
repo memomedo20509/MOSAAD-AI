@@ -230,6 +230,22 @@ export default function ReportsPage() {
     enabled: isManager,
   });
 
+  type ReassignmentRow = {
+    leadId: string;
+    leadName: string | null;
+    fromUser: string | null;
+    toUser: string | null;
+    performedBy: string | null;
+    note: string | null;
+    historyVisible: boolean;
+    createdAt: string | null;
+  };
+
+  const { data: reassignmentReport = [], isLoading: reassignmentLoading } = useQuery<ReassignmentRow[]>({
+    queryKey: ["/api/reports/reassignments"],
+    enabled: isManager,
+  });
+
   const reassignMutation = useMutation({
     mutationFn: async ({ leadId, agentId }: { leadId: string; agentId: string }) => {
       return apiRequest("PATCH", `/api/leads/${leadId}/reassign`, { assignedTo: agentId });
@@ -536,6 +552,10 @@ export default function ReportsPage() {
               <TabsTrigger value="marketing" data-testid="tab-reports-marketing">
                 <PieChart className="h-4 w-4 mr-1" />
                 {t.marketingTab}
+              </TabsTrigger>
+              <TabsTrigger value="reassignments" data-testid="tab-reassignments">
+                <Users className="h-4 w-4 mr-1" />
+                عمليات التحويل
               </TabsTrigger>
             </>
           )}
@@ -1918,6 +1938,70 @@ export default function ReportsPage() {
                 </Card>
               </>
             )}
+          </TabsContent>
+        )}
+
+        {/* ============================== REASSIGNMENTS TAB ============================== */}
+        {isManager && (
+          <TabsContent value="reassignments" className="space-y-4 mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  سجل عمليات تحويل الليدز
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {reassignmentLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : reassignmentReport.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    لا توجد عمليات تحويل مسجلة
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-muted-foreground">
+                          <th className="text-right py-3 px-2">التاريخ</th>
+                          <th className="text-right py-3 px-2">الليد</th>
+                          <th className="text-right py-3 px-2">من السيلز</th>
+                          <th className="text-right py-3 px-2">إلى السيلز</th>
+                          <th className="text-right py-3 px-2">بواسطة</th>
+                          <th className="text-center py-3 px-2">التاريخ ظاهر</th>
+                          <th className="text-right py-3 px-2">ملاحظة</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reassignmentReport.map((row, idx) => (
+                          <tr key={idx} className="border-b hover:bg-muted/30 transition-colors" data-testid={`row-reassignment-${idx}`}>
+                            <td className="py-3 px-2 text-muted-foreground whitespace-nowrap">
+                              {row.createdAt ? format(new Date(row.createdAt), "dd/MM/yyyy HH:mm") : "—"}
+                            </td>
+                            <td className="py-3 px-2 font-medium">
+                              {row.leadName || <span className="text-muted-foreground text-xs">{row.leadId.substring(0, 8)}…</span>}
+                            </td>
+                            <td className="py-3 px-2">{row.fromUser || "—"}</td>
+                            <td className="py-3 px-2 font-medium">{row.toUser || "—"}</td>
+                            <td className="py-3 px-2 text-muted-foreground">{row.performedBy || "—"}</td>
+                            <td className="py-3 px-2 text-center">
+                              <Badge variant={row.historyVisible ? "default" : "secondary"} data-testid={`badge-history-visible-${idx}`}>
+                                {row.historyVisible ? "ظاهر" : "مخفي"}
+                              </Badge>
+                            </td>
+                            <td className="py-3 px-2 text-muted-foreground max-w-[200px] truncate">
+                              {row.note || "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         )}
       </Tabs>

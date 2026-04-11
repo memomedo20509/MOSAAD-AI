@@ -252,7 +252,8 @@ export interface IStorage {
   
   // Lead filtering by role
   getLeadsByRole(userId: string, role: string, teamId?: string | null, username?: string | null): Promise<Lead[]>;
-  transferLead(leadId: string, toUserId: string, performedBy: string): Promise<Lead | undefined>;
+  transferLead(leadId: string, toUserId: string, performedBy: string, options?: { showHistoryToNew?: boolean; transferNote?: string; resetState?: boolean; fromUserId?: string; fromUserName?: string }): Promise<Lead | undefined>;
+  getReassignmentReport(): Promise<{ leadId: string; leadName: string | null; fromUser: string | null; toUser: string | null; performedBy: string | null; note: string | null; historyVisible: boolean; createdAt: Date | null }[]>;
 
   // Notifications
   getNotificationsByUser(userId: string): Promise<Notification[]>;
@@ -1305,25 +1306,97 @@ export class DatabaseStorage implements IStorage {
     return allLeads;
   }
 
-  async transferLead(leadId: string, toUserId: string, performedBy: string): Promise<Lead | undefined> {
+  async transferLead(leadId: string, toUserId: string, performedBy: string, options?: { showHistoryToNew?: boolean; transferNote?: string; resetState?: boolean; fromUserId?: string; fromUserName?: string }): Promise<Lead | undefined> {
     const lead = await this.getLead(leadId);
     if (!lead) return undefined;
     const toUser = await this.getUser(toUserId);
     if (!toUser) return undefined;
     const toUserName = `${toUser.firstName ?? ""} ${toUser.lastName ?? ""}`.trim() || toUser.username;
+    const fromUserName = options?.fromUserName || lead.assignedTo || null;
+    const showHistory = options?.showHistoryToNew !== false;
+
+    const updateData: Partial<Lead> = {
+      assignedTo: toUserId,
+      previousAssignedTo: lead.assignedTo,
+      historyVisibleToAssigned: showHistory,
+      updatedAt: new Date(),
+    };
+
+    if (options?.resetState) {
+      const freshState = await db.select().from(leadStates).orderBy(leadStates.order).limit(1);
+      if (freshState.length > 0) {
+        updateData.stateId = freshState[0].id;
+      }
+    }
+
     const [updated] = await db
       .update(leads)
-      .set({ assignedTo: toUserId, updatedAt: new Date() })
+      .set(updateData)
       .where(eq(leads.id, leadId))
       .returning();
+
+    const meta = JSON.stringify({
+      fromUser: fromUserName || null,
+      toUser: toUserName,
+      historyVisible: showHistory,
+      note: options?.transferNote || null,
+    });
     await this.createHistory({
       leadId,
-      action: `اتوزع على ${toUserName}`,
-      description: `تم تحويل الليد إلى ${toUserName}`,
+      action: `تحويل إلى ${toUserName}`,
+      description: meta,
       performedBy,
-      type: "assignment",
+      type: "reassignment",
     });
     return updated;
+  }
+
+  async getReassignmentReport(): Promise<{ leadId: string; leadName: string | null; fromUser: string | null; toUser: string | null; performedBy: string | null; note: string | null; historyVisible: boolean; createdAt: Date | null }[]> {
+    const reassignments = await db
+      .select()
+      .from(leadHistory)
+      .where(eq(leadHistory.type, "reassignment"))
+      .orderBy(sql`${leadHistory.createdAt} DESC`);
+
+    const leadIds = [...new Set(reassignments.map((h) => h.leadId).filter(Boolean))] as string[];
+    const leadMap: Record<string, string | null> = {};
+    if (leadIds.length > 0) {
+      const leadRecords = await db.select({ id: leads.id, name: leads.name }).from(leads);
+      for (const l of leadRecords) {
+        if (leadIds.includes(l.id)) leadMap[l.id] = l.name;
+      }
+    }
+
+    return reassignments.map((h) => {
+      let fromUser: string | null = null;
+      let toUser: string | null = null;
+      let historyVisible = true;
+      let note: string | null = null;
+
+      if (h.description) {
+        try {
+          const parsed = JSON.parse(h.description);
+          fromUser = parsed.fromUser ?? null;
+          toUser = parsed.toUser ?? null;
+          historyVisible = parsed.historyVisible !== false;
+          note = parsed.note ?? null;
+        } catch {
+          fromUser = null;
+          toUser = null;
+        }
+      }
+
+      return {
+        leadId: h.leadId || "",
+        leadName: h.leadId ? (leadMap[h.leadId] ?? null) : null,
+        fromUser,
+        toUser,
+        performedBy: h.performedBy || null,
+        note,
+        historyVisible,
+        createdAt: h.createdAt || null,
+      };
+    });
   }
 
   // Notifications
