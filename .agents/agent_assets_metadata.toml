@@ -12,3 +12,9 @@ id = "MNXypi4hs50lpl-TjGvoO"
 uri = "file://docs/whatsapp-ai-crm-prd.md"
 type = "text"
 title = "PRD — نظام واتساب + AI لإدارة العملاء"
+
+[[outputs]]
+id = "G9QO1Yv9xdhfJ8RxfBNmK"
+uri = "file://docs/mobile-app-prd.md"
+type = "text"
+title = "HomeAdvisor CRM — Mobile App PRD (مستند متطلبات تطبيق الموبايل)"
