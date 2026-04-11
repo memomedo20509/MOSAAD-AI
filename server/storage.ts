@@ -136,7 +136,7 @@ export interface IStorage {
   getAllLeads(): Promise<Lead[]>;
   getLead(id: string): Promise<Lead | undefined>;
   createLead(lead: InsertLead, creatingUserTeamId?: string | null): Promise<Lead>;
-  updateLead(id: string, data: Partial<Lead>): Promise<Lead | undefined>;
+  updateLead(id: string, data: Partial<Lead>, performedByName?: string): Promise<Lead | undefined>;
   deleteLead(id: string): Promise<boolean>;
 
   // Clients
@@ -629,9 +629,10 @@ export class DatabaseStorage implements IStorage {
     const [newLead] = await db.insert(leads).values({ ...safeLeadData, score }).returning();
     await this.createHistory({
       leadId: newLead.id,
-      action: "تم إنشاء الليد",
-      description: `تم إضافة الليد للنظام`,
+      action: "دخل السيستم",
+      description: `تم إضافة الليد — المصدر: ${newLead.channel ?? "غير محدد"}${newLead.campaign ? ` / ${newLead.campaign}` : ""}`,
       performedBy: "النظام",
+      type: "created",
     });
     if (!newLead.assignedTo) {
       const assigned = await this.autoAssignLead(newLead.id, creatingUserTeamId ?? null);
@@ -640,7 +641,7 @@ export class DatabaseStorage implements IStorage {
     return newLead;
   }
 
-  async updateLead(id: string, data: Partial<Lead>): Promise<Lead | undefined> {
+  async updateLead(id: string, data: Partial<Lead>, performedByName?: string): Promise<Lead | undefined> {
     const existing = await this.getLead(id);
     if (!existing) return undefined;
     const { firstContactAt: _fca, responseTimeMinutes: _rtm, ...safeUpdateData } = data as any;
@@ -650,12 +651,41 @@ export class DatabaseStorage implements IStorage {
     const score = computeScore(merged, ctx, config);
     const [updated] = await db.update(leads).set({ ...safeUpdateData, score, updatedAt: new Date() }).where(eq(leads.id, id)).returning();
     if (updated) {
-      await this.createHistory({
-        leadId: id,
-        action: "تم تحديث بيانات الليد",
-        description: `تم تعديل معلومات الليد`,
-        performedBy: "النظام",
-      });
+      const byName = performedByName ?? "النظام";
+      // Record typed history entries for specific changes
+      if (safeUpdateData.stateId !== undefined && safeUpdateData.stateId !== existing.stateId) {
+        const [fromState] = existing.stateId ? await db.select().from(leadStates).where(eq(leadStates.id, existing.stateId)).limit(1) : [null];
+        const [toState] = safeUpdateData.stateId ? await db.select().from(leadStates).where(eq(leadStates.id, safeUpdateData.stateId)).limit(1) : [null];
+        const fromName = fromState?.name ?? "—";
+        const toName = toState?.name ?? "—";
+        await this.createHistory({
+          leadId: id,
+          action: `انتقل من ${fromName} إلى ${toName}`,
+          description: `تغيير حالة الليد`,
+          performedBy: byName,
+          type: "state_change",
+          fromStateId: existing.stateId ?? null,
+          toStateId: safeUpdateData.stateId ?? null,
+        });
+      } else if (safeUpdateData.assignedTo !== undefined && safeUpdateData.assignedTo !== existing.assignedTo) {
+        const [toUser] = safeUpdateData.assignedTo ? await db.select().from(users).where(eq(users.id, safeUpdateData.assignedTo)).limit(1) : [null];
+        const toUserName = toUser ? `${toUser.firstName ?? ""} ${toUser.lastName ?? ""}`.trim() || toUser.username : safeUpdateData.assignedTo;
+        await this.createHistory({
+          leadId: id,
+          action: `اتوزع على ${toUserName}`,
+          description: `تم تعيين الليد لـ ${toUserName}`,
+          performedBy: byName,
+          type: "assignment",
+        });
+      } else {
+        await this.createHistory({
+          leadId: id,
+          action: "تم تحديث بيانات الليد",
+          description: `تم تعديل معلومات الليد`,
+          performedBy: byName,
+          type: "other",
+        });
+      }
     }
     return updated;
   }
@@ -706,6 +736,9 @@ export class DatabaseStorage implements IStorage {
     await db.update(whatsappCampaignRecipients).set({ leadId: null }).where(eq(whatsappCampaignRecipients.leadId, id));
     await db.update(whatsappFollowupRules).set({ leadId: null }).where(eq(whatsappFollowupRules.leadId, id));
 
+    // Preserve lead history by nullifying leadId (history is never deleted)
+    await db.update(leadHistory).set({ leadId: null }).where(eq(leadHistory.leadId, id));
+
     // Delete child records (cascade delete)
     await db.delete(leadUnitInterests).where(eq(leadUnitInterests.leadId, id));
     await db.delete(callLogs).where(eq(callLogs.leadId, id));
@@ -715,7 +748,6 @@ export class DatabaseStorage implements IStorage {
     await db.delete(reminders).where(eq(reminders.leadId, id));
     await db.delete(documents).where(eq(documents.leadId, id));
     await db.delete(tasks).where(eq(tasks.leadId, id));
-    await db.delete(leadHistory).where(eq(leadHistory.leadId, id));
     await db.delete(communications).where(eq(communications.leadId, id));
 
     const result = await db.delete(leads).where(eq(leads.id, id)).returning();
@@ -769,6 +801,7 @@ export class DatabaseStorage implements IStorage {
         action: "تم إضافة تاسك",
         description: `التاسك: "${task.title}"`,
         performedBy: "النظام",
+        type: "other",
       });
     }
     return newTask;
@@ -934,12 +967,21 @@ export class DatabaseStorage implements IStorage {
       meeting: "اجتماع",
       note: "ملاحظة",
     };
+    const historyTypeMap: Record<string, string> = {
+      call: "call",
+      no_answer: "call",
+      whatsapp: "whatsapp",
+      email: "other",
+      meeting: "other",
+      note: "note",
+    };
     const actionLabel = typeLabels[comm.type] ?? comm.type;
     await this.createHistory({
       leadId: comm.leadId,
       action: actionLabel,
       description: comm.note ?? `${actionLabel} من ${comm.userName ?? "المستخدم"}`,
       performedBy: comm.userName ?? undefined,
+      type: historyTypeMap[comm.type] ?? "other",
     });
     return newComm;
   }
@@ -984,6 +1026,14 @@ export class DatabaseStorage implements IStorage {
       .set({ assignedTo: agentWithLeast.id })
       .where(eq(leads.id, leadId))
       .returning();
+    const agentName = `${agentWithLeast.firstName ?? ""} ${agentWithLeast.lastName ?? ""}`.trim() || agentWithLeast.username;
+    await this.createHistory({
+      leadId,
+      action: `اتوزع على ${agentName}`,
+      description: `تم توزيع الليد تلقائياً على ${agentName}`,
+      performedBy: "النظام",
+      type: "assignment",
+    });
     return updated;
   }
 
@@ -1020,6 +1070,7 @@ export class DatabaseStorage implements IStorage {
         action: "جدولة متابعة",
         description: `${reminder.title} — ${new Date(reminder.dueDate).toLocaleDateString("ar-EG")}`,
         performedBy,
+        type: "other",
       });
     }
     return newReminder;
@@ -1267,9 +1318,10 @@ export class DatabaseStorage implements IStorage {
       .returning();
     await this.createHistory({
       leadId,
-      action: "تم تحويل الليد",
+      action: `اتوزع على ${toUserName}`,
       description: `تم تحويل الليد إلى ${toUserName}`,
       performedBy,
+      type: "assignment",
     });
     return updated;
   }
@@ -1352,6 +1404,24 @@ export class DatabaseStorage implements IStorage {
 
   async createCallLog(callLog: InsertCallLog): Promise<CallLog> {
     const [newCallLog] = await db.insert(callLogs).values(callLog).returning();
+    // Record typed history entry for call log
+    const outcomeLabels: Record<string, string> = {
+      answered: "رد",
+      no_answer: "لم يرد",
+      interested: "مهتم",
+      not_interested: "غير مهتم",
+      needs_time: "يحتاج وقت",
+      requested_visit: "طلب زيارة",
+    };
+    const [caller] = await db.select().from(users).where(eq(users.id, callLog.userId)).limit(1);
+    const callerName = caller ? `${caller.firstName ?? ""} ${caller.lastName ?? ""}`.trim() || caller.username : undefined;
+    await this.createHistory({
+      leadId: callLog.leadId,
+      action: `مكالمة — ${outcomeLabels[callLog.outcome] ?? callLog.outcome}`,
+      description: callLog.notes ?? undefined,
+      performedBy: callerName,
+      type: "call",
+    });
     return newCallLog;
   }
 
@@ -1520,6 +1590,17 @@ export class DatabaseStorage implements IStorage {
   // WhatsApp Messages Log
   async logWhatsappMessage(log: InsertWhatsappMessagesLog): Promise<WhatsappMessagesLog> {
     const [entry] = await db.insert(whatsappMessagesLog).values(log).returning();
+    // Record typed history entry for outbound WhatsApp messages only
+    if (log.leadId && log.direction === "outbound") {
+      const msgPreview = log.messageText ? (log.messageText.length > 80 ? log.messageText.slice(0, 80) + "..." : log.messageText) : undefined;
+      await this.createHistory({
+        leadId: log.leadId,
+        action: `رسالة واتساب ${log.templateName ? `— ${log.templateName}` : ""}`,
+        description: msgPreview,
+        performedBy: log.agentName ?? undefined,
+        type: "whatsapp",
+      });
+    }
     return entry;
   }
 

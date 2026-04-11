@@ -97,6 +97,7 @@ import { DocumentsTab } from "./documents-tab";
 import { WhatsAppPanel } from "./whatsapp-panel";
 import { InstallmentCalculator } from "./installment-calculator";
 import { UnitCompare } from "./unit-compare";
+import { LeadPassport } from "./lead-passport";
 import { computeLeadScore, SCORE_COLORS } from "@/lib/scoring";
 import { SocialMessagesPanel } from "./social-messages-panel";
 
@@ -816,7 +817,7 @@ export function LeadDetailPanel({
             </TabsTrigger>
             <TabsTrigger value="timeline" className="text-xs gap-1 shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-timeline">
               <Activity className="h-3.5 w-3.5 shrink-0" />
-              <span className="hidden sm:inline">السجل</span>
+              <span className="hidden sm:inline">السيرة الذاتية</span>
             </TabsTrigger>
             <TabsTrigger value="units" className="text-xs gap-1 shrink-0 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none" data-testid="tab-lead-units">
               <Home className="h-3.5 w-3.5 shrink-0" />
@@ -1696,7 +1697,7 @@ export function LeadDetailPanel({
                 </Card>
               </TabsContent>
 
-              {/* ═══════════════ TAB: السجل / Timeline ═══════════════ */}
+              {/* ═══════════════ TAB: السيرة الذاتية / Lead Passport ═══════════════ */}
               <TabsContent value="timeline" className="m-0 space-y-4">
                 {/* Manager Note button */}
                 {isManager && (
@@ -1726,116 +1727,57 @@ export function LeadDetailPanel({
                   </div>
                 )}
 
-                {/* Merged timeline: history + manager comments + communications */}
-                {(historyLoading || commentsLoading) ? (
-                  <div className="space-y-3">{[1, 2, 3].map((i) => <Card key={i}><CardContent className="p-4"><Skeleton className="h-5 w-32 mb-2" /><Skeleton className="h-4 w-48" /></CardContent></Card>)}</div>
-                ) : (() => {
-                  const historyItems = (history ?? []).map(item => ({ type: "history" as const, id: item.id, createdAt: item.createdAt, data: item }));
-                  const commentItems = (managerComments ?? []).map(c => ({ type: "manager_comment" as const, id: c.id, createdAt: c.createdAt, data: c }));
-                  const commItems = communications.map(c => ({ type: "communication" as const, id: c.id, createdAt: c.createdAt, data: c }));
-                  const allItems = [...historyItems, ...commentItems, ...commItems].sort((a, b) => {
-                    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-                    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-                    return bTime - aTime;
-                  });
-
-                  if (allItems.length === 0) {
-                    return (
-                      <Card>
-                        <CardContent className="flex flex-col items-center justify-center py-8">
-                          <History className="h-10 w-10 text-muted-foreground/50 mb-3" />
-                          <p className="text-muted-foreground text-sm">لا يوجد سجل بعد</p>
-                        </CardContent>
-                      </Card>
-                    );
-                  }
-
-                  return (
-                    <div className="relative">
-                      <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-border rtl:left-auto rtl:right-4" />
-                      <div className="space-y-3">
-                        {allItems.map((item) => {
-                          if (item.type === "manager_comment") {
-                            const comment = item.data as LeadManagerComment;
-                            const isMyComment = currentUser?.id === comment.managerId;
-                            const isBeingEdited = editingCommentId === comment.id;
-                            return (
-                              <div key={`mc-${comment.id}`} className="relative pl-10 rtl:pl-0 rtl:pr-10" data-testid={`manager-comment-${comment.id}`}>
-                                <div className="absolute left-2.5 top-2 h-3 w-3 rounded-full bg-amber-500 rtl:left-auto rtl:right-2.5" />
-                                <Card className="border-l-4 border-l-amber-400 dark:border-l-amber-600 bg-amber-50/50 dark:bg-amber-950/20">
-                                  <CardContent className="p-3">
-                                    <div className="flex items-start justify-between gap-2">
-                                      <div className="flex items-center gap-2">
-                                        <MessageSquare className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                                        <span className="font-semibold text-sm text-amber-700 dark:text-amber-300">ملاحظة المانجر</span>
-                                        {!comment.isReadByAgent && isAssignedAgent && <Badge className="bg-amber-500 text-white text-xs px-1.5 py-0">جديد</Badge>}
-                                        {comment.isReadByAgent && isManager && <Badge variant="outline" className="text-xs px-1.5 py-0 border-green-400 text-green-600"><Check className="h-3 w-3 mr-1" />تمت القراءة</Badge>}
-                                      </div>
-                                      <div className="flex items-center gap-1">
-                                        <span className="text-xs text-muted-foreground">{comment.createdAt ? format(new Date(comment.createdAt), "dd/MM HH:mm") : ""}</span>
-                                        {isMyComment && !isBeingEdited && (
-                                          <>
-                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditingCommentId(comment.id); setEditingCommentContent(comment.content); }} data-testid={`button-edit-manager-comment-${comment.id}`}><Edit2 className="h-3 w-3" /></Button>
-                                            <Button variant="ghost" size="icon" className="h-6 w-6 hover:text-destructive" onClick={() => deleteManagerCommentMutation.mutate(comment.id)} data-testid={`button-delete-manager-comment-${comment.id}`}><Trash2 className="h-3 w-3" /></Button>
-                                          </>
-                                        )}
-                                        {isBeingEdited && (
-                                          <>
-                                            <Button variant="ghost" size="icon" className="h-6 w-6 text-green-600" onClick={() => editManagerCommentMutation.mutate({ id: comment.id, content: editingCommentContent })} disabled={!editingCommentContent.trim()} data-testid={`button-save-manager-comment-${comment.id}`}><Check className="h-3 w-3" /></Button>
-                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditingCommentId(null); setEditingCommentContent(""); }} data-testid={`button-cancel-edit-manager-comment-${comment.id}`}><X className="h-3 w-3" /></Button>
-                                          </>
-                                        )}
-                                      </div>
-                                    </div>
-                                    {isBeingEdited ? (
-                                      <Textarea value={editingCommentContent} onChange={(e) => setEditingCommentContent(e.target.value)} rows={3} className="mt-2 border-amber-200 focus:border-amber-400" data-testid={`textarea-edit-manager-comment-${comment.id}`} />
-                                    ) : (
-                                      <p className="text-sm mt-2 whitespace-pre-wrap">{comment.content}</p>
-                                    )}
-                                    <p className="text-xs text-muted-foreground mt-1">{comment.managerName}</p>
-                                  </CardContent>
-                                </Card>
-                              </div>
-                            );
-                          }
-
-                          if (item.type === "communication") {
-                            const comm = item.data as Communication;
-                            const typeInfo = commIconMap[comm.type] || commIconMap.note;
-                            return (
-                              <div key={`comm-${comm.id}`} className="relative pl-10 rtl:pl-0 rtl:pr-10">
-                                <div className={`absolute left-2 top-2 w-4 h-4 rounded-full flex items-center justify-center rtl:left-auto rtl:right-2 ${typeInfo.color}`}>{typeInfo.icon}</div>
-                                <div className="p-3 rounded-md border text-sm">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <Badge variant="secondary" className={`text-xs ${typeInfo.color}`}>{commTypeLabel[comm.type] || comm.type}</Badge>
-                                    <span className="text-xs text-muted-foreground">{comm.createdAt && format(new Date(comm.createdAt), "dd/MM, HH:mm")}</span>
-                                  </div>
-                                  {comm.note && <p className="text-muted-foreground mt-1">{comm.note}</p>}
-                                  {comm.userName && <p className="text-xs text-muted-foreground mt-1">بواسطة: {comm.userName}</p>}
+                {/* Manager comments */}
+                {commentsLoading ? (
+                  <div className="space-y-2">{[1, 2].map((i) => <Card key={i}><CardContent className="p-3"><Skeleton className="h-4 w-40 mb-1" /><Skeleton className="h-3 w-56" /></CardContent></Card>)}</div>
+                ) : (managerComments ?? []).length > 0 ? (
+                  <div className="space-y-2">
+                    {(managerComments ?? []).map((comment) => {
+                      const isMyComment = currentUser?.id === comment.managerId;
+                      const isBeingEdited = editingCommentId === comment.id;
+                      return (
+                        <div key={`mc-${comment.id}`} data-testid={`manager-comment-${comment.id}`}>
+                          <Card className="border-l-4 border-l-amber-400 dark:border-l-amber-600 bg-amber-50/50 dark:bg-amber-950/20">
+                            <CardContent className="p-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <MessageSquare className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                                  <span className="font-semibold text-sm text-amber-700 dark:text-amber-300">ملاحظة المانجر</span>
+                                  {!comment.isReadByAgent && isAssignedAgent && <Badge className="bg-amber-500 text-white text-xs px-1.5 py-0">جديد</Badge>}
+                                  {comment.isReadByAgent && isManager && <Badge variant="outline" className="text-xs px-1.5 py-0 border-green-400 text-green-600"><Check className="h-3 w-3 mr-1" />تمت القراءة</Badge>}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-xs text-muted-foreground">{comment.createdAt ? format(new Date(comment.createdAt), "dd/MM HH:mm") : ""}</span>
+                                  {isMyComment && !isBeingEdited && (
+                                    <>
+                                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditingCommentId(comment.id); setEditingCommentContent(comment.content); }} data-testid={`button-edit-manager-comment-${comment.id}`}><Edit2 className="h-3 w-3" /></Button>
+                                      <Button variant="ghost" size="icon" className="h-6 w-6 hover:text-destructive" onClick={() => deleteManagerCommentMutation.mutate(comment.id)} data-testid={`button-delete-manager-comment-${comment.id}`}><Trash2 className="h-3 w-3" /></Button>
+                                    </>
+                                  )}
+                                  {isBeingEdited && (
+                                    <>
+                                      <Button variant="ghost" size="icon" className="h-6 w-6 text-green-600" onClick={() => editManagerCommentMutation.mutate({ id: comment.id, content: editingCommentContent })} disabled={!editingCommentContent.trim()} data-testid={`button-save-manager-comment-${comment.id}`}><Check className="h-3 w-3" /></Button>
+                                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditingCommentId(null); setEditingCommentContent(""); }} data-testid={`button-cancel-edit-manager-comment-${comment.id}`}><X className="h-3 w-3" /></Button>
+                                    </>
+                                  )}
                                 </div>
                               </div>
-                            );
-                          }
+                              {isBeingEdited ? (
+                                <Textarea value={editingCommentContent} onChange={(e) => setEditingCommentContent(e.target.value)} rows={3} className="mt-2 border-amber-200 focus:border-amber-400" data-testid={`textarea-edit-manager-comment-${comment.id}`} />
+                              ) : (
+                                <p className="text-sm mt-2 whitespace-pre-wrap">{comment.content}</p>
+                              )}
+                              <p className="text-xs text-muted-foreground mt-1">{comment.managerName}</p>
+                            </CardContent>
+                          </Card>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
 
-                          const historyItem = item.data as LeadHistory;
-                          return (
-                            <div key={`h-${historyItem.id}`} className="relative pl-10 rtl:pl-0 rtl:pr-10">
-                              <div className="absolute left-2.5 top-2 h-3 w-3 rounded-full bg-primary rtl:left-auto rtl:right-2.5" />
-                              <div className="p-3 rounded-md border text-sm">
-                                <div className="flex items-center justify-between gap-2">
-                                  <p className="font-medium">{historyItem.action}</p>
-                                  <span className="text-xs text-muted-foreground">{historyItem.createdAt ? format(new Date(historyItem.createdAt), "dd/MM, HH:mm") : ""}</span>
-                                </div>
-                                {historyItem.description && <p className="text-muted-foreground mt-1">{historyItem.description}</p>}
-                                {historyItem.performedBy && <p className="text-xs text-muted-foreground mt-1">بواسطة {historyItem.performedBy}</p>}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
+                {/* Lead Passport Timeline */}
+                <LeadPassport leadId={lead.id} />
               </TabsContent>
 
               {/* ═══════════════ TAB: الوحدات المهتم بها ═══════════════ */}

@@ -179,6 +179,11 @@ app.use((req, res, next) => {
     ADD COLUMN IF NOT EXISTS zone INTEGER NOT NULL DEFAULT 0
   `).catch(() => {});
 
+  // Lead History typed columns (Task #5 - Lead Passport)
+  await pool.query(`
+    ALTER TABLE lead_history ADD COLUMN IF NOT EXISTS type text DEFAULT 'other'
+  `).catch(() => {});
+
   await pool.query(`
     ALTER TABLE lead_history 
     ADD COLUMN IF NOT EXISTS from_state_id VARCHAR REFERENCES lead_states(id) ON DELETE SET NULL,

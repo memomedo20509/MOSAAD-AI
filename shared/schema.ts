@@ -115,12 +115,18 @@ export type UpdateTask = z.infer<typeof updateTaskSchema>;
 export type Task = typeof tasks.$inferSelect;
 
 // Lead History/Actions
+export const LEAD_HISTORY_TYPES = ["created", "state_change", "assignment", "call", "whatsapp", "note", "other"] as const;
+export type LeadHistoryType = typeof LEAD_HISTORY_TYPES[number];
+
 export const leadHistory = pgTable("lead_history", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   leadId: varchar("lead_id").references(() => leads.id),
   action: text("action").notNull(),
   description: text("description"),
   performedBy: text("performed_by"),
+  type: text("type").default("other"),
+  fromStateId: varchar("from_state_id"),
+  toStateId: varchar("to_state_id"),
   createdAt: timestamp("created_at").defaultNow(),
   fromStateId: varchar("from_state_id").references(() => leadStates.id),
   toStateId: varchar("to_state_id").references(() => leadStates.id),

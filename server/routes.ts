@@ -408,6 +408,8 @@ export async function registerRoutes(
         return res.status(403).json({ error: "Access denied" });
       }
       const data = updateLeadSchema.parse(req.body);
+      const user = req.user;
+      const performedByName = user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.username : undefined;
 
       // Transition rule enforcement when stateId is being changed
       if (data.stateId) {
@@ -461,26 +463,11 @@ export async function registerRoutes(
                 });
               }
             }
-
-            // Record state transition in history
-            const performedByUser = req.user;
-            const performedByName = performedByUser
-              ? `${performedByUser.firstName ?? ""} ${performedByUser.lastName ?? ""}`.trim() || performedByUser.username
-              : "System";
-
-            await storage.createHistory({
-              leadId: id,
-              action: "state_change",
-              description: `تم تغيير الحالة من "${fromState.name}" إلى "${toState.name}"`,
-              performedBy: performedByName,
-              fromStateId: currentLead.stateId,
-              toStateId: data.stateId,
-            });
           }
         }
       }
 
-      const lead = await storage.updateLead(id, data);
+      const lead = await storage.updateLead(id, data, performedByName);
       if (!lead) {
         return res.status(404).json({ error: "Lead not found" });
       }
