@@ -2,64 +2,62 @@ import { storage } from "./storage";
 import { hashPassword } from "./auth";
 import { pool } from "./db";
 
-const DEFAULT_LEAD_STATES = [
-  { name: "ليد جديد", color: "#3b82f6", order: 1 },
-  { name: "تحت المتابعة", color: "#f59e0b", order: 2 },
-  { name: "ميتنج", color: "#8b5cf6", order: 3 },
-  { name: "عرض سعر", color: "#06b6d4", order: 4 },
-  { name: "محجوز", color: "#f97316", order: 5 },
-  { name: "تم الصفقة", color: "#22c55e", order: 6 },
-  { name: "ملغي", color: "#ef4444", order: 7 },
+// The canonical 12 required funnel states in strict order
+// This is the single source of truth - seed will converge DB to exactly this list
+const CANONICAL_STATES = [
+  { name: "ليد جديد", color: "#64748b", order: 1, category: "untouched" as const, canGoBack: false, isSystemState: true, zone: 1 },
+  { name: "لا يرد (Untouched)", color: "#94a3b8", order: 2, category: "untouched" as const, canGoBack: false, isSystemState: true, zone: 1 },
+  { name: "خارج الخدمة", color: "#6b7280", order: 3, category: "untouched" as const, canGoBack: false, isSystemState: true, zone: 1 },
+  { name: "متابعة", color: "#3b82f6", order: 4, category: "active" as const, canGoBack: true, isSystemState: true, zone: 2 },
+  { name: "لا يرد (متابعة)", color: "#60a5fa", order: 5, category: "active" as const, canGoBack: true, isSystemState: true, zone: 2 },
+  { name: "ميتنج", color: "#8b5cf6", order: 6, category: "active" as const, canGoBack: true, isSystemState: true, zone: 2 },
+  { name: "متابعة بعد الميتنج", color: "#a78bfa", order: 7, category: "active" as const, canGoBack: true, isSystemState: true, zone: 2 },
+  { name: "لا يرد (بعد الميتنج)", color: "#c4b5fd", order: 8, category: "active" as const, canGoBack: true, isSystemState: true, zone: 2 },
+  { name: "محجوز", color: "#22c55e", order: 9, category: "won" as const, canGoBack: false, isSystemState: true, zone: 3 },
+  { name: "إلغاء بعد الميتنج", color: "#f97316", order: 10, category: "lost" as const, canGoBack: false, isSystemState: true, zone: 4 },
+  { name: "تم الصفقة", color: "#16a34a", order: 11, category: "won" as const, canGoBack: false, isSystemState: true, zone: 3 },
+  { name: "ميزانية منخفضة", color: "#ef4444", order: 12, category: "lost" as const, canGoBack: false, isSystemState: true, zone: 4 },
 ];
-
-const ENGLISH_TO_ARABIC_STATE_NAMES: Record<string, string> = {
-  "New Leads": "ليد جديد",
-  "New Lead": "ليد جديد",
-  "Follow Up": "تحت المتابعة",
-  "Meeting": "ميتنج",
-  "Price Offer": "عرض سعر",
-  "Reserved": "محجوز",
-  "Done Deal": "تم الصفقة",
-  "Canceled": "ملغي",
-  "Not Interested": "غير مهتم",
-};
 
 export async function seedDefaultLeadStates() {
   try {
     const existingStates = await storage.getAllStates();
-    if (existingStates.length === 0) {
-      for (const state of DEFAULT_LEAD_STATES) {
-        await storage.createState(state);
-      }
-      console.log("Default lead states seeded successfully");
-    } else {
-      let migratedCount = 0;
-      const alreadyMigratedTargets = new Set<string>();
-      for (const state of existingStates) {
-        const arabicName = ENGLISH_TO_ARABIC_STATE_NAMES[state.name];
-        if (arabicName && !alreadyMigratedTargets.has(arabicName)) {
-          const targetAlreadyExists = existingStates.some(s => s.id !== state.id && s.name === arabicName);
-          if (targetAlreadyExists) {
-            alreadyMigratedTargets.add(arabicName);
-            continue;
-          }
-          await storage.updateState(state.id, { name: arabicName });
-          alreadyMigratedTargets.add(arabicName);
-          migratedCount++;
-        }
-      }
-      if (migratedCount > 0) {
-        console.log(`Migrated ${migratedCount} lead states to Arabic terminology`);
-      }
-      const allStatesAfterMigration = await storage.getAllStates();
-      const existingNames = allStatesAfterMigration.map(s => s.name);
-      for (const required of DEFAULT_LEAD_STATES) {
-        if (!existingNames.includes(required.name)) {
-          await storage.createState(required);
-          console.log(`Created missing required state: ${required.name}`);
-        }
+    const existingNames = new Map(existingStates.map(s => [s.name, s]));
+
+    // Step 1: Ensure all canonical states exist with correct metadata
+    for (const canonical of CANONICAL_STATES) {
+      const existing = existingNames.get(canonical.name);
+      if (!existing) {
+        // Create missing canonical state - use direct SQL to set exact order
+        await pool.query(
+          `INSERT INTO lead_states (id, name, color, "order", category, can_go_back, is_system_state, zone)
+           VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT DO NOTHING`,
+          [canonical.name, canonical.color, canonical.order, canonical.category, canonical.canGoBack, canonical.isSystemState, canonical.zone]
+        );
+      } else {
+        // Update existing state with canonical metadata (preserve user-customized color if not default)
+        await pool.query(
+          `UPDATE lead_states 
+           SET "order" = $1, category = $2, can_go_back = $3, is_system_state = $4, zone = $5
+           WHERE id = $6`,
+          [canonical.order, canonical.category, canonical.canGoBack, canonical.isSystemState, canonical.zone, existing.id]
+        );
       }
     }
+
+    // Step 2: Delete non-system states that are empty (no leads assigned)
+    // This cleans up legacy states without data loss risk
+    await pool.query(`
+      DELETE FROM lead_states 
+      WHERE is_system_state = false 
+        AND id NOT IN (SELECT DISTINCT state_id FROM leads WHERE state_id IS NOT NULL)
+        AND name NOT IN (${CANONICAL_STATES.map((_, i) => `$${i + 1}`).join(',')})
+    `, CANONICAL_STATES.map(s => s.name)).catch((err) => {
+      console.warn("Could not clean up empty legacy states:", err.message);
+    });
+
+    console.log("Lead states seeded/updated with canonical funnel zones successfully");
   } catch (error) {
     console.error("Error seeding default lead states:", error);
   }
@@ -67,9 +65,6 @@ export async function seedDefaultLeadStates() {
 
 /**
  * Backfill nameEn for developers seeded from Nawy data.
- * Handles two cases:
- *  1. nameEn is NULL or empty and the name column contains "English | Arabic" bilingual format
- *  2. Developers that were scraped and have a nameEn already are left unchanged
  */
 export async function backfillDeveloperNameEn() {
   try {
@@ -84,7 +79,6 @@ export async function backfillDeveloperNameEn() {
     if (result.rowCount && result.rowCount > 0) {
       console.log(`Backfilled nameEn for ${result.rowCount} developers`);
     }
-    // Report any developers still missing nameEn after backfill
     const missing = await pool.query(`
       SELECT COUNT(*) AS count FROM developers
       WHERE name_en IS NULL OR TRIM(name_en) = ''

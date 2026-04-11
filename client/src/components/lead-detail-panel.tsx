@@ -702,27 +702,65 @@ export function LeadDetailPanel({
           </div>
 
           {/* State progress bar */}
-          <div className="flex items-center gap-1.5 mt-3 flex-wrap">
-            {sortedStates.map((state, idx) => {
-              const currentIdx = sortedStates.findIndex(s => s.id === lead.stateId);
-              const isPast = idx < currentIdx;
-              const isCurrent = state.id === lead.stateId;
-              return (
-                <button
-                  key={state.id}
-                  onClick={() => onUpdate({ stateId: state.id })}
-                  title={state.name}
-                  className={`h-1.5 flex-1 min-w-[20px] rounded-full transition-all hover:opacity-80 ${
-                    isCurrent ? "opacity-100" : isPast ? "opacity-60" : "opacity-20"
-                  }`}
-                  style={{ backgroundColor: state.color }}
-                  data-testid={`btn-state-${state.id}`}
-                />
-              );
-            })}
-          </div>
+          {(() => {
+            const isAdminUser = ["super_admin", "admin", "company_owner", "sales_admin"].includes(currentUser?.role ?? "");
+            const currentStateCategory = currentState?.category ?? "active";
+            const currentStateZone = currentState?.zone ?? 0;
+            const leadIsActiveOrBeyond = currentStateCategory !== "untouched";
+            return (
+              <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+                {sortedStates.map((state, idx) => {
+                  const currentIdx = sortedStates.findIndex(s => s.id === lead.stateId);
+                  const currentStateOrder = currentState?.order ?? 0;
+                  const isPast = idx < currentIdx;
+                  const isCurrent = state.id === lead.stateId;
+                  // Block untouched revert for non-admins
+                  const isBlockedUntouched = !isAdminUser && leadIsActiveOrBeyond && state.category === "untouched";
+                  // Block backward zone transitions for non-admins
+                  const isBlockedBackwardZone = !isAdminUser && !isCurrent &&
+                    (state.zone ?? 0) < currentStateZone && !state.canGoBack;
+                  // Block backward within same zone for non-admins
+                  const isBlockedSameZone = !isAdminUser && !isCurrent &&
+                    (state.zone ?? 0) === currentStateZone && (state.order ?? 0) < currentStateOrder && !state.canGoBack;
+                  const isBlocked = isBlockedUntouched || isBlockedBackwardZone || isBlockedSameZone;
+                  const opacityClass = isCurrent ? "opacity-100" : isPast ? "opacity-60" : "opacity-20";
+                  if (isBlocked) {
+                    return (
+                      <div
+                        key={state.id}
+                        className={`h-1.5 flex-1 min-w-[20px] rounded-full ${opacityClass} opacity-10`}
+                        style={{ backgroundColor: state.color }}
+                        data-testid={`bar-state-${state.id}`}
+                      />
+                    );
+                  }
+                  return (
+                    <button
+                      key={state.id}
+                      onClick={() => onUpdate({ stateId: state.id })}
+                      title={state.name}
+                      className={`h-1.5 flex-1 min-w-[20px] rounded-full transition-all hover:opacity-80 cursor-pointer ${opacityClass}`}
+                      style={{ backgroundColor: state.color }}
+                      data-testid={`btn-state-${state.id}`}
+                    />
+                  );
+                })}
+              </div>
+            );
+          })()}
           <p className="text-xs text-muted-foreground mt-1">
             {t.currentStage || "المرحلة الحالية"}: <span className="font-medium">{currentState?.name || "—"}</span>
+            {currentState?.category && (
+              <span className={`mr-1 text-xs ${
+                currentState.category === "untouched" ? "text-slate-500" :
+                currentState.category === "active" ? "text-blue-500" :
+                currentState.category === "won" ? "text-green-500" : "text-red-500"
+              }`}>
+                ({currentState.category === "untouched" ? "غير متفاعل" :
+                  currentState.category === "active" ? "تحت المتابعة" :
+                  currentState.category === "won" ? "فاز" : "خسارة"})
+              </span>
+            )}
           </p>
 
           {/* Summary stats bar */}
@@ -977,9 +1015,27 @@ export function LeadDetailPanel({
                               <SelectValue placeholder="اختر الحالة" />
                             </SelectTrigger>
                             <SelectContent>
-                              {states.map((state) => (
-                                <SelectItem key={state.id} value={state.id}>{state.name}</SelectItem>
-                              ))}
+                              {(() => {
+                                const isAdminUser = ["super_admin", "admin", "company_owner", "sales_admin"].includes(currentUser?.role ?? "");
+                                const leadCurrentCat = currentState?.category ?? "active";
+                                const leadCurrentZone = currentState?.zone ?? 0;
+                                const leadIsActiveOrBeyond = leadCurrentCat !== "untouched";
+                                const leadCurrentOrder = currentState?.order ?? 0;
+                                return states
+                                  .filter(s => {
+                                    if (isAdminUser) return true;
+                                    // Block untouched revert
+                                    if (leadIsActiveOrBeyond && s.category === "untouched") return false;
+                                    // Block backward zone transitions that are not reversible
+                                    if ((s.zone ?? 0) < leadCurrentZone && !s.canGoBack) return false;
+                                    // Block backward within same zone
+                                    if ((s.zone ?? 0) === leadCurrentZone && (s.order ?? 0) < leadCurrentOrder && !s.canGoBack) return false;
+                                    return true;
+                                  })
+                                  .map((state) => (
+                                    <SelectItem key={state.id} value={state.id}>{state.name}</SelectItem>
+                                  ));
+                              })()}
                             </SelectContent>
                           </Select>
                         </div>

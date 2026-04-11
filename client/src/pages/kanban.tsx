@@ -56,14 +56,15 @@ export default function KanbanPage() {
   });
 
   const moveStageMutation = useMutation({
-    mutationFn: ({ id, stateId }: { id: string; stateId: string }) =>
-      apiRequest("PATCH", `/api/leads/${id}`, { stateId }),
+    mutationFn: async ({ id, stateId }: { id: string; stateId: string }) => {
+      return apiRequest("PATCH", `/api/leads/${id}`, { stateId });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
       toast({ title: t.leadUpdatedSuccess });
     },
-    onError: () => {
-      toast({ title: t.leadUpdatedError, variant: "destructive" });
+    onError: (err: Error) => {
+      toast({ title: err.message || t.leadUpdatedError, variant: "destructive" });
     },
   });
 
@@ -131,7 +132,34 @@ export default function KanbanPage() {
   };
 
   const channels = [...new Set(leads.map((l) => l.channel).filter(Boolean))];
-  const sortedStates = [...states].sort((a, b) => a.order - b.order);
+  const sortedStates = [...states].sort((a, b) => {
+    const zoneDiff = (a.zone ?? 0) - (b.zone ?? 0);
+    if (zoneDiff !== 0) return zoneDiff;
+    return a.order - b.order;
+  });
+
+  const getZoneStyle = (state: LeadState) => {
+    const category = state.category ?? "active";
+    switch (category) {
+      case "untouched":
+        return { border: "border-slate-300 dark:border-slate-700", header: "bg-slate-100 dark:bg-slate-800/50", badge: "text-slate-600 dark:text-slate-400" };
+      case "active":
+        return { border: "border-blue-200 dark:border-blue-900", header: "bg-blue-50 dark:bg-blue-950/40", badge: "text-blue-600 dark:text-blue-400" };
+      case "won":
+        return { border: "border-green-200 dark:border-green-900", header: "bg-green-50 dark:bg-green-950/40", badge: "text-green-600 dark:text-green-400" };
+      case "lost":
+        return { border: "border-red-200 dark:border-red-900", header: "bg-red-50 dark:bg-red-950/40", badge: "text-red-600 dark:text-red-400" };
+      default:
+        return { border: "border-border/50", header: "", badge: "" };
+    }
+  };
+
+  const ZONE_LABELS: Record<string, string> = {
+    untouched: "غير متفاعل",
+    active: "تحت المتابعة",
+    won: "تم الفوز",
+    lost: "خسارة",
+  };
 
   if (leadsLoading || statesLoading) {
     return (
@@ -199,17 +227,23 @@ export default function KanbanPage() {
             {sortedStates.map((state) => {
               const stateLeads = getLeadsByState(state.id);
               const totalBudget = getColumnTotalBudget(stateLeads);
+              const zoneStyle = getZoneStyle(state);
+              const zoneLabel = ZONE_LABELS[state.category ?? "active"];
 
               return (
-                <div key={state.id} className="w-72 flex-shrink-0 flex flex-col bg-muted/30 rounded-xl border border-border/50">
+                <div key={state.id} className={`w-72 flex-shrink-0 flex flex-col bg-muted/30 rounded-xl border ${zoneStyle.border}`}>
                   {/* Column Header */}
                   <div
-                    className="px-3 py-2.5 rounded-t-xl flex items-center justify-between"
-                    style={{ backgroundColor: state.color + "15" }}
+                    className={`px-3 py-2.5 rounded-t-xl flex items-center justify-between ${zoneStyle.header}`}
                   >
                     <div className="flex items-center gap-2">
                       <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: state.color }} />
-                      <h3 className="font-semibold text-sm">{state.name}</h3>
+                      <div>
+                        <h3 className="font-semibold text-sm">{state.name}</h3>
+                        {state.category && (
+                          <span className={`text-xs font-normal opacity-70 ${zoneStyle.badge}`}>{zoneLabel}</span>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {totalBudget && (

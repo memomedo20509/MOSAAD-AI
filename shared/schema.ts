@@ -4,15 +4,25 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { users } from "./models/auth";
 
+// Lead State Categories
+export const LEAD_STATE_CATEGORIES = ["untouched", "active", "won", "lost"] as const;
+export type LeadStateCategory = typeof LEAD_STATE_CATEGORIES[number];
+
 // Lead States
 export const leadStates = pgTable("lead_states", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   color: text("color").notNull().default("#6366f1"),
   order: integer("order").notNull().default(0),
+  category: text("category").notNull().default("active"),
+  canGoBack: boolean("can_go_back").notNull().default(true),
+  isSystemState: boolean("is_system_state").notNull().default(false),
+  zone: integer("zone").notNull().default(0),
 });
 
-export const insertLeadStateSchema = createInsertSchema(leadStates).omit({ id: true });
+export const insertLeadStateSchema = createInsertSchema(leadStates).omit({ id: true }).extend({
+  category: z.enum(["untouched", "active", "won", "lost"]).default("active"),
+});
 export const updateLeadStateSchema = insertLeadStateSchema.partial();
 export type InsertLeadState = z.infer<typeof insertLeadStateSchema>;
 export type UpdateLeadState = z.infer<typeof updateLeadStateSchema>;
@@ -112,6 +122,8 @@ export const leadHistory = pgTable("lead_history", {
   description: text("description"),
   performedBy: text("performed_by"),
   createdAt: timestamp("created_at").defaultNow(),
+  fromStateId: varchar("from_state_id").references(() => leadStates.id),
+  toStateId: varchar("to_state_id").references(() => leadStates.id),
 });
 
 export const insertLeadHistorySchema = createInsertSchema(leadHistory).omit({ id: true, createdAt: true });

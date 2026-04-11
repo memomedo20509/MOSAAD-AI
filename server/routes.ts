@@ -249,10 +249,20 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/states", async (req, res) => {
+  // Map category to zone number deterministically
+  const categoryToZone: Record<string, number> = {
+    untouched: 1,
+    active: 2,
+    won: 3,
+    lost: 4,
+  };
+
+  app.post("/api/states", isAuthenticated, requireRole("super_admin", "admin", "sales_admin", "company_owner"), async (req, res) => {
     try {
       const data = insertLeadStateSchema.parse(req.body);
-      const state = await storage.createState(data);
+      // Always derive zone from category to keep them in sync
+      const zone = categoryToZone[data.category ?? "active"] ?? 2;
+      const state = await storage.createState({ ...data, zone });
       res.status(201).json(state);
     } catch (error) {
       console.error("Error creating state:", error);
@@ -260,11 +270,13 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/states/:id", async (req, res) => {
+  app.patch("/api/states/:id", isAuthenticated, requireRole("super_admin", "admin", "sales_admin", "company_owner"), async (req, res) => {
     try {
       const { id } = req.params;
       const data = updateLeadStateSchema.parse(req.body);
-      const state = await storage.updateState(id, data);
+      // If category is being updated, sync zone automatically
+      const zone = data.category ? (categoryToZone[data.category] ?? 2) : undefined;
+      const state = await storage.updateState(id, zone !== undefined ? { ...data, zone } : data);
       if (!state) {
         return res.status(404).json({ error: "State not found" });
       }
@@ -275,9 +287,16 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/states/:id", async (req, res) => {
+  app.delete("/api/states/:id", isAuthenticated, requireRole("super_admin", "admin", "sales_admin", "company_owner"), async (req, res) => {
     try {
       const { id } = req.params;
+      const state = await storage.getState(id);
+      if (!state) {
+        return res.status(404).json({ error: "State not found" });
+      }
+      if (state.isSystemState) {
+        return res.status(403).json({ error: "لا يمكن حذف الحالات الأساسية للنظام" });
+      }
       const deleted = await storage.deleteState(id);
       if (!deleted) {
         return res.status(404).json({ error: "State not found" });
@@ -389,6 +408,78 @@ export async function registerRoutes(
         return res.status(403).json({ error: "Access denied" });
       }
       const data = updateLeadSchema.parse(req.body);
+
+      // Transition rule enforcement when stateId is being changed
+      if (data.stateId) {
+        const currentLead = await storage.getLead(id);
+        if (currentLead && currentLead.stateId && currentLead.stateId !== data.stateId) {
+          const fromState = await storage.getState(currentLead.stateId);
+          const toState = await storage.getState(data.stateId);
+          const userRole = req.user?.role ?? "sales_agent";
+          const isAdmin = ["super_admin", "admin", "company_owner", "sales_admin"].includes(userRole);
+
+          if (fromState && toState) {
+            const fromCategory = fromState.category ?? "active";
+            const toCategory = toState.category ?? "active";
+            const fromZone = fromState.zone ?? 0;
+            const toZone = toState.zone ?? 0;
+
+            const fromOrder = fromState.order ?? 0;
+            const toOrder = toState.order ?? 0;
+
+            if (!isAdmin) {
+              // Rule 1: Cannot move back to Untouched zone once lead has left Untouched
+              if (toCategory === "untouched" && fromCategory !== "untouched") {
+                return res.status(403).json({
+                  error: "لا يمكن إرجاع الليد لمرحلة 'غير متفاعل' بعد التعامل معه. فقط الأدمن يمكنه ذلك.",
+                  code: "TRANSITION_BLOCKED"
+                });
+              }
+
+              // Rule 2: Cannot move backwards across zones unless canGoBack is true on target
+              if (toZone < fromZone && !toState.canGoBack) {
+                return res.status(403).json({
+                  error: `لا يمكن الرجوع لمرحلة "${toState.name}" من "${fromState.name}". هذا الانتقال غير مسموح.`,
+                  code: "TRANSITION_BLOCKED"
+                });
+              }
+
+              // Rule 3: From Won/Lost zones, cannot go backwards to Active or Untouched (won/lost are final for non-admins)
+              if ((fromCategory === "won" || fromCategory === "lost") && 
+                  (toCategory === "untouched" || toCategory === "active")) {
+                return res.status(403).json({
+                  error: `لا يمكن إرجاع الليد من مرحلة "${fromState.name}" لمرحلة "${toState.name}". هذا الانتقال يحتاج صلاحية أدمن.`,
+                  code: "TRANSITION_BLOCKED"
+                });
+              }
+
+              // Rule 4: Within the same zone, movement must be forward (ascending order) unless canGoBack on target
+              if (toZone === fromZone && toOrder < fromOrder && !toState.canGoBack) {
+                return res.status(403).json({
+                  error: `لا يمكن الرجوع لمرحلة "${toState.name}" من "${fromState.name}" داخل نفس المنطقة.`,
+                  code: "TRANSITION_BLOCKED"
+                });
+              }
+            }
+
+            // Record state transition in history
+            const performedByUser = req.user;
+            const performedByName = performedByUser
+              ? `${performedByUser.firstName ?? ""} ${performedByUser.lastName ?? ""}`.trim() || performedByUser.username
+              : "System";
+
+            await storage.createHistory({
+              leadId: id,
+              action: "state_change",
+              description: `تم تغيير الحالة من "${fromState.name}" إلى "${toState.name}"`,
+              performedBy: performedByName,
+              fromStateId: currentLead.stateId,
+              toStateId: data.stateId,
+            });
+          }
+        }
+      }
+
       const lead = await storage.updateLead(id, data);
       if (!lead) {
         return res.status(404).json({ error: "Lead not found" });

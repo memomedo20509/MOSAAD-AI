@@ -170,6 +170,21 @@ app.use((req, res, next) => {
     )
   `).catch(() => {});
 
+  // Task #4: Sales Funnel Zones & Transition Rules
+  await pool.query(`
+    ALTER TABLE lead_states 
+    ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'active',
+    ADD COLUMN IF NOT EXISTS can_go_back BOOLEAN NOT NULL DEFAULT true,
+    ADD COLUMN IF NOT EXISTS is_system_state BOOLEAN NOT NULL DEFAULT false,
+    ADD COLUMN IF NOT EXISTS zone INTEGER NOT NULL DEFAULT 0
+  `).catch(() => {});
+
+  await pool.query(`
+    ALTER TABLE lead_history 
+    ADD COLUMN IF NOT EXISTS from_state_id VARCHAR REFERENCES lead_states(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS to_state_id VARCHAR REFERENCES lead_states(id) ON DELETE SET NULL
+  `).catch(() => {});
+
   await registerRoutes(httpServer, app);
   
   await seedDefaultAdmin();

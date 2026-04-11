@@ -4,7 +4,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -39,6 +48,7 @@ import {
   ChevronDown,
   GripVertical,
   Loader2,
+  Lock,
 } from "lucide-react";
 import type { LeadState } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -46,17 +56,34 @@ import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/lib/i18n";
 
 const defaultColors = [
-  "#3b82f6", // Blue
-  "#22c55e", // Green
-  "#f59e0b", // Amber
-  "#ef4444", // Red
-  "#8b5cf6", // Purple
-  "#06b6d4", // Cyan
-  "#f97316", // Orange
-  "#ec4899", // Pink
-  "#64748b", // Slate
-  "#14b8a6", // Teal
+  "#3b82f6",
+  "#22c55e",
+  "#f59e0b",
+  "#ef4444",
+  "#8b5cf6",
+  "#06b6d4",
+  "#f97316",
+  "#ec4899",
+  "#64748b",
+  "#14b8a6",
 ];
+
+const CATEGORY_OPTIONS = [
+  { value: "untouched", label: "غير متفاعل (Untouched)", color: "bg-slate-100 text-slate-700 border-slate-300" },
+  { value: "active", label: "تحت المتابعة (Active)", color: "bg-blue-100 text-blue-700 border-blue-300" },
+  { value: "won", label: "فاز (Won)", color: "bg-green-100 text-green-700 border-green-300" },
+  { value: "lost", label: "خسارة (Lost)", color: "bg-red-100 text-red-700 border-red-300" },
+];
+
+function getCategoryBadge(category: string) {
+  const opt = CATEGORY_OPTIONS.find(o => o.value === category);
+  if (!opt) return null;
+  return (
+    <Badge variant="outline" className={`text-xs ${opt.color}`}>
+      {opt.label}
+    </Badge>
+  );
+}
 
 export default function StatesManagementPage() {
   const { t } = useLanguage();
@@ -65,6 +92,8 @@ export default function StatesManagementPage() {
   const [deleteState, setDeleteState] = useState<LeadState | null>(null);
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState(defaultColors[0]);
+  const [newCategory, setNewCategory] = useState("active");
+  const [newCanGoBack, setNewCanGoBack] = useState(true);
   const { toast } = useToast();
 
   const { data: states, isLoading } = useQuery<LeadState[]>({
@@ -72,7 +101,7 @@ export default function StatesManagementPage() {
   });
 
   const createStateMutation = useMutation({
-    mutationFn: async (data: { name: string; color: string }) => {
+    mutationFn: async (data: { name: string; color: string; category: string; canGoBack: boolean }) => {
       return apiRequest("POST", "/api/states", data);
     },
     onSuccess: () => {
@@ -80,6 +109,8 @@ export default function StatesManagementPage() {
       setIsAddOpen(false);
       setNewName("");
       setNewColor(defaultColors[0]);
+      setNewCategory("active");
+      setNewCanGoBack(true);
       toast({ title: t.stateCreatedSuccess });
     },
     onError: () => {
@@ -110,8 +141,9 @@ export default function StatesManagementPage() {
       setDeleteState(null);
       toast({ title: t.stateDeletedSuccess });
     },
-    onError: () => {
-      toast({ title: t.stateDeletedError, variant: "destructive" });
+    onError: (err: Error) => {
+      toast({ title: err.message || t.stateDeletedError, variant: "destructive" });
+      setDeleteState(null);
     },
   });
 
@@ -140,6 +172,8 @@ export default function StatesManagementPage() {
     createStateMutation.mutate({
       name: newName.trim(),
       color: newColor,
+      category: newCategory,
+      canGoBack: newCanGoBack,
     });
   };
 
@@ -147,9 +181,16 @@ export default function StatesManagementPage() {
     if (!editState || !editState.name.trim()) return;
     updateStateMutation.mutate({
       id: editState.id,
-      data: { name: editState.name, color: editState.color },
+      data: {
+        name: editState.name,
+        color: editState.color,
+        category: editState.category,
+        canGoBack: editState.canGoBack,
+      },
     });
   };
+
+  const sortedStates = states ? [...states].sort((a, b) => a.order - b.order) : [];
 
   return (
     <div className="space-y-6">
@@ -179,6 +220,27 @@ export default function StatesManagementPage() {
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   data-testid="input-new-state-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>الفئة (Zone)</Label>
+                <Select value={newCategory} onValueChange={setNewCategory}>
+                  <SelectTrigger data-testid="select-new-state-category">
+                    <SelectValue placeholder="اختر الفئة" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORY_OPTIONS.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center justify-between">
+                <Label>يُسمح بالتراجع</Label>
+                <Switch
+                  checked={newCanGoBack}
+                  onCheckedChange={setNewCanGoBack}
+                  data-testid="switch-new-can-go-back"
                 />
               </div>
               <div className="space-y-2">
@@ -228,86 +290,107 @@ export default function StatesManagementPage() {
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
-          ) : states && states.length > 0 ? (
+          ) : sortedStates && sortedStates.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10">#</TableHead>
                   <TableHead>{t.stateName}</TableHead>
+                  <TableHead>الفئة</TableHead>
+                  <TableHead className="w-28 text-center">يُسمح بالتراجع</TableHead>
                   <TableHead className="w-24">{t.stateColor}</TableHead>
                   <TableHead className="w-24 text-center">{t.order}</TableHead>
-                  <TableHead className="w-24 text-right">{t.actions}</TableHead>
+                  <TableHead className="w-28 text-right">{t.actions}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {states
-                  .sort((a, b) => a.order - b.order)
-                  .map((state, index) => (
-                    <TableRow key={state.id} data-testid={`row-state-${state.id}`}>
-                      <TableCell className="text-muted-foreground">
+                {sortedStates.map((state, index) => (
+                  <TableRow key={state.id} data-testid={`row-state-${state.id}`}>
+                    <TableCell className="text-muted-foreground">
+                      {state.isSystemState ? (
+                        <Lock className="h-4 w-4 text-muted-foreground" />
+                      ) : (
                         <GripVertical className="h-4 w-4" />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="h-4 w-4 rounded-sm"
-                            style={{ backgroundColor: state.color }}
-                          />
-                          <span className="font-medium">{state.name}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
                         <div
-                          className="h-6 w-12 rounded-md"
+                          className="h-4 w-4 rounded-sm flex-shrink-0"
                           style={{ backgroundColor: state.color }}
                         />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => moveState(state.id, "up")}
-                            disabled={index === 0}
-                          >
-                            <ChevronUp className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => moveState(state.id, "down")}
-                            disabled={index === states.length - 1}
-                          >
-                            <ChevronDown className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => setEditState(state)}
-                            data-testid={`button-edit-state-${state.id}`}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive"
-                            onClick={() => setDeleteState(state)}
-                            data-testid={`button-delete-state-${state.id}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        <span className="font-medium">{state.name}</span>
+                        {state.isSystemState && (
+                          <Badge variant="outline" className="text-xs text-muted-foreground">نظام</Badge>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {getCategoryBadge(state.category ?? "active")}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Switch
+                        checked={state.canGoBack ?? true}
+                        onCheckedChange={(checked) => {
+                          updateStateMutation.mutate({ id: state.id, data: { canGoBack: checked } });
+                        }}
+                        data-testid={`switch-can-go-back-${state.id}`}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <div
+                        className="h-6 w-12 rounded-md"
+                        style={{ backgroundColor: state.color }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => moveState(state.id, "up")}
+                          disabled={index === 0}
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => moveState(state.id, "down")}
+                          disabled={index === sortedStates.length - 1}
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => setEditState(state)}
+                          data-testid={`button-edit-state-${state.id}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive"
+                          onClick={() => setDeleteState(state)}
+                          disabled={state.isSystemState}
+                          title={state.isSystemState ? "لا يمكن حذف الحالات الأساسية" : undefined}
+                          data-testid={`button-delete-state-${state.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           ) : (
@@ -339,6 +422,30 @@ export default function StatesManagementPage() {
                   value={editState.name}
                   onChange={(e) => setEditState({ ...editState, name: e.target.value })}
                   data-testid="input-edit-state-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>الفئة (Zone)</Label>
+                <Select
+                  value={editState.category ?? "active"}
+                  onValueChange={(val) => setEditState({ ...editState, category: val })}
+                >
+                  <SelectTrigger data-testid="select-edit-state-category">
+                    <SelectValue placeholder="اختر الفئة" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORY_OPTIONS.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center justify-between">
+                <Label>يُسمح بالتراجع</Label>
+                <Switch
+                  checked={editState.canGoBack ?? true}
+                  onCheckedChange={(checked) => setEditState({ ...editState, canGoBack: checked })}
+                  data-testid="switch-edit-can-go-back"
                 />
               </div>
               <div className="space-y-2">

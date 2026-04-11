@@ -131,8 +131,8 @@ export default function LeadsPage() {
       setSelectedLead((prev) => (prev?.id === variables.id ? updatedLead : prev));
       toast({ title: t.leadUpdatedSuccess });
     },
-    onError: () => {
-      toast({ title: t.leadUpdatedError, variant: "destructive" });
+    onError: (err: Error) => {
+      toast({ title: err.message || t.leadUpdatedError, variant: "destructive" });
     },
   });
 
