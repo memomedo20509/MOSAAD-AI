@@ -580,5 +580,17 @@ export const insertSocialMessagesLogSchema = createInsertSchema(socialMessagesLo
 export type InsertSocialMessagesLog = z.infer<typeof insertSocialMessagesLogSchema>;
 export type SocialMessagesLog = typeof socialMessagesLog.$inferSelect;
 
+// Stale Lead Settings — per-state threshold (days before considered stale)
+export const staleLeadSettings = pgTable("stale_lead_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  stateId: varchar("state_id").notNull().unique().references(() => leadStates.id, { onDelete: "cascade" }),
+  staleDays: integer("stale_days").notNull().default(7),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertStaleLeadSettingsSchema = createInsertSchema(staleLeadSettings).omit({ id: true, updatedAt: true });
+export type InsertStaleLeadSettings = z.infer<typeof insertStaleLeadSettingsSchema>;
+export type StaleLeadSettings = typeof staleLeadSettings.$inferSelect;
+
 // Export auth models (users, teams, sessions, role_permissions)
 export * from "./models/auth";

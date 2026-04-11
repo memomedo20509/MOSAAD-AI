@@ -4538,6 +4538,87 @@ export async function registerRoutes(
     res.json({ appId });
   });
 
+  // ==================== FUNNEL HEALTH ANALYTICS ====================
+
+  app.get("/api/analytics/funnel-overview", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (_req, res) => {
+    try {
+      const data = await storage.getFunnelOverview();
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching funnel overview:", error);
+      res.status(500).json({ error: "Failed to fetch funnel overview" });
+    }
+  });
+
+  app.get("/api/analytics/time-in-stage", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (_req, res) => {
+    try {
+      const data = await storage.getTimeInStage();
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching time-in-stage:", error);
+      res.status(500).json({ error: "Failed to fetch time-in-stage data" });
+    }
+  });
+
+  app.get("/api/analytics/stale-leads", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (_req, res) => {
+    try {
+      const settings = await storage.getAllStaleLeadSettings();
+      const thresholds: Record<string, number> = {};
+      for (const s of settings) thresholds[s.stateId] = s.staleDays;
+      const data = await storage.getStaleLeads(thresholds);
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching stale leads:", error);
+      res.status(500).json({ error: "Failed to fetch stale leads" });
+    }
+  });
+
+  app.get("/api/analytics/agent-funnel", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (_req, res) => {
+    try {
+      const data = await storage.getAgentFunnelPerformance();
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching agent funnel performance:", error);
+      res.status(500).json({ error: "Failed to fetch agent funnel performance" });
+    }
+  });
+
+  app.get("/api/analytics/lead-flow", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (_req, res) => {
+    try {
+      const data = await storage.getLeadFlow();
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching lead flow:", error);
+      res.status(500).json({ error: "Failed to fetch lead flow" });
+    }
+  });
+
+  // Stale Lead Settings
+  app.get("/api/analytics/stale-settings", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (_req, res) => {
+    try {
+      const data = await storage.getAllStaleLeadSettings();
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching stale lead settings:", error);
+      res.status(500).json({ error: "Failed to fetch stale lead settings" });
+    }
+  });
+
+  app.put("/api/analytics/stale-settings/:stateId", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (req, res) => {
+    try {
+      const { stateId } = req.params;
+      const { staleDays } = req.body;
+      if (typeof staleDays !== "number" || staleDays < 1) {
+        return res.status(400).json({ error: "staleDays must be a positive number" });
+      }
+      await storage.upsertStaleLeadSetting(stateId, staleDays);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating stale lead setting:", error);
+      res.status(500).json({ error: "Failed to update stale lead setting" });
+    }
+  });
+
   // SSE real-time event stream
   app.get("/api/events/stream", isAuthenticated, (req, res) => {
     const userId = (req.user as { id: string } | undefined)?.id;

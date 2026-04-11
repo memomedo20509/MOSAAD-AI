@@ -97,6 +97,8 @@ import {
   type InsertMetaPageConnection,
   type SocialMessagesLog,
   type InsertSocialMessagesLog,
+  staleLeadSettings,
+  type StaleLeadSettings,
 } from "@shared/schema";
 import {
   customRoles,
@@ -474,6 +476,61 @@ export interface IStorage {
     bookings: number;
     totalActions: number;
   }[]>;
+
+  // Funnel Health Analytics
+  getFunnelOverview(): Promise<{
+    stateId: string;
+    stateName: string;
+    stateColor: string;
+    stateOrder: number;
+    category: string;
+    count: number;
+  }[]>;
+
+  getTimeInStage(): Promise<{
+    stateId: string;
+    stateName: string;
+    stateColor: string;
+    avgDays: number | null;
+    minDays: number | null;
+    maxDays: number | null;
+    leadsCount: number;
+  }[]>;
+
+  getStaleLeads(thresholds: Record<string, number>): Promise<{
+    leadId: string;
+    leadName: string | null;
+    leadPhone: string | null;
+    agentId: string | null;
+    agentName: string | null;
+    stateId: string;
+    stateName: string;
+    daysInState: number;
+    threshold: number;
+  }[]>;
+
+  getAgentFunnelPerformance(): Promise<{
+    agentId: string;
+    agentName: string;
+    totalLeads: number;
+    doneDeals: number;
+    conversionRate: number;
+    avgResponseMinutes: number | null;
+    leadsByState: { stateId: string; stateName: string; count: number }[];
+  }[]>;
+
+  getLeadFlow(): Promise<{
+    today: number;
+    thisWeek: number;
+    thisMonth: number;
+    closedToday: number;
+    closedThisWeek: number;
+    closedThisMonth: number;
+  }>;
+
+  // Stale Lead Settings
+  getAllStaleLeadSettings(): Promise<{ stateId: string; staleDays: number }[]>;
+  upsertStaleLeadSetting(stateId: string, staleDays: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2638,6 +2695,198 @@ export class DatabaseStorage implements IStorage {
       buildPeriod("lastMonth", "lastMonth", lastMonthStart, lastMonthEnd),
       buildPeriod("thisMonth", "thisMonth", thisMonthStart, now),
     ];
+  }
+
+  // ─── Funnel Health Analytics ────────────────────────────────────────────────
+
+  async getFunnelOverview(): Promise<{
+    stateId: string;
+    stateName: string;
+    stateColor: string;
+    stateOrder: number;
+    category: string;
+    count: number;
+  }[]> {
+    const allStates = await db.select().from(leadStates).orderBy(leadStates.order);
+    const allLeads = await db.select({ stateId: leads.stateId }).from(leads);
+
+    const countMap: Record<string, number> = {};
+    for (const s of allStates) countMap[s.id] = 0;
+    for (const l of allLeads) {
+      if (l.stateId && countMap[l.stateId] !== undefined) countMap[l.stateId]++;
+    }
+
+    return allStates.map(s => ({
+      stateId: s.id,
+      stateName: s.name,
+      stateColor: s.color,
+      stateOrder: s.order,
+      category: s.category,
+      count: countMap[s.id] ?? 0,
+    }));
+  }
+
+  async getTimeInStage(): Promise<{
+    stateId: string;
+    stateName: string;
+    stateColor: string;
+    avgDays: number | null;
+    minDays: number | null;
+    maxDays: number | null;
+    leadsCount: number;
+  }[]> {
+    const allStates = await db.select().from(leadStates).orderBy(leadStates.order);
+    const allLeads = await db.select({ stateId: leads.stateId, updatedAt: leads.updatedAt }).from(leads);
+
+    const now = new Date();
+
+    return allStates.map(state => {
+      const stateLeads = allLeads.filter(l => l.stateId === state.id && l.updatedAt);
+      if (stateLeads.length === 0) {
+        return { stateId: state.id, stateName: state.name, stateColor: state.color, avgDays: null, minDays: null, maxDays: null, leadsCount: 0 };
+      }
+      const days = stateLeads.map(l => Math.floor((now.getTime() - new Date(l.updatedAt!).getTime()) / (1000 * 60 * 60 * 24)));
+      const avgDays = Math.round(days.reduce((a, b) => a + b, 0) / days.length);
+      const minDays = Math.min(...days);
+      const maxDays = Math.max(...days);
+      return { stateId: state.id, stateName: state.name, stateColor: state.color, avgDays, minDays, maxDays, leadsCount: stateLeads.length };
+    });
+  }
+
+  async getStaleLeads(thresholds: Record<string, number>): Promise<{
+    leadId: string;
+    leadName: string | null;
+    leadPhone: string | null;
+    agentId: string | null;
+    agentName: string | null;
+    stateId: string;
+    stateName: string;
+    daysInState: number;
+    threshold: number;
+  }[]> {
+    const allLeads = await db.select().from(leads);
+    const allUsers = await db.select().from(users);
+    const allStates = await db.select().from(leadStates);
+
+    const userMap = new Map(allUsers.map(u => [u.id, `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.username]));
+    const stateMap = new Map(allStates.map(s => [s.id, s.name]));
+
+    const now = new Date();
+    const result: {
+      leadId: string;
+      leadName: string | null;
+      leadPhone: string | null;
+      agentId: string | null;
+      agentName: string | null;
+      stateId: string;
+      stateName: string;
+      daysInState: number;
+      threshold: number;
+    }[] = [];
+
+    for (const lead of allLeads) {
+      if (!lead.stateId) continue;
+      const threshold = thresholds[lead.stateId] ?? 7;
+      const updatedAt = lead.updatedAt ? new Date(lead.updatedAt) : (lead.createdAt ? new Date(lead.createdAt) : null);
+      if (!updatedAt) continue;
+      const daysInState = Math.floor((now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysInState >= threshold) {
+        result.push({
+          leadId: lead.id,
+          leadName: lead.name,
+          leadPhone: lead.phone,
+          agentId: lead.assignedTo,
+          agentName: lead.assignedTo ? (userMap.get(lead.assignedTo) ?? null) : null,
+          stateId: lead.stateId,
+          stateName: stateMap.get(lead.stateId) ?? "—",
+          daysInState,
+          threshold,
+        });
+      }
+    }
+
+    return result.sort((a, b) => b.daysInState - a.daysInState);
+  }
+
+  async getAgentFunnelPerformance(): Promise<{
+    agentId: string;
+    agentName: string;
+    totalLeads: number;
+    doneDeals: number;
+    conversionRate: number;
+    avgResponseMinutes: number | null;
+    leadsByState: { stateId: string; stateName: string; count: number }[];
+  }[]> {
+    const allUsers = await db.select().from(users);
+    const allLeads = await db.select().from(leads);
+    const allStates = await db.select().from(leadStates).orderBy(leadStates.order);
+
+    const agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "team_leader");
+    const doneStateIds = new Set(
+      allStates.filter(s => s.category === "won").map(s => s.id)
+    );
+    const stateMap = new Map(allStates.map(s => [s.id, s.name]));
+
+    return agents.map(agent => {
+      const agentLeads = allLeads.filter(l => l.assignedTo === agent.id || l.assignedTo === agent.username);
+      const doneDeals = agentLeads.filter(l => l.stateId && doneStateIds.has(l.stateId)).length;
+      const conversionRate = agentLeads.length > 0 ? parseFloat(((doneDeals / agentLeads.length) * 100).toFixed(1)) : 0;
+
+      const responseTimes = agentLeads.filter(l => l.responseTimeMinutes !== null && l.responseTimeMinutes !== undefined).map(l => l.responseTimeMinutes!);
+      const avgResponseMinutes = responseTimes.length > 0 ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length) : null;
+
+      const leadsByState: { stateId: string; stateName: string; count: number }[] = [];
+      for (const state of allStates) {
+        const count = agentLeads.filter(l => l.stateId === state.id).length;
+        if (count > 0) {
+          leadsByState.push({ stateId: state.id, stateName: state.name, count });
+        }
+      }
+
+      const agentName = `${agent.firstName ?? ""} ${agent.lastName ?? ""}`.trim() || agent.username;
+      return { agentId: agent.id, agentName, totalLeads: agentLeads.length, doneDeals, conversionRate, avgResponseMinutes, leadsByState };
+    }).sort((a, b) => b.doneDeals - a.doneDeals);
+  }
+
+  async getLeadFlow(): Promise<{
+    today: number;
+    thisWeek: number;
+    thisMonth: number;
+    closedToday: number;
+    closedThisWeek: number;
+    closedThisMonth: number;
+  }> {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekStart = new Date(todayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const allLeads = await db.select().from(leads);
+    const allStates = await db.select().from(leadStates);
+    const closedStateIds = new Set(allStates.filter(s => s.category === "won" || s.category === "lost").map(s => s.id));
+
+    const inRange = (date: Date | null | undefined, start: Date) => date && date >= start;
+
+    return {
+      today: allLeads.filter(l => inRange(l.createdAt ? new Date(l.createdAt) : null, todayStart)).length,
+      thisWeek: allLeads.filter(l => inRange(l.createdAt ? new Date(l.createdAt) : null, weekStart)).length,
+      thisMonth: allLeads.filter(l => inRange(l.createdAt ? new Date(l.createdAt) : null, monthStart)).length,
+      closedToday: allLeads.filter(l => l.stateId && closedStateIds.has(l.stateId) && inRange(l.updatedAt ? new Date(l.updatedAt) : null, todayStart)).length,
+      closedThisWeek: allLeads.filter(l => l.stateId && closedStateIds.has(l.stateId) && inRange(l.updatedAt ? new Date(l.updatedAt) : null, weekStart)).length,
+      closedThisMonth: allLeads.filter(l => l.stateId && closedStateIds.has(l.stateId) && inRange(l.updatedAt ? new Date(l.updatedAt) : null, monthStart)).length,
+    };
+  }
+
+  async getAllStaleLeadSettings(): Promise<{ stateId: string; staleDays: number }[]> {
+    const rows = await db.select().from(staleLeadSettings);
+    return rows.map(r => ({ stateId: r.stateId, staleDays: r.staleDays }));
+  }
+
+  async upsertStaleLeadSetting(stateId: string, staleDays: number): Promise<void> {
+    await db
+      .insert(staleLeadSettings)
+      .values({ stateId, staleDays })
+      .onConflictDoUpdate({ target: staleLeadSettings.stateId, set: { staleDays, updatedAt: new Date() } });
   }
 }
 

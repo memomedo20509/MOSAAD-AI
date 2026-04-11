@@ -14,8 +14,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Loader2, Users, TrendingUp, Target, BarChart3, PieChart, Calendar, Clock,
   AlertTriangle, Zap, Download, TrendingDown, FileText, Phone, MessageSquare,
-  UserCheck, Snowflake, Building2, Activity,
+  UserCheck, Snowflake, Building2, Activity, HeartPulse, ExternalLink, Save,
 } from "lucide-react";
+import { Link } from "wouter";
 import { useLanguage } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { useState, useMemo } from "react";
@@ -230,7 +231,7 @@ export default function ReportsPage() {
     enabled: isManager,
   });
 
-  type ReassignmentRow = {
+  type ReAssignmentRow = {
     leadId: string;
     leadName: string | null;
     fromUser: string | null;
@@ -241,10 +242,79 @@ export default function ReportsPage() {
     createdAt: string | null;
   };
 
-  const { data: reassignmentReport = [], isLoading: reassignmentLoading } = useQuery<ReassignmentRow[]>({
+  const { data: reassignmentReport = [], isLoading: reassignmentLoading } = useQuery<ReAssignmentRow[]>({
     queryKey: ["/api/reports/reassignments"],
     enabled: isManager,
   });
+
+  // Funnel Health Data
+  const { data: funnelOverview = [], isLoading: funnelOverviewLoading } = useQuery<{
+    stateId: string; stateName: string; stateColor: string; stateOrder: number; category: string; count: number;
+  }[]>({
+    queryKey: ["/api/analytics/funnel-overview"],
+    enabled: isManager,
+  });
+
+  const { data: timeInStage = [], isLoading: timeInStageLoading } = useQuery<{
+    stateId: string; stateName: string; stateColor: string;
+    avgDays: number | null; minDays: number | null; maxDays: number | null; leadsCount: number;
+  }[]>({
+    queryKey: ["/api/analytics/time-in-stage"],
+    enabled: isManager,
+  });
+
+  const { data: staleLeadsData = [], isLoading: staleLeadsLoading } = useQuery<{
+    leadId: string; leadName: string | null; leadPhone: string | null;
+    agentId: string | null; agentName: string | null;
+    stateId: string; stateName: string; daysInState: number; threshold: number;
+  }[]>({
+    queryKey: ["/api/analytics/stale-leads"],
+    enabled: isManager,
+  });
+
+  const { data: agentFunnelData = [], isLoading: agentFunnelLoading } = useQuery<{
+    agentId: string; agentName: string; totalLeads: number; doneDeals: number;
+    conversionRate: number; avgResponseMinutes: number | null;
+    leadsByState: { stateId: string; stateName: string; count: number }[];
+  }[]>({
+    queryKey: ["/api/analytics/agent-funnel"],
+    enabled: isManager,
+  });
+
+  const { data: leadFlowData, isLoading: leadFlowLoading } = useQuery<{
+    today: number; thisWeek: number; thisMonth: number;
+    closedToday: number; closedThisWeek: number; closedThisMonth: number;
+  }>({
+    queryKey: ["/api/analytics/lead-flow"],
+    enabled: isManager,
+  });
+
+  const { data: staleSettings = [] } = useQuery<{ stateId: string; staleDays: number }[]>({
+    queryKey: ["/api/analytics/stale-settings"],
+    enabled: isManager,
+  });
+
+  const [staleSettingsEdit, setStaleSettingsEdit] = useState<Record<string, number>>({});
+
+  const staleSettingsMutation = useMutation({
+    mutationFn: async ({ stateId, staleDays }: { stateId: string; staleDays: number }) => {
+      return apiRequest("PUT", `/api/analytics/stale-settings/${stateId}`, { staleDays });
+    },
+    onSuccess: () => {
+      toast({ title: t.settingsSaved });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/stale-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/stale-leads"] });
+    },
+    onError: () => {
+      toast({ title: t.settingsError, variant: "destructive" });
+    },
+  });
+
+  const getStaleThreshold = (stateId: string) => {
+    if (staleSettingsEdit[stateId] !== undefined) return staleSettingsEdit[stateId];
+    const found = staleSettings.find(s => s.stateId === stateId);
+    return found ? found.staleDays : 7;
+  };
 
   const reassignMutation = useMutation({
     mutationFn: async ({ leadId, agentId }: { leadId: string; agentId: string }) => {
@@ -556,6 +626,10 @@ export default function ReportsPage() {
               <TabsTrigger value="reassignments" data-testid="tab-reassignments">
                 <Users className="h-4 w-4 mr-1" />
                 عمليات التحويل
+              </TabsTrigger>
+              <TabsTrigger value="funnel-health" data-testid="tab-funnel-health">
+                <HeartPulse className="h-4 w-4 mr-1" />
+                {t.funnelHealthTab}
               </TabsTrigger>
             </>
           )}
@@ -1941,7 +2015,6 @@ export default function ReportsPage() {
           </TabsContent>
         )}
 
-        {/* ============================== REASSIGNMENTS TAB ============================== */}
         {isManager && (
           <TabsContent value="reassignments" className="space-y-4 mt-4">
             <Card>
@@ -2002,6 +2075,431 @@ export default function ReportsPage() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+        )}
+
+        {/* ============================== FUNNEL HEALTH TAB ============================== */}
+        {isManager && (
+          <TabsContent value="funnel-health" className="space-y-6 mt-4">
+            <div>
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <HeartPulse className="h-5 w-5 text-primary" />
+                {t.funnelHealthTitle}
+              </h2>
+              <p className="text-sm text-muted-foreground">{t.funnelHealthSubtitle}</p>
+            </div>
+
+            {/* Lead Flow Section */}
+            <div>
+              <h3 className="font-semibold mb-3 flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-primary" />
+                {t.leadFlowTitle}
+              </h3>
+              <p className="text-xs text-muted-foreground mb-3">{t.leadFlowSubtitle}</p>
+              {leadFlowLoading ? (
+                <div className="flex items-center justify-center h-20"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-3">
+                  {[
+                    { label: t.todayActivity, entered: leadFlowData?.today ?? 0, closed: leadFlowData?.closedToday ?? 0 },
+                    { label: t.weekActivity, entered: leadFlowData?.thisWeek ?? 0, closed: leadFlowData?.closedThisWeek ?? 0 },
+                    { label: t.periodMonth, entered: leadFlowData?.thisMonth ?? 0, closed: leadFlowData?.closedThisMonth ?? 0 },
+                  ].map(({ label, entered, closed }) => (
+                    <Card key={label} data-testid={`card-lead-flow-${label}`}>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs text-muted-foreground">{t.leadsEntered}</p>
+                            <p className="text-2xl font-bold text-primary">{entered}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">{t.leadsClosed}</p>
+                            <p className="text-2xl font-bold text-green-600 dark:text-green-400">{closed}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Funnel Overview Section */}
+            <div>
+              <h3 className="font-semibold mb-1 flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-primary" />
+                {t.funnelOverviewTitle}
+              </h3>
+              <p className="text-xs text-muted-foreground mb-3">{t.funnelOverviewSubtitle}</p>
+              {funnelOverviewLoading ? (
+                <div className="flex items-center justify-center h-40"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+              ) : (
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <Card data-testid="chart-funnel-overview">
+                    <CardContent className="pt-6">
+                      <div className="h-[300px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={funnelOverview} layout="vertical">
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                            <XAxis type="number" tick={{ fontSize: 12 }} />
+                            <YAxis dataKey="stateName" type="category" tick={{ fontSize: 11 }} width={120} />
+                            <Tooltip />
+                            <Bar dataKey="count" radius={[0, 4, 4, 0]} name={t.funnelCount}>
+                              {funnelOverview.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.stateColor || COLORS[index % COLORS.length]} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card data-testid="table-funnel-overview">
+                    <CardContent className="pt-6">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b">
+                              <th className="text-start py-2 px-2 font-medium">{t.funnelStage}</th>
+                              <th className="text-center py-2 px-2 font-medium">{t.funnelCount}</th>
+                              <th className="text-center py-2 px-2 font-medium">{t.conversionRatesTitle}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {funnelOverview.map((row, idx) => {
+                              const next = funnelOverview[idx + 1];
+                              const conv = next && row.count > 0
+                                ? parseFloat(((next.count / row.count) * 100).toFixed(1))
+                                : null;
+                              return (
+                                <tr key={row.stateId} className="border-b last:border-0" data-testid={`row-funnel-overview-${row.stateId}`}>
+                                  <td className="py-2 px-2">
+                                    <div className="flex items-center gap-2">
+                                      <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: row.stateColor }} />
+                                      <span className="font-medium">{row.stateName}</span>
+                                    </div>
+                                  </td>
+                                  <td className="text-center py-2 px-2">
+                                    <Badge variant="outline">{row.count}</Badge>
+                                  </td>
+                                  <td className="text-center py-2 px-2">
+                                    {conv !== null ? (
+                                      <Badge variant={conv >= 30 ? "default" : conv >= 10 ? "outline" : "secondary"}>
+                                        {conv}%
+                                      </Badge>
+                                    ) : "—"}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+            </div>
+
+            {/* Time in Stage Section */}
+            <div>
+              <h3 className="font-semibold mb-1 flex items-center gap-2">
+                <Clock className="h-4 w-4 text-primary" />
+                {t.timeInStageTitle}
+              </h3>
+              <p className="text-xs text-muted-foreground mb-3">{t.timeInStageSubtitle}</p>
+              {timeInStageLoading ? (
+                <div className="flex items-center justify-center h-40"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+              ) : (
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <Card data-testid="chart-time-in-stage">
+                    <CardContent className="pt-6">
+                      <div className="h-[300px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={timeInStage.filter(s => s.avgDays !== null)} layout="vertical">
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                            <XAxis type="number" tick={{ fontSize: 12 }} unit={` ${t.days}`} />
+                            <YAxis dataKey="stateName" type="category" tick={{ fontSize: 11 }} width={120} />
+                            <Tooltip formatter={(v) => [`${v} ${t.days}`, t.avgDaysLabel]} />
+                            <Bar dataKey="avgDays" radius={[0, 4, 4, 0]} name={t.avgDaysLabel}>
+                              {timeInStage.filter(s => s.avgDays !== null).map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.stateColor || COLORS[index % COLORS.length]} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card data-testid="table-time-in-stage">
+                    <CardContent className="pt-6">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b">
+                              <th className="text-start py-2 px-2 font-medium">{t.funnelStage}</th>
+                              <th className="text-center py-2 px-2 font-medium">{t.leadsInStage}</th>
+                              <th className="text-center py-2 px-2 font-medium">{t.avgDaysLabel}</th>
+                              <th className="text-center py-2 px-2 font-medium">{t.minDaysLabel}</th>
+                              <th className="text-center py-2 px-2 font-medium">{t.maxDaysLabel}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {timeInStage.map((row) => {
+                              const threshold = getStaleThreshold(row.stateId);
+                              const isHigh = row.avgDays !== null && row.avgDays >= threshold;
+                              return (
+                                <tr key={row.stateId} className={`border-b last:border-0 ${isHigh ? "bg-orange-50 dark:bg-orange-950/20" : ""}`} data-testid={`row-time-in-stage-${row.stateId}`}>
+                                  <td className="py-2 px-2">
+                                    <div className="flex items-center gap-2">
+                                      <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: row.stateColor }} />
+                                      <span className="font-medium">{row.stateName}</span>
+                                    </div>
+                                  </td>
+                                  <td className="text-center py-2 px-2">{row.leadsCount}</td>
+                                  <td className="text-center py-2 px-2">
+                                    {row.avgDays !== null ? (
+                                      <Badge variant={isHigh ? "destructive" : row.avgDays >= threshold * 0.7 ? "outline" : "secondary"}>
+                                        {row.avgDays} {t.days}
+                                        {isHigh && <AlertTriangle className="h-3 w-3 ml-1 inline" />}
+                                      </Badge>
+                                    ) : "—"}
+                                  </td>
+                                  <td className="text-center py-2 px-2 text-muted-foreground">{row.minDays !== null ? `${row.minDays} ${t.days}` : "—"}</td>
+                                  <td className="text-center py-2 px-2 text-muted-foreground">{row.maxDays !== null ? `${row.maxDays} ${t.days}` : "—"}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+            </div>
+
+            {/* Stale Leads Alert Section */}
+            <div>
+              <h3 className="font-semibold mb-1 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                {t.staleLeadsTitle}
+                {staleLeadsData.length > 0 && <Badge variant="destructive">{staleLeadsData.length}</Badge>}
+              </h3>
+              <p className="text-xs text-muted-foreground mb-3">{t.staleLeadsSubtitle}</p>
+              {staleLeadsLoading ? (
+                <div className="flex items-center justify-center h-40"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+              ) : staleLeadsData.length === 0 ? (
+                <Card>
+                  <CardContent className="flex items-center justify-center h-20 text-muted-foreground">
+                    {t.noStaleLeads}
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card data-testid="table-stale-leads">
+                  <CardContent className="pt-6">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-start py-2 px-2 font-medium">{t.name}</th>
+                            <th className="text-center py-2 px-2 font-medium">{t.phone}</th>
+                            <th className="text-center py-2 px-2 font-medium">{t.assignedTo}</th>
+                            <th className="text-center py-2 px-2 font-medium">{t.leadStatus}</th>
+                            <th className="text-center py-2 px-2 font-medium">{t.daysInStage}</th>
+                            <th className="text-center py-2 px-2 font-medium">{t.thresholdLabel}</th>
+                            <th className="text-center py-2 px-2 font-medium"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {staleLeadsData.slice(0, 50).map((row) => (
+                            <tr key={row.leadId} className="border-b last:border-0 bg-destructive/5" data-testid={`row-stale-lead-${row.leadId}`}>
+                              <td className="py-2 px-2 font-medium">{row.leadName || t.noName}</td>
+                              <td className="text-center py-2 px-2 text-muted-foreground">{row.leadPhone || "—"}</td>
+                              <td className="text-center py-2 px-2">{row.agentName || "—"}</td>
+                              <td className="text-center py-2 px-2">
+                                <Badge variant="outline">{row.stateName}</Badge>
+                              </td>
+                              <td className="text-center py-2 px-2">
+                                <Badge variant="destructive">{row.daysInState} {t.days}</Badge>
+                              </td>
+                              <td className="text-center py-2 px-2 text-muted-foreground">{row.threshold} {t.days}</td>
+                              <td className="text-center py-2 px-2">
+                                <Link href={`/leads?id=${row.leadId}`}>
+                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" data-testid={`button-view-stale-lead-${row.leadId}`}>
+                                    <ExternalLink className="h-3.5 w-3.5" />
+                                  </Button>
+                                </Link>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            {/* Agent Funnel Performance Section */}
+            <div>
+              <h3 className="font-semibold mb-1 flex items-center gap-2">
+                <Users className="h-4 w-4 text-primary" />
+                {t.agentFunnelTitle}
+              </h3>
+              <p className="text-xs text-muted-foreground mb-3">{t.agentFunnelSubtitle}</p>
+              {agentFunnelLoading ? (
+                <div className="flex items-center justify-center h-40"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+              ) : agentFunnelData.length === 0 ? (
+                <Card>
+                  <CardContent className="flex items-center justify-center h-20 text-muted-foreground">
+                    {t.noDataToDisplay}
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-4">
+                  <Card data-testid="chart-agent-funnel">
+                    <CardContent className="pt-6">
+                      <div className="h-[280px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={agentFunnelData.slice(0, 10)}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                            <XAxis dataKey="agentName" tick={{ fontSize: 11 }} />
+                            <YAxis tick={{ fontSize: 12 }} />
+                            <Tooltip />
+                            <Legend />
+                            <Bar dataKey="totalLeads" fill="#6366f1" name={t.funnelCount} radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="doneDeals" fill="#22c55e" name={t.agentDoneDeals} radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card data-testid="table-agent-funnel">
+                    <CardContent className="pt-4">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b">
+                              <th className="text-start py-2 px-2 font-medium">{t.assignedTo}</th>
+                              <th className="text-center py-2 px-2 font-medium">{t.totalLeads}</th>
+                              <th className="text-center py-2 px-2 font-medium">{t.agentDoneDeals}</th>
+                              <th className="text-center py-2 px-2 font-medium">{t.conversionRate}</th>
+                              <th className="text-center py-2 px-2 font-medium">{t.agentAvgResponse}</th>
+                              <th className="text-start py-2 px-2 font-medium">{t.leadStatus}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {agentFunnelData.map((row) => (
+                              <tr key={row.agentId} className="border-b last:border-0" data-testid={`row-agent-funnel-${row.agentId}`}>
+                                <td className="py-2 px-2 font-medium">{row.agentName}</td>
+                                <td className="text-center py-2 px-2">{row.totalLeads}</td>
+                                <td className="text-center py-2 px-2">
+                                  <Badge variant={row.doneDeals > 0 ? "default" : "secondary"}>{row.doneDeals}</Badge>
+                                </td>
+                                <td className="text-center py-2 px-2">
+                                  <Badge variant={row.conversionRate >= 20 ? "default" : row.conversionRate >= 10 ? "outline" : "secondary"}>
+                                    {row.conversionRate}%
+                                  </Badge>
+                                </td>
+                                <td className="text-center py-2 px-2 text-muted-foreground">
+                                  {formatResponseTime(row.avgResponseMinutes, t.minutesAbbr, t.hoursAbbr)}
+                                </td>
+                                <td className="py-2 px-2">
+                                  <div className="flex flex-wrap gap-1">
+                                    {row.leadsByState.slice(0, 3).map(s => (
+                                      <Badge key={s.stateId} variant="outline" className="text-xs">{s.stateName}: {s.count}</Badge>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+            </div>
+
+            {/* Stale Lead Settings Section */}
+            <div>
+              <h3 className="font-semibold mb-1 flex items-center gap-2">
+                <Save className="h-4 w-4 text-primary" />
+                {t.staleLeadsSettings}
+              </h3>
+              <p className="text-xs text-muted-foreground mb-3">{t.staleLeadsSettingsSubtitle}</p>
+              <Card data-testid="card-stale-settings">
+                <CardContent className="pt-6">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-start py-2 px-2 font-medium">{t.funnelStage}</th>
+                          <th className="text-center py-2 px-2 font-medium">{t.staleDaysLabel}</th>
+                          <th className="text-center py-2 px-2 font-medium"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {funnelOverview.map((state) => {
+                          const currentVal = getStaleThreshold(state.stateId);
+                          return (
+                            <tr key={state.stateId} className="border-b last:border-0" data-testid={`row-stale-setting-${state.stateId}`}>
+                              <td className="py-2 px-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: state.stateColor }} />
+                                  <span className="font-medium">{state.stateName}</span>
+                                </div>
+                              </td>
+                              <td className="text-center py-2 px-2">
+                                <div className="flex items-center justify-center gap-2">
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    max={365}
+                                    value={currentVal}
+                                    onChange={(e) => setStaleSettingsEdit(prev => ({
+                                      ...prev,
+                                      [state.stateId]: parseInt(e.target.value) || 1,
+                                    }))}
+                                    className="w-20 h-7 text-center"
+                                    data-testid={`input-stale-days-${state.stateId}`}
+                                  />
+                                  <span className="text-muted-foreground text-xs">{t.days}</span>
+                                </div>
+                              </td>
+                              <td className="text-center py-2 px-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7"
+                                  disabled={staleSettingsMutation.isPending}
+                                  onClick={() => staleSettingsMutation.mutate({ stateId: state.stateId, staleDays: currentVal })}
+                                  data-testid={`button-save-stale-setting-${state.stateId}`}
+                                >
+                                  {staleSettingsMutation.isPending ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Save className="h-3.5 w-3.5" />
+                                  )}
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         )}
       </Tabs>
