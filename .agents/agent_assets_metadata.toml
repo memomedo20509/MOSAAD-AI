@@ -24,3 +24,9 @@ id = "AKGG6eQoZp077UKiFadQ9"
 uri = "file://docs/mobile-design-system-prd.md"
 type = "text"
 title = "HomeAdvisor CRM — Mobile Design System & Visual Identity PRD"
+
+[[outputs]]
+id = "PEri5CjbH6ze3q8YN5Guc"
+uri = "file://docs/whatsapp-system-prd.md"
+type = "text"
+title = "WhatsApp CRM Integration — Complete Technical PRD (شرح كامل لنظام الواتساب)"
