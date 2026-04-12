@@ -18,3 +18,9 @@ id = "G9QO1Yv9xdhfJ8RxfBNmK"
 uri = "file://docs/mobile-app-prd.md"
 type = "text"
 title = "HomeAdvisor CRM — Mobile App PRD (مستند متطلبات تطبيق الموبايل)"
+
+[[outputs]]
+id = "AKGG6eQoZp077UKiFadQ9"
+uri = "file://docs/mobile-design-system-prd.md"
+type = "text"
+title = "HomeAdvisor CRM — Mobile Design System & Visual Identity PRD"
