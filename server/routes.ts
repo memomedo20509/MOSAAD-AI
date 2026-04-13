@@ -481,10 +481,12 @@ export async function registerRoutes(
   app.delete("/api/leads/:id", isAuthenticated, requirePermission("canDeleteData"), async (req, res) => {
     try {
       const id = req.params.id as string;
+      const leadBeforeDelete = await storage.getLead(id);
       const deleted = await storage.deleteLead(id);
       if (!deleted) {
         return res.status(404).json({ error: "Lead not found" });
       }
+      console.log(`[Lead] Deleted lead ${id} (phone: ${leadBeforeDelete?.phone}, name: ${leadBeforeDelete?.name}) — all related data removed`);
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting lead:", error);
@@ -3422,7 +3424,9 @@ export async function registerRoutes(
             channel: "واتساب",
             assignedTo: userId,
             stateId: newLeadState?.id ?? null,
-          });
+            botActive: true,
+            botStage: "greeting",
+          } as any);
           console.log(`[WhatsApp] Auto-created lead ${lead.id} for phone ${phone} (name: ${leadName})`);
         } else if (msg.senderName && lead.name && lead.name.startsWith("واتساب -")) {
           await storage.updateLead(lead.id, { name: msg.senderName });
@@ -3474,6 +3478,8 @@ export async function registerRoutes(
           const botEnabled = botSettings?.isActive === true;
           const leadBotActive = lead.botActive !== false; // default true
 
+          console.log(`[Chatbot] Check for lead ${lead.id} (${phone}): botEnabled=${botEnabled}, leadBotActive=${leadBotActive}, botStage=${lead.botStage}, isNew=${isNewLead}`);
+
           if (botEnabled && leadBotActive && lead.botStage !== "handed_off") {
             // Bot responds always if respondAlways=true, otherwise only outside working hours
             const respondAlways = botSettings?.respondAlways === true;
@@ -3481,6 +3487,8 @@ export async function registerRoutes(
               botSettings?.workingHoursStart ?? 9,
               botSettings?.workingHoursEnd ?? 18
             );
+
+            console.log(`[Chatbot] Hours check: respondAlways=${respondAlways}, outsideHours=${outsideHours}`);
 
             if (respondAlways || outsideHours) {
               const { generateBotReply } = await import("./ai");
@@ -3730,7 +3738,11 @@ export async function registerRoutes(
 
               // Apply updates to lead
               await storage.updateLead(lead.id, leadUpdates);
+            } else {
+              console.log(`[Chatbot] Skipped — respondAlways=${respondAlways}, outsideHours=${outsideHours} (working hours: ${botSettings?.workingHoursStart ?? 9}-${botSettings?.workingHoursEnd ?? 18})`);
             }
+          } else {
+            console.log(`[Chatbot] Skipped — botEnabled=${botEnabled}, leadBotActive=${leadBotActive}, botStage=${lead.botStage}`);
           }
         } catch (botErr) {
           console.error("[Chatbot] Bot reply error:", botErr);
