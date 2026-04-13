@@ -1,0 +1,95 @@
+نظرة عامة على المشروع (High-Level Architecture)
+نريد بناء SaaS لـ AI Outbound Calling باستخدام SIM cards حقيقية في أجهزة أندرويد (Device Farm) بدلاً من Voice APIs سحابية (مثل Twilio أو Plivo).
+الهدف: الـ AI يدير مكالمات تلقائية (conversational) باستخدام أرقام مصرية محلية رخيصة، مع answer rate عالي، وتسجيل المكالمات، مع التركيز على scalability و reliability.
+المكونات الرئيسية:
+
+Backend SaaS (Node.js / Python / Django أو Laravel)
+Mobile Agent App (Kotlin – Android)
+Command & Control Layer (Firebase FCM أو WebSocket / MQTT لـ real-time)
+AI Layer (STT + LLM + TTS – cloud أو hybrid)
+Device Farm (مجموعة أجهزة أندرويد مع SIMs + شحن مستمر)
+
+1. Mobile App (الـ Agent على كل جهاز)
+
+التقنيات الأساسية:
+Telecom API + Self-Managed ConnectionService (موصى به من Android Developers 2026) للتحكم الكامل في المكالمات.
+يسجل PhoneAccount ويستخدم TelecomManager.placeCall() لإجراء outbound calls.
+يدعم multiple calls و call states (ringing, answered, busy, failed, voicemail detection).
+يعمل كـ Foreground Service مع persistent notification + exemptions من Battery Optimization (requestIgnoreBatteryOptimizations + Unrestricted mode) + Auto-start permissions (خاصة على Xiaomi/Samsung/OPPO).
+
+إرسال واستقبال الأوامر:
+يتلقى commands من الـ backend عبر FCM High-Priority أو WebSocket persistent connection.
+مثال command: { action: "dial", number: "010xxxxxxxx", campaignId: "...", scriptContext: "..." }
+
+دمج الـ AI (Real-time Conversational):
+عندما تكون المكالمة active (Connection.setActive()):
+يلتقط الصوت من الـ microphone.
+يرسل stream الصوت لـ STT (Deepgram أو Whisper أو Google Speech-to-Text) عبر WebSocket.
+يبعت النص لـ LLM (OpenAI Realtime API أو Groq + local fallback).
+يتلقى رد ويحوله لصوت عبر TTS (ElevenLabs أو Piper local) ويخرجه على الـ speaker.
+
+Latency يجب أن يكون أقل من 800-1200ms لتجربة طبيعية.
+
+تسجيل المكالمات (Call Recording):
+أصعب جزء بسبب قيود Android 10+.
+حلول محتملة:
+Accessibility Service + overlay (غير موثوق 100%، يتعطل كثيراً، Google يحد من استخدامه).
+MediaProjection API لالتقاط الصوت/الشاشة (يحتاج user consent أول مرة).
+Self-Managed Connection مع custom audio routing (أفضل للـ internal audio).
+Hybrid: تسجيل من الـ server side إذا أمكن، أو استخدام أجهزة مع ROMs مخصصة تدعم recording.
+
+يجب حفظ التسجيلات ورفعها للـ backend (مع encryption).
+
+إضافات أخرى:
+Real-time status reporting (call duration, disposition, recording URL).
+Handling dual-SIM إن أمكن.
+Error handling قوي (network drop, SIM issues, overheating).
+
+
+2. Backend SaaS
+
+يدير:
+Campaigns و lists الأرقام (مع pacing controls عشان متتفلترش من carriers).
+Queueing و distribution الأوامر للـ available devices.
+AI orchestration (prompts, context, conversation history).
+Compliance: opt-in logs، NTRA registration، opt-out handling، "NTRA Alert" simulation إن أمكن.
+Dashboard للعملاء (reports، recordings، analytics).
+Billing & usage tracking.
+
+Communication مع الـ Agents:
+WebSocket server لـ low latency bidirectional.
+أو Firebase للبداية (أسهل scaling).
+
+AI Integration:
+يمكن أن يكون الـ heavy lifting (LLM inference) على الـ backend، والـ app يعمل كـ thin client للـ audio فقط.
+
+
+3. Device Farm & Scaling
+
+اشترِ موبايلات رخيصة (Samsung A-series أو Chinese brands) → ركبها في racks مع USB charging hubs + cooling + stable WiFi/4G.
+كل جهاز = "Agent" يقدر يعمل 40-60 مكالمة/ساعة (حسب pacing).
+Monitoring: heartbeat، battery level، signal strength، app health.
+Scaling: من 10 أجهزة → مئات (تحتاج automation للـ deployment والـ updates عبر ADB أو MDM tools).
+Challenges:
+OEM fragmentation (Samsung، Xiaomi، Huawei لكل واحد قواعد battery مختلفة).
+Doze mode + Background restrictions (Android 8+).
+Carrier blocking في مصر (Vodafone/Orange/Etisalat) للـ auto-dialing الثقيل.
+Maintenance (أجهزة تتعطل، SIMs، overheating).
+
+
+4. التحديات التقنية الرئيسية (يجب مناقشتها)
+
+Reliability of background execution: الـ app لازم يفضل شغال 24/7 → Foreground Service + exemptions + testing على أجهزة حقيقية.
+Call Recording: غير مضمون على كل الأجهزة → اختبار مكثف مطلوب.
+Legal & Compliance في مصر: NTRA rules، consent، تسجيل الأرقام، تجنب spam classification.
+Latency & Audio Quality: مهم جداً لتجربة AI طبيعية.
+Cost: Hardware + SIM plans + internet + maintenance vs cloud Voice API.
+Security: تشفير التسجيلات، authentication بين app و backend، حماية الـ SIMs.
+
+اقتراح للبداية (MVP)
+
+اعمل واحد أو اثنين أجهزة test.
+ابنِ الـ Android App بـ Self-Managed ConnectionService + basic dial + status reporting.
+دمج simple AI loop (STT → LLM → TTS).
+Backend بسيط يرسل commands ويستقبل recordings.
+اختبر recording + battery life + answer rate على شبكات مصرية.
