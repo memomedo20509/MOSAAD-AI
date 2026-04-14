@@ -1,0 +1,282 @@
+import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Link } from "wouter";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  ArrowLeft,
+  Save,
+  CheckCircle2,
+  MessageSquare,
+  Bot,
+  Key,
+  Info,
+  Copy,
+  ShieldOff,
+} from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+
+interface IntegrationSettings {
+  whatsappCloudToken?: string | null;
+  whatsappPhoneNumberId?: string | null;
+  whatsappVerifyToken?: string | null;
+  openAiApiKey?: string | null;
+  openAiModel?: string | null;
+}
+
+const ADMIN_ROLES = ["super_admin", "admin", "company_owner"];
+
+export default function IntegrationsSettingsPage() {
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = ADMIN_ROLES.includes(user?.role ?? "");
+
+  const [form, setForm] = useState<IntegrationSettings>({
+    whatsappCloudToken: "",
+    whatsappPhoneNumberId: "",
+    whatsappVerifyToken: "",
+    openAiApiKey: "",
+    openAiModel: "gpt-4o-mini",
+  });
+
+  const { data: settings, isLoading } = useQuery<IntegrationSettings>({
+    queryKey: ["/api/integration-settings"],
+    enabled: isAdmin,
+  });
+
+  useEffect(() => {
+    if (settings) {
+      setForm({
+        whatsappCloudToken: settings.whatsappCloudToken ?? "",
+        whatsappPhoneNumberId: settings.whatsappPhoneNumberId ?? "",
+        whatsappVerifyToken: settings.whatsappVerifyToken ?? "",
+        openAiApiKey: settings.openAiApiKey ?? "",
+        openAiModel: settings.openAiModel ?? "gpt-4o-mini",
+      });
+    }
+  }, [settings]);
+
+  const saveMutation = useMutation({
+    mutationFn: async (data: IntegrationSettings) => {
+      const res = await apiRequest("PUT", "/api/integration-settings", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/integration-settings"] });
+      toast({ title: "تم حفظ الإعدادات بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "فشل في حفظ الإعدادات", variant: "destructive" });
+    },
+  });
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast({ title: `تم نسخ ${label}` });
+    });
+  };
+
+  const webhookUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/webhook/whatsapp`
+    : "/webhook/whatsapp";
+
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4 text-center" dir="rtl">
+        <ShieldOff className="h-12 w-12 text-muted-foreground" />
+        <div>
+          <p className="text-lg font-semibold">صلاحية مرفوضة</p>
+          <p className="text-muted-foreground text-sm">هذه الصفحة للمديرين فقط</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 max-w-2xl" dir="rtl">
+      <div className="flex items-center gap-4">
+        <Link href="/leads">
+          <Button variant="ghost" size="icon" data-testid="button-back-integrations">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        </Link>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight" data-testid="text-integrations-title">
+            إعدادات الإنتيجريشن
+          </h1>
+          <p className="text-muted-foreground">ربط واتساب Business API وOpenAI لتشغيل الشات بوت</p>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-4">
+          <Skeleton className="h-48 w-full" />
+          <Skeleton className="h-48 w-full" />
+        </div>
+      ) : (
+        <>
+          {/* WhatsApp Business Cloud API */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-5 w-5 text-green-600" />
+                <div>
+                  <CardTitle className="text-base">واتساب Business Cloud API</CardTitle>
+                  <CardDescription>اربط واتساب Business API الرسمي لاستقبال الرسائل تلقائياً</CardDescription>
+                </div>
+                {settings?.whatsappCloudToken && (
+                  <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200 mr-auto">
+                    <CheckCircle2 className="h-3.5 w-3.5 ml-1" />
+                    مربوط
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="wa-token" className="text-sm">Access Token</Label>
+                <Input
+                  id="wa-token"
+                  type="password"
+                  value={form.whatsappCloudToken ?? ""}
+                  onChange={e => setForm(f => ({ ...f, whatsappCloudToken: e.target.value }))}
+                  placeholder="EAAxxxxxxx..."
+                  data-testid="input-wa-cloud-token"
+                />
+                <p className="text-xs text-muted-foreground">الـ Token الخاص بـ WhatsApp Business Account من Meta Developer</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="wa-phone-id" className="text-sm">Phone Number ID</Label>
+                <Input
+                  id="wa-phone-id"
+                  value={form.whatsappPhoneNumberId ?? ""}
+                  onChange={e => setForm(f => ({ ...f, whatsappPhoneNumberId: e.target.value }))}
+                  placeholder="123456789012345"
+                  data-testid="input-wa-phone-number-id"
+                />
+                <p className="text-xs text-muted-foreground">رقم الـ Phone Number ID من إعدادات واتساب في Meta Developer</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="wa-verify-token" className="text-sm">Verify Token (للـ Webhook)</Label>
+                <Input
+                  id="wa-verify-token"
+                  value={form.whatsappVerifyToken ?? ""}
+                  onChange={e => setForm(f => ({ ...f, whatsappVerifyToken: e.target.value }))}
+                  placeholder="my_custom_verify_token"
+                  data-testid="input-wa-verify-token"
+                />
+                <p className="text-xs text-muted-foreground">كلمة سر من اختيارك لتأكيد الـ Webhook</p>
+              </div>
+
+              {/* Webhook URL info */}
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                  <Info className="h-3.5 w-3.5" />
+                  <span>Webhook URL لإعداده في Meta Developer</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-xs bg-background border rounded px-2 py-1.5 break-all" data-testid="text-wa-webhook-url">
+                    {webhookUrl}
+                  </code>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => copyToClipboard(webhookUrl, "Webhook URL")}
+                    data-testid="button-copy-wa-webhook-url"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  في Meta Developer → WhatsApp → Configuration → Webhook: أدخل الـ URL أعلاه والـ Verify Token اللي اخترته
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* OpenAI Settings */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Bot className="h-5 w-5 text-purple-600" />
+                <div>
+                  <CardTitle className="text-base">OpenAI — محرك الذكاء الاصطناعي</CardTitle>
+                  <CardDescription>أدخل مفتاح OpenAI API لتفعيل الشات بوت بالذكاء الاصطناعي</CardDescription>
+                </div>
+                {settings?.openAiApiKey && (
+                  <Badge variant="outline" className="bg-purple-100 text-purple-700 border-purple-200 mr-auto">
+                    <CheckCircle2 className="h-3.5 w-3.5 ml-1" />
+                    مربوط
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="openai-key" className="text-sm">
+                  <Key className="h-3.5 w-3.5 inline ml-1" />
+                  OpenAI API Key
+                </Label>
+                <Input
+                  id="openai-key"
+                  type="password"
+                  value={form.openAiApiKey ?? ""}
+                  onChange={e => setForm(f => ({ ...f, openAiApiKey: e.target.value }))}
+                  placeholder="sk-proj-..."
+                  data-testid="input-openai-api-key"
+                />
+                <p className="text-xs text-muted-foreground">
+                  احصل على مفتاحك من{" "}
+                  <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                    platform.openai.com
+                  </a>
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="openai-model" className="text-sm">موديل OpenAI</Label>
+                <Input
+                  id="openai-model"
+                  value={form.openAiModel ?? ""}
+                  onChange={e => setForm(f => ({ ...f, openAiModel: e.target.value }))}
+                  placeholder="gpt-4o-mini"
+                  data-testid="input-openai-model"
+                />
+                <p className="text-xs text-muted-foreground">
+                  الموديل المستخدم للرد التلقائي (gpt-4o-mini للسرعة، gpt-4o للدقة)
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-900/10 p-3 text-xs text-blue-700 dark:text-blue-400">
+                <p className="font-medium mb-1">ملاحظة:</p>
+                <p>
+                  لو مافيش OpenAI key، البوت بيستخدم Gemini Flash تلقائياً (عن طريق OPENROUTER_API_KEY).
+                  لو ضبطت OpenAI key، البوت هيستخدم OpenAI بدلاً منه.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Save Button */}
+          <Button
+            className="w-full"
+            onClick={() => saveMutation.mutate(form)}
+            disabled={saveMutation.isPending}
+            data-testid="button-save-integrations"
+          >
+            <Save className="h-4 w-4 ml-2" />
+            {saveMutation.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
