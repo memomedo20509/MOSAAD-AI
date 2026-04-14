@@ -30,3 +30,9 @@ id = "PEri5CjbH6ze3q8YN5Guc"
 uri = "file://docs/whatsapp-system-prd.md"
 type = "text"
 title = "WhatsApp CRM Integration — Complete Technical PRD (شرح كامل لنظام الواتساب)"
+
+[[outputs]]
+id = "1GLdFl4YBTSCRf6C5G0DO"
+uri = "file://.local/tasks/facebook-instagram-integration-prd.md"
+type = "text"
+title = "PRD — تكامل فيسبوك وإنستجرام مع HomeAdvisor CRM"
