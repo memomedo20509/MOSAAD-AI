@@ -7,399 +7,148 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Plus, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Edit, UserCheck, UserX, Search, Plus } from "lucide-react";
-import type { User, Team } from "@shared/schema";
-import { useLanguage } from "@/lib/i18n";
-import { useAuth } from "@/hooks/use-auth";
-import { ROLE_ARABIC_NAMES, ROLE_COLORS, type CustomRole } from "@shared/models/auth";
+import type { User } from "@shared/models/auth";
 
-function getRoleName(role: string | null | undefined): string {
-  return ROLE_ARABIC_NAMES[(role ?? "sales_agent") as keyof typeof ROLE_ARABIC_NAMES] || role || "سيلز";
-}
+const ROLES = ["super_admin", "admin", "sales_manager", "team_leader", "sales_agent", "company_owner", "sales_admin"] as const;
 
-function getRoleColor(role: string | null | undefined): string {
-  return ROLE_COLORS[(role ?? "sales_agent") as keyof typeof ROLE_COLORS] || "bg-gray-500/10 text-gray-600";
+function UserForm({ onSave, onCancel, isPending }: {
+  onSave: (data: Record<string, unknown>) => void;
+  onCancel: () => void;
+  isPending: boolean;
+}) {
+  const [form, setForm] = useState({ username: "", password: "", email: "", firstName: "", lastName: "", role: "sales_agent", isActive: true });
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label>First Name</Label>
+          <Input data-testid="input-first-name" value={form.firstName} onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))} />
+        </div>
+        <div>
+          <Label>Last Name</Label>
+          <Input data-testid="input-last-name" value={form.lastName} onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))} />
+        </div>
+      </div>
+      <div>
+        <Label>Username *</Label>
+        <Input data-testid="input-username" value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} />
+      </div>
+      <div>
+        <Label>Password *</Label>
+        <Input data-testid="input-password" type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
+      </div>
+      <div>
+        <Label>Email</Label>
+        <Input data-testid="input-email" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+      </div>
+      <div>
+        <Label>Role</Label>
+        <Select value={form.role} onValueChange={v => setForm(f => ({ ...f, role: v }))}>
+          <SelectTrigger data-testid="select-role"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {ROLES.map(r => <SelectItem key={r} value={r}>{r.replace(/_/g, " ")}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex items-center gap-3">
+        <Switch checked={form.isActive} onCheckedChange={v => setForm(f => ({ ...f, isActive: v }))} data-testid="switch-is-active" />
+        <Label>Active</Label>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onCancel} data-testid="button-cancel">Cancel</Button>
+        <Button onClick={() => onSave(form)} disabled={!form.username || !form.password || isPending} data-testid="button-save-user">
+          {isPending ? "Creating..." : "Create User"}
+        </Button>
+      </DialogFooter>
+    </div>
+  );
 }
 
 export default function UsersPage() {
   const { toast } = useToast();
-  const { t } = useLanguage();
-  const { user: currentUser } = useAuth();
-  const [search, setSearch] = useState("");
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
-  const isAdmin = currentUser?.role === "super_admin" || currentUser?.role === "sales_admin";
+  const { data: users = [], isLoading } = useQuery<User[]>({ queryKey: ["/api/users"] });
 
-  const { data: users = [], isLoading } = useQuery<User[]>({
-    queryKey: ["/api/users"],
-  });
-
-  const { data: teams = [] } = useQuery<Team[]>({
-    queryKey: ["/api/teams"],
-  });
-
-  const { data: customRoles = [] } = useQuery<CustomRole[]>({
-    queryKey: ["/api/custom-roles"],
-  });
-
-  const updateUserMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<User> }) => {
-      const res = await apiRequest("PATCH", `/api/users/${id}`, data);
-      return await res.json();
-    },
+  const createMutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => apiRequest("POST", "/api/users", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-      toast({ title: t.userUpdatedSuccess });
-      setIsEditDialogOpen(false);
-      setEditingUser(null);
+      setDialogOpen(false);
+      toast({ title: "User created" });
     },
-    onError: () => {
-      toast({ title: t.userUpdatedError, variant: "destructive" });
-    },
+    onError: () => toast({ title: "Failed to create user", variant: "destructive" }),
   });
-
-  const createUserMutation = useMutation({
-    mutationFn: async (data: Record<string, unknown>) => {
-      const res = await apiRequest("POST", "/api/users", data);
-      return await res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-      toast({ title: t.userCreatedSuccess });
-      setIsAddDialogOpen(false);
-    },
-    onError: () => {
-      toast({ title: t.userCreatedError, variant: "destructive" });
-    },
-  });
-
-  const filteredUsers = users.filter(
-    (user) =>
-      user.email?.toLowerCase().includes(search.toLowerCase()) ||
-      user.firstName?.toLowerCase().includes(search.toLowerCase()) ||
-      user.lastName?.toLowerCase().includes(search.toLowerCase()) ||
-      user.username?.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const handleEditSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!editingUser) return;
-
-    const formData = new FormData(e.currentTarget);
-    const password = formData.get("password") as string;
-    const rawTeamId = formData.get("teamId") as string;
-    const updateData: Record<string, unknown> = {
-      role: formData.get("role") as string,
-      teamId: rawTeamId === "none" || !rawTeamId ? null : rawTeamId,
-      isActive: formData.get("isActive") === "true",
-      firstName: formData.get("firstName") as string || null,
-      lastName: formData.get("lastName") as string || null,
-      phone: formData.get("phone") as string || null,
-    };
-    if (password) {
-      updateData.password = password;
-    }
-    updateUserMutation.mutate({
-      id: editingUser.id,
-      data: updateData,
-    });
-  };
-
-  const handleAddSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const rawTeamId = formData.get("teamId") as string;
-    createUserMutation.mutate({
-      username: formData.get("username") as string,
-      password: formData.get("password") as string,
-      email: formData.get("email") as string || null,
-      firstName: formData.get("firstName") as string || null,
-      lastName: formData.get("lastName") as string || null,
-      phone: formData.get("phone") as string || null,
-      role: formData.get("role") as string || "sales_agent",
-      teamId: rawTeamId === "none" || !rawTeamId ? null : rawTeamId,
-      isActive: true,
-    });
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-pulse text-muted-foreground">{t.loading}</div>
-      </div>
-    );
-  }
-
-  const BASE_ROLE_OPTIONS = [
-    { value: "super_admin", label: "مدير النظام" },
-    { value: "company_owner", label: "صاحب الشركة" },
-    { value: "sales_admin", label: "سيلز ادمن" },
-    { value: "team_leader", label: "تيم ليدر" },
-    { value: "sales_agent", label: "سيلز" },
-  ];
-
-  const ROLE_OPTIONS = [
-    ...BASE_ROLE_OPTIONS,
-    ...customRoles.map(cr => ({ value: cr.name, label: cr.name })),
-  ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-testid="page-users">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-page-title">{t.usersTitle}</h1>
-          <p className="text-muted-foreground">{t.usersSubtitle}</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
+          <p className="text-muted-foreground">Manage team members and their access</p>
         </div>
-        {isAdmin && (
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button data-testid="button-add-user">
-                <Plus className="h-4 w-4 mr-2 rtl:mr-0 rtl:ml-2" />
-                {t.addUser}
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>{t.addUser}</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleAddSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label>{t.firstName}</Label>
-                    <Input name="firstName" placeholder={t.firstName} data-testid="input-first-name" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>{t.lastName}</Label>
-                    <Input name="lastName" placeholder={t.lastName} data-testid="input-last-name" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>{t.username} *</Label>
-                  <Input name="username" required placeholder={t.username} data-testid="input-username" />
-                </div>
-                <div className="space-y-2">
-                  <Label>{t.email}</Label>
-                  <Input name="email" type="email" placeholder={t.email} data-testid="input-email" />
-                </div>
-                <div className="space-y-2">
-                  <Label>رقم التليفون</Label>
-                  <Input name="phone" placeholder="01xxxxxxxxx" data-testid="input-phone" />
-                </div>
-                <div className="space-y-2">
-                  <Label>{t.password} *</Label>
-                  <Input name="password" type="password" required placeholder={t.password} data-testid="input-password" />
-                </div>
-                <div className="space-y-2">
-                  <Label>{t.role}</Label>
-                  <Select name="role" defaultValue="sales_agent">
-                    <SelectTrigger data-testid="select-role-add">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ROLE_OPTIONS.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>{t.team}</Label>
-                  <Select name="teamId" defaultValue="none">
-                    <SelectTrigger data-testid="select-team-add">
-                      <SelectValue placeholder={t.selectTeam} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">{t.noTeam}</SelectItem>
-                      {teams.map((team) => (
-                        <SelectItem key={team.id} value={team.id}>
-                          {team.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button type="submit" className="w-full" disabled={createUserMutation.isPending} data-testid="button-save-new-user">
-                  {createUserMutation.isPending ? t.saving : t.create}
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
-        )}
+        <Button onClick={() => setDialogOpen(true)} data-testid="button-add-user">
+          <Plus className="h-4 w-4 mr-2" />
+          Add User
+        </Button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between gap-4">
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              {t.users} ({filteredUsers.length})
-            </CardTitle>
-            <div className="relative w-64">
-              <Search className="absolute left-3 rtl:left-auto rtl:right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder={t.searchUsers}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 rtl:pl-3 rtl:pr-9"
-                data-testid="input-search-users"
-              />
+      {isLoading ? (
+        <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
+      ) : users.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
+            <Users className="h-12 w-12 text-muted-foreground" />
+            <p className="font-medium">No users yet</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b">
+                  <tr>
+                    <th className="text-start py-3 px-4 font-medium">Name</th>
+                    <th className="text-start py-3 px-4 font-medium">Username</th>
+                    <th className="text-start py-3 px-4 font-medium">Email</th>
+                    <th className="text-start py-3 px-4 font-medium">Role</th>
+                    <th className="text-start py-3 px-4 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map(user => (
+                    <tr key={user.id} className="border-b last:border-0 hover:bg-muted/50" data-testid={`row-user-${user.id}`}>
+                      <td className="py-3 px-4 font-medium">{user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : "—"}</td>
+                      <td className="py-3 px-4 text-muted-foreground">{user.username}</td>
+                      <td className="py-3 px-4 text-muted-foreground">{user.email ?? "—"}</td>
+                      <td className="py-3 px-4"><Badge variant="secondary">{user.role ?? "—"}</Badge></td>
+                      <td className="py-3 px-4">
+                        <Badge className={user.isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>
+                          {user.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="divide-y">
-            {filteredUsers.map((user) => (
-              <div
-                key={user.id}
-                className="flex items-center justify-between py-4"
-                data-testid={`row-user-${user.id}`}
-              >
-                <div className="flex items-center gap-4">
-                  {user.profileImageUrl ? (
-                    <img
-                      src={user.profileImageUrl}
-                      alt={user.firstName || "User"}
-                      className="h-10 w-10 rounded-full"
-                    />
-                  ) : (
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Users className="h-5 w-5 text-primary" />
-                    </div>
-                  )}
-                  <div>
-                    <div className="font-medium">
-                      {user.firstName} {user.lastName}
-                      {!user.firstName && !user.lastName && <span className="text-muted-foreground">{user.username}</span>}
-                    </div>
-                    <div className="text-sm text-muted-foreground">{user.email || user.username}</div>
-                    {user.phone && <div className="text-xs text-muted-foreground">{user.phone}</div>}
-                  </div>
-                </div>
+          </CardContent>
+        </Card>
+      )}
 
-                <div className="flex items-center gap-3 flex-wrap">
-                  <Badge className={getRoleColor(user.role)} data-testid={`badge-role-${user.id}`}>
-                    {getRoleName(user.role)}
-                  </Badge>
-                  {user.teamId && teams.find(t => t.id === user.teamId) && (
-                    <Badge variant="secondary" data-testid={`badge-team-${user.id}`}>
-                      {teams.find(t => t.id === user.teamId)?.name}
-                    </Badge>
-                  )}
-                  {user.isActive ? (
-                    <Badge variant="outline" className="text-green-600" data-testid={`badge-status-${user.id}`}>
-                      <UserCheck className="h-3 w-3 mr-1" /> {t.active}
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-red-600" data-testid={`badge-status-${user.id}`}>
-                      <UserX className="h-3 w-3 mr-1" /> {t.inactive}
-                    </Badge>
-                  )}
-
-                  {isAdmin && (
-                    <Dialog open={isEditDialogOpen && editingUser?.id === user.id} onOpenChange={(open) => {
-                      setIsEditDialogOpen(open);
-                      if (!open) setEditingUser(null);
-                    }}>
-                      <DialogTrigger asChild>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setEditingUser(user);
-                            setIsEditDialogOpen(true);
-                          }}
-                          data-testid={`button-edit-user-${user.id}`}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-md">
-                        <DialogHeader>
-                          <DialogTitle>{t.editUser}: {user.username}</DialogTitle>
-                        </DialogHeader>
-                        <form onSubmit={handleEditSubmit} className="space-y-4">
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-2">
-                              <Label>{t.firstName}</Label>
-                              <Input name="firstName" defaultValue={user.firstName || ""} data-testid="input-edit-first-name" />
-                            </div>
-                            <div className="space-y-2">
-                              <Label>{t.lastName}</Label>
-                              <Input name="lastName" defaultValue={user.lastName || ""} data-testid="input-edit-last-name" />
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>رقم التليفون</Label>
-                            <Input name="phone" defaultValue={user.phone || ""} data-testid="input-edit-phone" />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>{t.password} (اتركه فارغاً للإبقاء على القديم)</Label>
-                            <Input name="password" type="password" placeholder="كلمة سر جديدة" data-testid="input-edit-password" />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>{t.role}</Label>
-                            <Select name="role" defaultValue={user.role || "sales_agent"}>
-                              <SelectTrigger data-testid="select-role">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {ROLE_OPTIONS.map(opt => (
-                                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>{t.team}</Label>
-                            <Select name="teamId" defaultValue={user.teamId || "none"}>
-                              <SelectTrigger data-testid="select-team">
-                                <SelectValue placeholder={t.selectTeam} />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">{t.noTeam}</SelectItem>
-                                {teams.map((team) => (
-                                  <SelectItem key={team.id} value={team.id}>
-                                    {team.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>{t.status}</Label>
-                            <Select name="isActive" defaultValue={user.isActive ? "true" : "false"}>
-                              <SelectTrigger data-testid="select-status">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="true">{t.active}</SelectItem>
-                                <SelectItem value="false">{t.inactive}</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <Button type="submit" className="w-full" disabled={updateUserMutation.isPending} data-testid="button-save-user">
-                            {updateUserMutation.isPending ? t.saving : t.save}
-                          </Button>
-                        </form>
-                      </DialogContent>
-                    </Dialog>
-                  )}
-                </div>
-              </div>
-            ))}
-
-            {filteredUsers.length === 0 && (
-              <div className="py-8 text-center text-muted-foreground">
-                {t.noUsersFound}
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Add User</DialogTitle></DialogHeader>
+          <UserForm onSave={data => createMutation.mutate(data)} onCancel={() => setDialogOpen(false)} isPending={createMutation.isPending} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

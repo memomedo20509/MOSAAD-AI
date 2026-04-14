@@ -5,7 +5,7 @@ export type Language = "ar" | "en";
 export const translations = {
   ar: {
     // App
-    appName: "HomeAdvisor CRM",
+    appName: "SalesBot AI",
     version: "الإصدار 1.0",
     signOut: "تسجيل الخروج",
     switchLanguage: "English",
@@ -57,9 +57,9 @@ export const translations = {
     firstName: "الاسم الأول",
     lastName: "الاسم الأخير",
     email: "البريد الإلكتروني",
-    welcomeToCRM: "مرحباً بك في HomeAdvisor CRM",
-    crmDescription: "نظام متكامل لإدارة الليدز والعقارات والمبيعات. تتبع الليدز، وإدارة المشاريع، وتحليل الأداء.",
-    customerManagementSystem: "نظام إدارة الليدز والمبيعات",
+    welcomeToCRM: "مرحباً بك في SalesBot AI",
+    crmDescription: "منصة الذكاء الاصطناعي لأتمتة المبيعات. تتبع المحادثات، وإدارة الليدز، وتحليل الأداء.",
+    customerManagementSystem: "منصة المبيعات بالذكاء الاصطناعي",
     passwordsMismatch: "كلمات المرور غير متطابقة",
     passwordMinLength: "كلمة المرور يجب أن تكون 6 أحرف على الأقل",
     quickLoginDev: "دخول سريع (للتطوير)",
@@ -886,7 +886,7 @@ export const translations = {
   },
   en: {
     // App
-    appName: "HomeAdvisor CRM",
+    appName: "SalesBot AI",
     version: "Version 1.0",
     signOut: "Sign Out",
     switchLanguage: "العربية",
@@ -938,9 +938,9 @@ export const translations = {
     firstName: "First Name",
     lastName: "Last Name",
     email: "Email",
-    welcomeToCRM: "Welcome to HomeAdvisor CRM",
-    crmDescription: "A comprehensive system for managing clients, properties, and sales. Track potential customers, manage projects, and analyze performance.",
-    customerManagementSystem: "Customer & Sales Management System",
+    welcomeToCRM: "Welcome to SalesBot AI",
+    crmDescription: "An AI-powered platform for sales automation. Track conversations, manage leads, and analyze performance.",
+    customerManagementSystem: "AI-Powered Sales Chatbot Platform",
     passwordsMismatch: "Passwords do not match",
     passwordMinLength: "Password must be at least 6 characters",
     quickLoginDev: "Quick Login (Dev)",

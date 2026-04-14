@@ -2,7 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { seedDefaultAdmin, seedDefaultLeadStates, backfillDeveloperNameEn } from "./seed";
+import { seedDefaultAdmin } from "./seed";
 import { pool } from "./db";
 
 const app = express();
@@ -53,7 +53,6 @@ app.use((req, res, next) => {
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
-
       log(logLine);
     }
   });
@@ -62,92 +61,65 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Run DB migrations to ensure new tables exist
+  // Ensure auth tables exist
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS role_permissions (
-      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
-      role VARCHAR NOT NULL UNIQUE,
-      permissions JSONB NOT NULL,
-      updated_at TIMESTAMP DEFAULT NOW()
+    CREATE TABLE IF NOT EXISTS sessions (
+      sid VARCHAR NOT NULL PRIMARY KEY,
+      sess JSONB NOT NULL,
+      expire TIMESTAMP NOT NULL
     )
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS email_report_settings (
-      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id VARCHAR NOT NULL UNIQUE,
-      to_email VARCHAR NOT NULL,
-      frequency VARCHAR NOT NULL DEFAULT 'monthly',
-      language VARCHAR NOT NULL DEFAULT 'ar',
-      enabled BOOLEAN NOT NULL DEFAULT false,
-      last_sent_at TIMESTAMP,
-      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
-    )
-  `);
-  await pool.query(`
-    ALTER TABLE email_report_settings ADD COLUMN IF NOT EXISTS language VARCHAR NOT NULL DEFAULT 'ar'
-  `);
-
-  // Add is_read column to whatsapp_messages_log if it doesn't exist
-  await pool.query(`
-    ALTER TABLE whatsapp_messages_log ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE
   `).catch(() => {});
 
-  // WhatsApp Campaigns tables (Task #10)
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS whatsapp_campaigns (
+    CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON sessions (expire)
+  `).catch(() => {});
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS teams (
       id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
-      name TEXT NOT NULL,
-      message TEXT NOT NULL,
-      filter_state_id VARCHAR,
-      filter_channel TEXT,
-      filter_days_no_reply INTEGER,
-      scheduled_at TIMESTAMP,
-      status TEXT DEFAULT 'draft',
-      created_by TEXT NOT NULL,
-      total_count INTEGER DEFAULT 0,
-      sent_count INTEGER DEFAULT 0,
-      failed_count INTEGER DEFAULT 0,
+      name VARCHAR NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `).catch(() => {});
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      username VARCHAR UNIQUE NOT NULL,
+      password VARCHAR NOT NULL,
+      email VARCHAR UNIQUE,
+      first_name VARCHAR,
+      last_name VARCHAR,
+      phone VARCHAR,
+      profile_image_url VARCHAR,
+      role VARCHAR DEFAULT 'sales_agent',
+      team_id VARCHAR REFERENCES teams(id),
+      is_active BOOLEAN DEFAULT true,
+      last_login TIMESTAMP,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
   `).catch(() => {});
 
+  // Ensure new SalesBot AI tables exist
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS whatsapp_campaign_recipients (
-      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
-      campaign_id VARCHAR REFERENCES whatsapp_campaigns(id),
-      lead_id VARCHAR REFERENCES leads(id),
-      phone TEXT NOT NULL,
-      status TEXT DEFAULT 'pending',
-      sent_at TIMESTAMP,
-      error_message TEXT
+    CREATE TABLE IF NOT EXISTS company_profile (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      name TEXT NOT NULL DEFAULT 'My Company',
+      industry TEXT,
+      website TEXT,
+      logo_url TEXT,
+      updated_at TIMESTAMP DEFAULT NOW()
     )
   `).catch(() => {});
 
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS whatsapp_followup_rules (
+    CREATE TABLE IF NOT EXISTS knowledge_base_items (
       id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
       name TEXT NOT NULL,
-      message TEXT NOT NULL,
-      days_after_no_reply INTEGER NOT NULL DEFAULT 3,
-      is_active BOOLEAN DEFAULT true,
-      created_by TEXT NOT NULL,
-      last_run_at TIMESTAMP,
-      created_at TIMESTAMP DEFAULT NOW()
-    )
-  `).catch(() => {});
-
-  // Meta (Messenger/Instagram) integration tables (Task #9)
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS meta_page_connections (
-      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
-      page_id TEXT NOT NULL UNIQUE,
-      page_name TEXT NOT NULL,
-      page_access_token TEXT NOT NULL,
-      instagram_account_id TEXT,
-      connected_by VARCHAR,
+      description TEXT,
+      category TEXT,
+      price NUMERIC,
       is_active BOOLEAN DEFAULT true,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
@@ -155,63 +127,70 @@ app.use((req, res, next) => {
   `).catch(() => {});
 
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS social_messages_log (
-      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
-      lead_id VARCHAR REFERENCES leads(id),
-      platform TEXT NOT NULL,
-      sender_id TEXT NOT NULL,
-      direction TEXT NOT NULL DEFAULT 'inbound',
-      message_text TEXT,
-      message_id TEXT UNIQUE,
-      agent_name TEXT,
-      is_read BOOLEAN DEFAULT false,
-      bot_actions_summary TEXT,
-      created_at TIMESTAMP DEFAULT NOW()
+    CREATE TABLE IF NOT EXISTS chatbot_config (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      persona_name TEXT NOT NULL DEFAULT 'SalesBot',
+      greeting TEXT NOT NULL DEFAULT 'Hello! How can I help you today?',
+      lead_questions JSONB DEFAULT '[]',
+      language TEXT NOT NULL DEFAULT 'en',
+      is_active BOOLEAN DEFAULT true,
+      updated_at TIMESTAMP DEFAULT NOW()
     )
   `).catch(() => {});
 
-  // Task #4: Sales Funnel Zones & Transition Rules
   await pool.query(`
-    ALTER TABLE lead_states 
-    ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'active',
-    ADD COLUMN IF NOT EXISTS can_go_back BOOLEAN NOT NULL DEFAULT true,
-    ADD COLUMN IF NOT EXISTS is_system_state BOOLEAN NOT NULL DEFAULT false,
-    ADD COLUMN IF NOT EXISTS zone INTEGER NOT NULL DEFAULT 0
+    CREATE TABLE IF NOT EXISTS conversations (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      platform TEXT NOT NULL DEFAULT 'web',
+      contact_name TEXT,
+      contact_phone TEXT,
+      contact_id TEXT,
+      status TEXT NOT NULL DEFAULT 'open',
+      channel TEXT,
+      assigned_to VARCHAR REFERENCES users(id),
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
   `).catch(() => {});
 
-  // Lead History typed columns (Task #5 - Lead Passport)
   await pool.query(`
-    ALTER TABLE lead_history ADD COLUMN IF NOT EXISTS type text DEFAULT 'other'
+    CREATE TABLE IF NOT EXISTS messages (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      conversation_id VARCHAR NOT NULL REFERENCES conversations(id),
+      role TEXT NOT NULL DEFAULT 'user',
+      content TEXT NOT NULL,
+      timestamp TIMESTAMP DEFAULT NOW()
+    )
   `).catch(() => {});
 
   await pool.query(`
-    ALTER TABLE lead_history 
-    ADD COLUMN IF NOT EXISTS from_state_id VARCHAR REFERENCES lead_states(id) ON DELETE SET NULL,
-    ADD COLUMN IF NOT EXISTS to_state_id VARCHAR REFERENCES lead_states(id) ON DELETE SET NULL
+    CREATE TABLE IF NOT EXISTS leads (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT,
+      phone TEXT,
+      email TEXT,
+      interest TEXT,
+      source_channel TEXT,
+      status TEXT NOT NULL DEFAULT 'new',
+      conversation_id VARCHAR REFERENCES conversations(id),
+      assigned_to VARCHAR REFERENCES users(id),
+      notes TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
   `).catch(() => {});
 
   await registerRoutes(httpServer, app);
-  
   await seedDefaultAdmin();
-  await seedDefaultLeadStates();
-  await backfillDeveloperNameEn();
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-
     console.error("Internal Server Error:", err);
-
-    if (res.headersSent) {
-      return next(err);
-    }
-
+    if (res.headersSent) return next(err);
     return res.status(status).json({ message });
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
   if (process.env.NODE_ENV === "production") {
     serveStatic(app);
   } else {
@@ -219,19 +198,9 @@ app.use((req, res, next) => {
     await setupVite(httpServer, app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
   httpServer.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
-    () => {
-      log(`serving on port ${port}`);
-    },
+    { port, host: "0.0.0.0", reusePort: true },
+    () => { log(`serving on port ${port}`); },
   );
 })();

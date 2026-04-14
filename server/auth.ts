@@ -152,19 +152,8 @@ export function registerAuthRoutes(app: Express) {
     userWithoutPassword.role = role;
     let effectivePermissions: RolePermissions | null = null;
     try {
-      // Check if this is a standard role
-      if (DEFAULT_ROLE_PERMISSIONS[role]) {
-        const dbPerms = await storage.getPermissionsForRole(role);
-        effectivePermissions = dbPerms ?? DEFAULT_ROLE_PERMISSIONS[role];
-      } else {
-        // Might be a custom role - look it up by name
-        const customRole = await storage.getCustomRoleByName(role);
-        if (customRole) {
-          effectivePermissions = customRole.permissions as RolePermissions;
-        } else {
-          effectivePermissions = DEFAULT_ROLE_PERMISSIONS["sales_agent"];
-        }
-      }
+      const dbPerms = await storage.getPermissionsForRole(role);
+      effectivePermissions = dbPerms ?? DEFAULT_ROLE_PERMISSIONS[role] ?? DEFAULT_ROLE_PERMISSIONS["sales_agent"];
     } catch {
       effectivePermissions = DEFAULT_ROLE_PERMISSIONS[role] ?? DEFAULT_ROLE_PERMISSIONS["sales_agent"];
     }
@@ -201,16 +190,8 @@ export function requirePermission(permission: keyof RolePermissions) {
     const role = normalizeRole(user.role);
 
     let perms: RolePermissions;
-    if (DEFAULT_ROLE_PERMISSIONS[role]) {
-      const dbPerms = await storage.getPermissionsForRole(role);
-      perms = dbPerms ?? DEFAULT_ROLE_PERMISSIONS[role];
-    } else {
-      // Custom role - look up by name
-      const customRole = await storage.getCustomRoleByName(role);
-      perms = customRole
-        ? (customRole.permissions as RolePermissions)
-        : DEFAULT_ROLE_PERMISSIONS["sales_agent"];
-    }
+    const dbPerms = await storage.getPermissionsForRole(role);
+    perms = dbPerms ?? DEFAULT_ROLE_PERMISSIONS[role] ?? DEFAULT_ROLE_PERMISSIONS["sales_agent"];
 
     if (!perms[permission]) {
       return res.status(403).json({ error: "Forbidden" });
