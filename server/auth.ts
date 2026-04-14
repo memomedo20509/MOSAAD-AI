@@ -5,7 +5,7 @@ import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
-import { User as SelectUser, UserRole, ROLE_ARABIC_NAMES, DEFAULT_ROLE_PERMISSIONS, type RolePermissions } from "@shared/models/auth";
+import { User as SelectUser, UserRole, ROLE_ARABIC_NAMES, DEFAULT_ROLE_PERMISSIONS, type RolePermissions, normalizeRole } from "@shared/models/auth";
 
 declare global {
   namespace Express {
@@ -148,7 +148,8 @@ export function registerAuthRoutes(app: Express) {
   app.get("/api/user", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     const { password: _, ...userWithoutPassword } = req.user as SelectUser;
-    const role = (req.user as SelectUser).role as UserRole;
+    const role = normalizeRole((req.user as SelectUser).role);
+    userWithoutPassword.role = role;
     let effectivePermissions: RolePermissions | null = null;
     try {
       // Check if this is a standard role
@@ -184,7 +185,7 @@ export function requireRole(...roles: UserRole[]) {
       return res.status(401).json({ error: "Unauthorized" });
     }
     const user = req.user as SelectUser;
-    if (!roles.includes(user.role as UserRole)) {
+    if (!roles.includes(normalizeRole(user.role))) {
       return res.status(403).json({ error: "Forbidden" });
     }
     next();
@@ -197,7 +198,7 @@ export function requirePermission(permission: keyof RolePermissions) {
       return res.status(401).json({ error: "Unauthorized" });
     }
     const user = req.user as SelectUser;
-    const role = user.role as UserRole;
+    const role = normalizeRole(user.role);
 
     let perms: RolePermissions;
     if (DEFAULT_ROLE_PERMISSIONS[role]) {

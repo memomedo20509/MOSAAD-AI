@@ -47,7 +47,7 @@ import {
 } from "@/components/ui/collapsible";
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/i18n";
-import { ROLE_ARABIC_NAMES, type UserRole } from "@shared/models/auth";
+import { ROLE_ARABIC_NAMES, type UserRole, normalizeRole } from "@shared/models/auth";
 
 const isAdmin = (role: string | null | undefined): boolean => {
   return role === "super_admin" || role === "admin" || role === "sales_admin";
@@ -57,6 +57,7 @@ const isManager = (role: string | null | undefined): boolean => {
   return (
     role === "super_admin" ||
     role === "admin" ||
+    role === "sales_admin" ||
     role === "sales_manager" ||
     role === "company_owner"
   );
@@ -70,7 +71,7 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
   const { t, isRTL } = useLanguage();
-  const userRole = user?.role as UserRole | undefined;
+  const userRole = user?.role ? normalizeRole(user.role) : undefined;
   const perms = user?.permissions;
 
   const { data: myDayData } = useQuery<{
@@ -152,33 +153,40 @@ export function AppSidebar() {
     },
   ].filter(item => item.show);
 
+  const isAdminOrManager = isAdmin(userRole) || isManager(userRole);
+
   const adminItems = [
     {
       title: t.addNewLead,
       url: "/leads/new",
       icon: UserPlus,
+      show: true,
     },
     {
       title: t.uploadLeads,
       url: "/leads/upload",
       icon: Upload,
+      show: isAdminOrManager,
     },
     {
       title: t.duplicatedLeads,
       url: "/leads/duplicated",
       icon: Copy,
+      show: isAdminOrManager,
     },
     {
       title: t.withdrawnLeads,
       url: "/leads/withdrawn",
       icon: FileX,
+      show: isAdminOrManager,
     },
     {
       title: t.actionsLog,
       url: "/leads/actions",
       icon: Activity,
+      show: isAdminOrManager,
     },
-  ];
+  ].filter(item => item.show);
 
   const inventoryItems = [
     {

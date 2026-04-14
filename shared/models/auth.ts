@@ -218,6 +218,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
   },
 };
 
+export function normalizeRole(role: string | null | undefined): UserRole {
+  if (!role) return "sales_agent";
+  if (role === "sales") return "sales_agent";
+  return role as UserRole;
+}
+
 // Keep backward compatibility - alias old ROLE_PERMISSIONS
 export const ROLE_PERMISSIONS = DEFAULT_ROLE_PERMISSIONS;
 

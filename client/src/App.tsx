@@ -14,6 +14,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { useRealtime } from "@/hooks/use-realtime";
 import { Loader2 } from "lucide-react";
+import { ProtectedRoute } from "@/components/protected-route";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import LeadsPage from "@/pages/leads";
@@ -63,37 +64,40 @@ function LogoutButton() {
   );
 }
 
+const ADMIN_MANAGER_ROLES = ["super_admin", "admin", "sales_admin", "sales_manager", "company_owner"] as const;
+const ADMIN_ONLY_ROLES = ["super_admin", "admin", "sales_admin"] as const;
+
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
-      <Route path="/kanban" component={KanbanPage} />
-      <Route path="/reports" component={ReportsPage} />
+      <Route path="/kanban">{() => <ProtectedRoute permission="canAccessKanban"><KanbanPage /></ProtectedRoute>}</Route>
+      <Route path="/reports">{() => <ProtectedRoute permission="canAccessReports"><ReportsPage /></ProtectedRoute>}</Route>
       <Route path="/leads" component={LeadsPage} />
       <Route path="/leads/new" component={AddLeadPage} />
-      <Route path="/leads/upload" component={UploadLeadsPage} />
-      <Route path="/leads/duplicated" component={DuplicatedLeadsPage} />
-      <Route path="/leads/withdrawn" component={WithdrawnLeadsPage} />
-      <Route path="/leads/actions" component={ActionsLogPage} />
+      <Route path="/leads/upload">{() => <ProtectedRoute roles={[...ADMIN_MANAGER_ROLES]}><UploadLeadsPage /></ProtectedRoute>}</Route>
+      <Route path="/leads/duplicated">{() => <ProtectedRoute roles={[...ADMIN_MANAGER_ROLES]}><DuplicatedLeadsPage /></ProtectedRoute>}</Route>
+      <Route path="/leads/withdrawn">{() => <ProtectedRoute roles={[...ADMIN_MANAGER_ROLES]}><WithdrawnLeadsPage /></ProtectedRoute>}</Route>
+      <Route path="/leads/actions">{() => <ProtectedRoute roles={[...ADMIN_MANAGER_ROLES]}><ActionsLogPage /></ProtectedRoute>}</Route>
       <Route path="/clients" component={ClientsPage} />
-      <Route path="/settings/states" component={StatesManagementPage} />
-      <Route path="/settings/filters" component={SavedFiltersPage} />
-      <Route path="/settings/users" component={UsersPage} />
-      <Route path="/settings/teams" component={TeamsPage} />
-      <Route path="/inventory/developers" component={DevelopersPage} />
-      <Route path="/inventory/projects" component={ProjectsPage} />
-      <Route path="/inventory/units" component={AllUnitsPage} />
-      <Route path="/inventory/projects/:projectId/units" component={UnitsPage} />
-      <Route path="/commissions" component={CommissionsPage} />
-      <Route path="/settings/permissions" component={PermissionsPage} />
-      <Route path="/my-day" component={MyDayPage} />
-      <Route path="/settings/whatsapp" component={WhatsAppSettingsPage} />
-      <Route path="/settings/whatsapp/templates" component={WhatsAppTemplatesPage} />
-      <Route path="/whatsapp-inbox" component={WhatsAppInboxPage} />
-      <Route path="/whatsapp-campaigns" component={WhatsAppCampaignsPage} />
-      <Route path="/settings/email-reports" component={EmailReportsPage} />
-      <Route path="/leaderboard" component={LeaderboardPage} />
-      <Route path="/settings/meta" component={MetaSettingsPage} />
+      <Route path="/settings/states">{() => <ProtectedRoute permission="canAccessSettings"><StatesManagementPage /></ProtectedRoute>}</Route>
+      <Route path="/settings/filters">{() => <ProtectedRoute permission="canAccessSettings"><SavedFiltersPage /></ProtectedRoute>}</Route>
+      <Route path="/settings/users">{() => <ProtectedRoute permission="canAccessSettings" roles={[...ADMIN_ONLY_ROLES]}><UsersPage /></ProtectedRoute>}</Route>
+      <Route path="/settings/teams">{() => <ProtectedRoute permission="canAccessSettings" roles={[...ADMIN_ONLY_ROLES]}><TeamsPage /></ProtectedRoute>}</Route>
+      <Route path="/inventory/developers">{() => <ProtectedRoute permission="canAccessInventory"><DevelopersPage /></ProtectedRoute>}</Route>
+      <Route path="/inventory/projects">{() => <ProtectedRoute permission="canAccessInventory"><ProjectsPage /></ProtectedRoute>}</Route>
+      <Route path="/inventory/units">{() => <ProtectedRoute permission="canAccessInventory"><AllUnitsPage /></ProtectedRoute>}</Route>
+      <Route path="/inventory/projects/:projectId/units">{() => <ProtectedRoute permission="canAccessInventory"><UnitsPage /></ProtectedRoute>}</Route>
+      <Route path="/commissions">{() => <ProtectedRoute permission="canAccessCommissions"><CommissionsPage /></ProtectedRoute>}</Route>
+      <Route path="/settings/permissions">{() => <ProtectedRoute roles={["super_admin"]}><PermissionsPage /></ProtectedRoute>}</Route>
+      <Route path="/my-day">{() => <ProtectedRoute permission="canAccessMyDay"><MyDayPage /></ProtectedRoute>}</Route>
+      <Route path="/settings/whatsapp">{() => <ProtectedRoute permission="canAccessSettings"><WhatsAppSettingsPage /></ProtectedRoute>}</Route>
+      <Route path="/settings/whatsapp/templates">{() => <ProtectedRoute permission="canAccessSettings" roles={[...ADMIN_ONLY_ROLES]}><WhatsAppTemplatesPage /></ProtectedRoute>}</Route>
+      <Route path="/whatsapp-inbox">{() => <ProtectedRoute permission="canAccessWhatsapp"><WhatsAppInboxPage /></ProtectedRoute>}</Route>
+      <Route path="/whatsapp-campaigns">{() => <ProtectedRoute permission="canAccessCampaigns"><WhatsAppCampaignsPage /></ProtectedRoute>}</Route>
+      <Route path="/settings/email-reports">{() => <ProtectedRoute permission="canAccessSettings" roles={[...ADMIN_MANAGER_ROLES]}><EmailReportsPage /></ProtectedRoute>}</Route>
+      <Route path="/leaderboard">{() => <ProtectedRoute permission="canAccessLeaderboard"><LeaderboardPage /></ProtectedRoute>}</Route>
+      <Route path="/settings/meta">{() => <ProtectedRoute permission="canAccessSettings" roles={[...ADMIN_ONLY_ROLES]}><MetaSettingsPage /></ProtectedRoute>}</Route>
       <Route component={NotFound} />
     </Switch>
   );
