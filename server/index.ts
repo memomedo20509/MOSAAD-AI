@@ -4,6 +4,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { seedDefaultAdmin } from "./seed";
 import { pool } from "./db";
+import { syncDatabaseSchema } from "./db-sync";
 
 const app = express();
 const httpServer = createServer(app);
@@ -61,18 +62,17 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Ensure auth tables exist
   await pool.query(`
     CREATE TABLE IF NOT EXISTS sessions (
       sid VARCHAR NOT NULL PRIMARY KEY,
       sess JSONB NOT NULL,
       expire TIMESTAMP NOT NULL
     )
-  `).catch(() => {});
+  `);
 
   await pool.query(`
     CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON sessions (expire)
-  `).catch(() => {});
+  `);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS teams (
@@ -80,7 +80,7 @@ app.use((req, res, next) => {
       name VARCHAR NOT NULL,
       created_at TIMESTAMP DEFAULT NOW()
     )
-  `).catch(() => {});
+  `);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -99,9 +99,8 @@ app.use((req, res, next) => {
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
-  `).catch(() => {});
+  `);
 
-  // Ensure new SalesBot AI tables exist
   await pool.query(`
     CREATE TABLE IF NOT EXISTS company_profile (
       id INTEGER PRIMARY KEY DEFAULT 1,
@@ -111,7 +110,7 @@ app.use((req, res, next) => {
       logo_url TEXT,
       updated_at TIMESTAMP DEFAULT NOW()
     )
-  `).catch(() => {});
+  `);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS knowledge_base_items (
@@ -125,11 +124,11 @@ app.use((req, res, next) => {
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
-  `).catch(() => {});
+  `);
 
   await pool.query(`
     ALTER TABLE knowledge_base_items ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active'
-  `).catch(() => {});
+  `);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS chatbot_config (
@@ -141,7 +140,7 @@ app.use((req, res, next) => {
       is_active BOOLEAN DEFAULT true,
       updated_at TIMESTAMP DEFAULT NOW()
     )
-  `).catch(() => {});
+  `);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS conversations (
@@ -156,7 +155,7 @@ app.use((req, res, next) => {
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
-  `).catch(() => {});
+  `);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS messages (
@@ -166,7 +165,7 @@ app.use((req, res, next) => {
       content TEXT NOT NULL,
       timestamp TIMESTAMP DEFAULT NOW()
     )
-  `).catch(() => {});
+  `);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS leads (
@@ -183,7 +182,9 @@ app.use((req, res, next) => {
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
-  `).catch(() => {});
+  `);
+
+  await syncDatabaseSchema();
 
   await registerRoutes(httpServer, app);
   await seedDefaultAdmin();
