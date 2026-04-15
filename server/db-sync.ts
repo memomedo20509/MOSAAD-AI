@@ -518,6 +518,68 @@ export async function syncDatabaseSchema(): Promise<void> {
       ON stale_lead_settings (COALESCE(company_id, ''), state_id)
     `);
 
+    // Platform Plans
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS plans (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        name TEXT NOT NULL,
+        description TEXT,
+        price_monthly NUMERIC NOT NULL DEFAULT 0,
+        price_yearly NUMERIC,
+        features TEXT[],
+        max_users INTEGER,
+        max_leads INTEGER,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    // Support Tickets
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS tickets (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id VARCHAR REFERENCES companies(id),
+        company_name TEXT,
+        subject TEXT NOT NULL,
+        description TEXT NOT NULL,
+        priority TEXT NOT NULL DEFAULT 'medium',
+        status TEXT NOT NULL DEFAULT 'open',
+        created_by_user_id VARCHAR,
+        created_by_name TEXT,
+        assigned_to_user_id VARCHAR,
+        assigned_to_name TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    // Ticket Replies
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ticket_replies (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        ticket_id VARCHAR NOT NULL REFERENCES tickets(id),
+        user_id VARCHAR,
+        user_name TEXT,
+        content TEXT NOT NULL,
+        is_internal BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    // Platform Notifications
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS platform_notifications (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        type TEXT NOT NULL,
+        message TEXT NOT NULL,
+        company_id VARCHAR REFERENCES companies(id),
+        company_name TEXT,
+        is_read BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
     await client.query("COMMIT");
     console.log("[db-sync] All tables verified/created successfully");
   } catch (error) {

@@ -729,6 +729,21 @@ export const subscriptions = pgTable("subscriptions", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Platform Plans (simple plan management for platform_admin dashboard)
+export const plans = pgTable("plans", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  priceMonthly: numeric("price_monthly", { mode: "number" }).notNull().default(0),
+  priceYearly: numeric("price_yearly", { mode: "number" }),
+  features: text("features").array(),
+  maxUsers: integer("max_users"),
+  maxLeads: integer("max_leads"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({ id: true, createdAt: true, updatedAt: true });
 export const updateSubscriptionSchema = insertSubscriptionSchema.partial();
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
@@ -770,6 +785,74 @@ export const invoices = pgTable("invoices", {
 export const insertInvoiceSchema = createInsertSchema(invoices).omit({ id: true, createdAt: true });
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
 export type Invoice = typeof invoices.$inferSelect;
+
+// Platform Plans schema types
+export const insertPlanSchema = createInsertSchema(plans).omit({ id: true, createdAt: true, updatedAt: true });
+export const updatePlanSchema = insertPlanSchema.partial();
+export type InsertPlan = z.infer<typeof insertPlanSchema>;
+export type UpdatePlan = z.infer<typeof updatePlanSchema>;
+export type Plan = typeof plans.$inferSelect;
+
+// Support Tickets (submitted by companies, handled by platform_admin)
+export const TICKET_PRIORITIES = ["low", "medium", "high", "urgent"] as const;
+export const TICKET_STATUSES = ["open", "in_progress", "resolved", "closed"] as const;
+export type TicketPriority = typeof TICKET_PRIORITIES[number];
+export type TicketStatus = typeof TICKET_STATUSES[number];
+
+export const tickets = pgTable("tickets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id),
+  companyName: text("company_name"),
+  subject: text("subject").notNull(),
+  description: text("description").notNull(),
+  priority: text("priority").notNull().default("medium"),
+  status: text("status").notNull().default("open"),
+  createdByUserId: varchar("created_by_user_id"),
+  createdByName: text("created_by_name"),
+  assignedToUserId: varchar("assigned_to_user_id"),
+  assignedToName: text("assigned_to_name"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertTicketSchema = createInsertSchema(tickets).omit({ id: true, createdAt: true, updatedAt: true });
+export const updateTicketSchema = insertTicketSchema.partial();
+export type InsertTicket = z.infer<typeof insertTicketSchema>;
+export type UpdateTicket = z.infer<typeof updateTicketSchema>;
+export type Ticket = typeof tickets.$inferSelect;
+
+// Ticket Replies
+export const ticketReplies = pgTable("ticket_replies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ticketId: varchar("ticket_id").references(() => tickets.id).notNull(),
+  userId: varchar("user_id"),
+  userName: text("user_name"),
+  content: text("content").notNull(),
+  isInternal: boolean("is_internal").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertTicketReplySchema = createInsertSchema(ticketReplies).omit({ id: true, createdAt: true });
+export type InsertTicketReply = z.infer<typeof insertTicketReplySchema>;
+export type TicketReply = typeof ticketReplies.$inferSelect;
+
+// Platform Notifications (events for platform_admin)
+export const PLATFORM_NOTIFICATION_TYPES = ["new_registration", "trial_ending", "payment_overdue", "whatsapp_disconnect", "subscription_cancelled", "plan_upgraded"] as const;
+export type PlatformNotificationType = typeof PLATFORM_NOTIFICATION_TYPES[number];
+
+export const platformNotifications = pgTable("platform_notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  type: text("type").notNull(),
+  message: text("message").notNull(),
+  companyId: varchar("company_id").references(() => companies.id),
+  companyName: text("company_name"),
+  isRead: boolean("is_read").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertPlatformNotificationSchema = createInsertSchema(platformNotifications).omit({ id: true, createdAt: true });
+export type InsertPlatformNotification = z.infer<typeof insertPlatformNotificationSchema>;
+export type PlatformNotification = typeof platformNotifications.$inferSelect;
 
 // TypeScript interfaces for WhatsApp conversation inbox (mapped from whatsapp_messages_log)
 export interface Conversation {

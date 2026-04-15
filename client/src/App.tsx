@@ -16,6 +16,7 @@ import { useRealtime } from "@/hooks/use-realtime";
 import { Loader2 } from "lucide-react";
 import { ProtectedRoute } from "@/components/protected-route";
 import { NotificationBell } from "@/components/notification-bell";
+import { PlatformLayout } from "@/components/platform-layout";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import LeadsPage from "@/pages/leads";
@@ -35,6 +36,15 @@ import UploadLeadsPage from "@/pages/upload-leads";
 import DuplicateLeadsPage from "@/pages/duplicate-leads";
 import WithdrawnLeadsPage from "@/pages/withdrawn-leads";
 import ActivityLogPage from "@/pages/activity-log";
+import PlatformDashboard from "@/pages/platform/dashboard";
+import PlatformCompaniesPage from "@/pages/platform/companies";
+import CompanyDetailPage from "@/pages/platform/company-detail";
+import PlatformRevenuePage from "@/pages/platform/revenue";
+import PlatformPlansPage from "@/pages/platform/plans";
+import PlatformTicketsPage from "@/pages/platform/tickets";
+import TicketDetailPage from "@/pages/platform/ticket-detail";
+import PlatformNotificationsPage from "@/pages/platform/notifications";
+import PlatformSettingsPage from "@/pages/platform/settings";
 
 function LogoutButton() {
   const { logoutMutation } = useAuth();
@@ -80,9 +90,33 @@ function Router() {
   );
 }
 
+function PlatformRouter() {
+  return (
+    <PlatformLayout>
+      <Switch>
+        <Route path="/platform" component={PlatformDashboard} />
+        <Route path="/platform/companies" component={PlatformCompaniesPage} />
+        <Route path="/platform/companies/:id" component={CompanyDetailPage} />
+        <Route path="/platform/revenue" component={PlatformRevenuePage} />
+        <Route path="/platform/plans" component={PlatformPlansPage} />
+        <Route path="/platform/tickets" component={PlatformTicketsPage} />
+        <Route path="/platform/tickets/:id" component={TicketDetailPage} />
+        <Route path="/platform/notifications" component={PlatformNotificationsPage} />
+        <Route path="/platform/settings" component={PlatformSettingsPage} />
+        <Route component={NotFound} />
+      </Switch>
+    </PlatformLayout>
+  );
+}
+
 function AuthenticatedApp() {
   const { user } = useAuth();
   useRealtime();
+
+  if (user?.role === "platform_admin") {
+    return <PlatformRouter />;
+  }
+
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",

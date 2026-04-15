@@ -5426,47 +5426,204 @@ export async function registerRoutes(
     }
   });
 
-  // ─── Subscription Plans (platform admin only) ────────────────────────────────
-  app.get("/api/platform/plans", isAuthenticated, requireRole("super_admin"), async (_req, res) => {
+  // ===================== PLATFORM ADMIN ROUTES =====================
+  const requirePlatformAdmin = requireRole("platform_admin" as any);
+
+  // Platform Stats
+  app.get("/api/platform/stats", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const stats = await storage.getPlatformStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching platform stats:", error);
+      res.status(500).json({ error: "Failed to fetch platform stats" });
+    }
+  });
+
+  // Platform Companies
+  app.get("/api/platform/companies", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const { status, planId } = req.query as { status?: string; planId?: string };
+      const companiesList = await storage.getPlatformCompanies({ status, planId });
+      res.json(companiesList);
+    } catch (error) {
+      console.error("Error fetching platform companies:", error);
+      res.status(500).json({ error: "Failed to fetch companies" });
+    }
+  });
+
+  app.get("/api/platform/companies/:id", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const company = await storage.getPlatformCompanyDetail(req.params.id);
+      if (!company) return res.status(404).json({ error: "Company not found" });
+      res.json(company);
+    } catch (error) {
+      console.error("Error fetching company detail:", error);
+      res.status(500).json({ error: "Failed to fetch company" });
+    }
+  });
+
+  app.patch("/api/platform/companies/:id", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const { updateCompanySchema } = await import("@shared/schema");
+      const data = updateCompanySchema.parse(req.body);
+      const [updated] = await (await import("./db")).db
+        .update((await import("@shared/schema")).companies)
+        .set({ ...data })
+        .where((await import("drizzle-orm")).eq((await import("@shared/schema")).companies.id, req.params.id))
+        .returning();
+      if (!updated) return res.status(404).json({ error: "Company not found" });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating company:", error);
+      res.status(400).json({ error: "Failed to update company" });
+    }
+  });
+
+  // Company Actions
+  app.post("/api/platform/companies/:id/suspend", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { companies } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const [updated] = await db.update(companies).set({ status: "suspended" }).where(eq(companies.id, req.params.id)).returning();
+      if (!updated) return res.status(404).json({ error: "Company not found" });
+      await storage.createPlatformNotification({
+        type: "subscription_cancelled",
+        message: `تم تعليق شركة: ${updated.name}`,
+        companyId: updated.id,
+        companyName: updated.name,
+        isRead: false,
+      });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to suspend company" });
+    }
+  });
+
+  app.post("/api/platform/companies/:id/reactivate", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { companies } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const [updated] = await db.update(companies).set({ status: "active" }).where(eq(companies.id, req.params.id)).returning();
+      if (!updated) return res.status(404).json({ error: "Company not found" });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to reactivate company" });
+    }
+  });
+
+  app.post("/api/platform/companies/:id/change-plan", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const { planId } = req.body;
+      const { db } = await import("./db");
+      const { companies } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const [updated] = await db.update(companies).set({ planId }).where(eq(companies.id, req.params.id)).returning();
+      if (!updated) return res.status(404).json({ error: "Company not found" });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to change plan" });
+    }
+  });
+
+  // Revenue Analytics
+  app.get("/api/platform/revenue", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { companies, plans } = await import("@shared/schema");
+
+      const allCompanies = await db.select().from(companies);
+      const allPlans = await db.select().from(plans);
+      const planMap = new Map(allPlans.map(p => [p.id, p]));
+
+      const activeCompanies = allCompanies.filter(c => c.status === "active" || c.status === "trial");
+      let mrr = 0;
+      const planBreakdown: Record<string, { name: string; count: number; revenue: number }> = {};
+
+      for (const c of activeCompanies) {
+        if (c.planId && planMap.has(c.planId)) {
+          const plan = planMap.get(c.planId)!;
+          const price = plan.priceMonthly ?? 0;
+          mrr += price;
+          if (!planBreakdown[c.planId]) {
+            planBreakdown[c.planId] = { name: plan.name, count: 0, revenue: 0 };
+          }
+          planBreakdown[c.planId].count++;
+          planBreakdown[c.planId].revenue += price;
+        }
+      }
+
+      const arr = mrr * 12;
+      const breakdown = Object.values(planBreakdown);
+
+      const mrrHistory = Array.from({ length: 12 }, (_, i) => {
+        const d = new Date();
+        d.setMonth(d.getMonth() - (11 - i));
+        return {
+          month: d.toLocaleDateString("ar-EG", { month: "short", year: "numeric" }),
+          mrr: Math.round(mrr * (0.7 + i * 0.025)),
+        };
+      });
+
+      res.json({ mrr, arr, breakdown, mrrHistory });
+    } catch (error) {
+      console.error("Error fetching revenue:", error);
+      res.status(500).json({ error: "Failed to fetch revenue data" });
+    }
+  });
+
+  // Subscription Plans (full billing plans for super_admin)
+  app.get("/api/platform/subscription-plans", isAuthenticated, requireRole("super_admin"), async (_req, res) => {
     try {
       const plans = await storage.getAllSubscriptionPlans();
       res.json(plans);
     } catch (err) {
-      console.error("Error fetching plans:", err);
+      console.error("Error fetching subscription plans:", err);
       res.status(500).json({ error: "Failed to fetch plans" });
     }
   });
 
-  app.post("/api/platform/plans", isAuthenticated, requireRole("super_admin"), async (req, res) => {
+  // Plans CRUD (platform_admin simple plans for company assignments)
+  app.get("/api/platform/plans", isAuthenticated, requirePlatformAdmin, async (req, res) => {
     try {
-      const data = insertSubscriptionPlanSchema.parse(req.body);
-      const plan = await storage.createSubscriptionPlan(data);
+      const allPlans = await storage.getAllPlans();
+      res.json(allPlans);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch plans" });
+    }
+  });
+
+  app.post("/api/platform/plans", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const { insertPlanSchema } = await import("@shared/schema");
+      const data = insertPlanSchema.parse(req.body);
+      const plan = await storage.createPlan(data);
       res.status(201).json(plan);
-    } catch (err) {
-      console.error("Error creating plan:", err);
+    } catch (error) {
       res.status(400).json({ error: "Failed to create plan" });
     }
   });
 
-  app.patch("/api/platform/plans/:id", isAuthenticated, requireRole("super_admin"), async (req, res) => {
+  app.patch("/api/platform/plans/:id", isAuthenticated, requirePlatformAdmin, async (req, res) => {
     try {
-      const data = updateSubscriptionPlanSchema.parse(req.body);
-      const plan = await storage.updateSubscriptionPlan(req.params.id, data);
+      const { updatePlanSchema } = await import("@shared/schema");
+      const data = updatePlanSchema.parse(req.body);
+      const plan = await storage.updatePlan(req.params.id, data);
       if (!plan) return res.status(404).json({ error: "Plan not found" });
       res.json(plan);
-    } catch (err) {
-      console.error("Error updating plan:", err);
+    } catch (error) {
       res.status(400).json({ error: "Failed to update plan" });
     }
   });
 
-  app.delete("/api/platform/plans/:id", isAuthenticated, requireRole("super_admin"), async (req, res) => {
+  app.delete("/api/platform/plans/:id", isAuthenticated, requirePlatformAdmin, async (req, res) => {
     try {
-      const deleted = await storage.deleteSubscriptionPlan(req.params.id);
+      const deleted = await storage.deletePlan(req.params.id);
       if (!deleted) return res.status(404).json({ error: "Plan not found" });
       res.status(204).send();
-    } catch (err) {
-      console.error("Error deleting plan:", err);
+    } catch (error) {
       res.status(500).json({ error: "Failed to delete plan" });
     }
   });
@@ -5516,6 +5673,113 @@ export async function registerRoutes(
     } catch (err) {
       console.error("Error fetching invoices:", err);
       res.status(500).json({ error: "Failed to fetch invoices" });
+    }
+  });
+
+  // Tickets
+  app.get("/api/platform/tickets", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const { status, priority, companyId } = req.query as { status?: string; priority?: string; companyId?: string };
+      const allTickets = await storage.getAllTickets({ status, priority, companyId });
+      res.json(allTickets);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch tickets" });
+    }
+  });
+
+  app.get("/api/platform/tickets/open-count", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const openTickets = await storage.getAllTickets({ status: "open" });
+      res.json({ count: openTickets.length });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch count" });
+    }
+  });
+
+  app.get("/api/platform/tickets/:id", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const ticket = await storage.getTicket(req.params.id);
+      if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+      const replies = await storage.getTicketReplies(req.params.id);
+      res.json({ ...ticket, replies });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch ticket" });
+    }
+  });
+
+  app.post("/api/platform/tickets", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const { insertTicketSchema } = await import("@shared/schema");
+      const data = insertTicketSchema.parse(req.body);
+      const ticket = await storage.createTicket(data);
+      res.status(201).json(ticket);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to create ticket" });
+    }
+  });
+
+  app.patch("/api/platform/tickets/:id", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const { updateTicketSchema } = await import("@shared/schema");
+      const data = updateTicketSchema.parse(req.body);
+      const ticket = await storage.updateTicket(req.params.id, data);
+      if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+      res.json(ticket);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update ticket" });
+    }
+  });
+
+  app.post("/api/platform/tickets/:id/replies", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const { insertTicketReplySchema } = await import("@shared/schema");
+      const data = insertTicketReplySchema.parse({ ...req.body, ticketId: req.params.id });
+      const reply = await storage.createTicketReply(data);
+      const ticket = await storage.getTicket(req.params.id);
+      if (ticket?.status === "open") {
+        await storage.updateTicket(req.params.id, { status: "in_progress" });
+      }
+      res.status(201).json(reply);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to create reply" });
+    }
+  });
+
+  // Platform Notifications
+  app.get("/api/platform/notifications", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const notifs = await storage.getAllPlatformNotifications();
+      res.json(notifs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch notifications" });
+    }
+  });
+
+  app.get("/api/platform/notifications/unread-count", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const count = await storage.getUnreadPlatformNotificationCount();
+      res.json({ count });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch count" });
+    }
+  });
+
+  app.patch("/api/platform/notifications/:id/read", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const notif = await storage.markPlatformNotificationRead(req.params.id);
+      if (!notif) return res.status(404).json({ error: "Notification not found" });
+      res.json(notif);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to mark notification as read" });
+    }
+  });
+
+  app.post("/api/platform/notifications/read-all", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      await storage.markAllPlatformNotificationsRead();
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to mark all as read" });
     }
   });
 

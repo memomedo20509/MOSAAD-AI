@@ -52,6 +52,29 @@ export async function seedDefaultAdmin() {
     console.error("[seed] Error seeding default admin:", error);
   }
 
+  // Step 2b: Seed platform admin user
+  try {
+    const existingPlatformAdmin = await storage.getUserByUsername("platform");
+    if (!existingPlatformAdmin) {
+      const hashedPassword = await hashPassword("Platform@123");
+      // Use a unique email to avoid duplicates; clear any conflicting email first
+      const uniqueEmail = `platform_admin_${Date.now()}@salesbot.ai`;
+      await storage.createUser({
+        username: "platform",
+        password: hashedPassword,
+        email: uniqueEmail,
+        firstName: "Platform",
+        lastName: "Admin",
+        role: "platform_admin",
+        companyId: null,
+        isActive: true,
+      });
+      console.log("[seed] Platform admin user created (platform / Platform@123)");
+    }
+  } catch (error) {
+    console.error("[seed] Error seeding platform admin:", error);
+  }
+
   // Step 3: Seed default lead states
   try {
     const states = [

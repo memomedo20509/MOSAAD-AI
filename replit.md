@@ -51,11 +51,25 @@ Preferred communication style: Simple, everyday language.
 - **Conversation** / **Message** — TypeScript interfaces mapping WhatsApp inbox data
 
 ### Auth Data Model (shared/models/auth.ts)
-- **users** – Platform users with roles: super_admin, admin, sales_admin, team_leader, sales_agent
+- **users** – Platform users with roles: super_admin, admin, sales_admin, team_leader, sales_agent, platform_admin
 - **teams** – User team groupings
 - **sessions** – Express session storage
+- **plans** – Subscription plans (name, priceMonthly, maxUsers, features)
+- **tickets** – Support tickets from companies (status: open/in_progress/resolved/closed)
+- **ticket_replies** – Replies on support tickets
+- **platform_notifications** – Global platform-wide notifications for platform_admin
 
-### Pages
+### Platform Admin Pages (role: platform_admin only)
+- `/platform` → Platform dashboard with MRR/ARR KPIs and company stats
+- `/platform/companies` → All companies list with filters, status badges, user/lead counts
+- `/platform/companies/:id` → Company detail with tabs (Profile, Users, Tickets)
+- `/platform/revenue` → Revenue analytics with MRR/ARR charts
+- `/platform/plans` → Subscription plan management (CRUD)
+- `/platform/tickets` → Support ticket list and detail view
+- `/platform/notifications` → Platform-wide notifications center
+- `/platform/settings` → Platform settings
+
+### Company Pages
 - `/` → Dashboard (overview stats)
 - `/leaderboard` → Sales agent rankings with deals/leads metrics (manager+)
 - `/analytics` → Performance analytics and reports
@@ -115,5 +129,22 @@ Preferred communication style: Simple, everyday language.
 - `client/src/pages/dashboard.tsx` – Dashboard with usage widget
 
 ## Default Credentials
-- Username: `admin`
-- Password: `Admin@123`
+- Username: `admin` / Password: `Admin@123` (super_admin role — company dashboard)
+- Username: `platform` / Password: `Platform@123` (platform_admin role — platform dashboard at `/platform`)
+
+### Platform Admin API Routes
+- `GET /api/platform/stats` — KPI stats (companies, tickets)
+- `GET /api/platform/companies` — All companies with filters
+- `GET /api/platform/companies/:id` — Company detail
+- `PATCH /api/platform/companies/:id/suspend` — Suspend company
+- `PATCH /api/platform/companies/:id/reactivate` — Reactivate company
+- `PATCH /api/platform/companies/:id/plan` — Change company plan
+- `GET/POST/PATCH/DELETE /api/platform/plans` — Subscription plans CRUD
+- `GET/POST /api/platform/tickets` — Tickets list and create
+- `GET /api/platform/tickets/:id` — Ticket detail
+- `PATCH /api/platform/tickets/:id` — Update ticket status
+- `POST /api/platform/tickets/:id/replies` — Add reply to ticket
+- `GET /api/platform/revenue` — Revenue analytics
+- `GET/POST /api/platform/notifications` — Platform notifications
+- `PATCH /api/platform/notifications/:id/read` — Mark notification read
+- `PATCH /api/platform/notifications/read-all` — Mark all read

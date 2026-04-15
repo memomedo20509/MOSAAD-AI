@@ -119,6 +119,21 @@ import {
   type UsageRecord,
   type Invoice,
   type InsertInvoice,
+  companies,
+  plans,
+  tickets,
+  ticketReplies,
+  platformNotifications,
+  type Plan,
+  type InsertPlan,
+  type UpdatePlan,
+  type Ticket,
+  type InsertTicket,
+  type UpdateTicket,
+  type TicketReply,
+  type InsertTicketReply,
+  type PlatformNotification,
+  type InsertPlatformNotification,
 } from "@shared/schema";
 import {
   customRoles,
@@ -594,6 +609,41 @@ export interface IStorage {
   // Invoices
   getInvoices(companyId: string): Promise<Invoice[]>;
   createInvoice(data: InsertInvoice): Promise<Invoice>;
+
+  // Platform Admin - Plans
+  getAllPlans(activeOnly?: boolean): Promise<Plan[]>;
+  getPlan(id: string): Promise<Plan | undefined>;
+  createPlan(data: InsertPlan): Promise<Plan>;
+  updatePlan(id: string, data: UpdatePlan): Promise<Plan | undefined>;
+  deletePlan(id: string): Promise<boolean>;
+
+  // Platform Admin - Tickets
+  getAllTickets(filters?: { status?: string; priority?: string; companyId?: string }): Promise<Ticket[]>;
+  getTicket(id: string): Promise<Ticket | undefined>;
+  createTicket(data: InsertTicket): Promise<Ticket>;
+  updateTicket(id: string, data: UpdateTicket): Promise<Ticket | undefined>;
+  getTicketReplies(ticketId: string): Promise<TicketReply[]>;
+  createTicketReply(data: InsertTicketReply): Promise<TicketReply>;
+
+  // Platform Admin - Platform Notifications
+  getAllPlatformNotifications(unreadOnly?: boolean): Promise<PlatformNotification[]>;
+  createPlatformNotification(data: InsertPlatformNotification): Promise<PlatformNotification>;
+  markPlatformNotificationRead(id: string): Promise<PlatformNotification | undefined>;
+  markAllPlatformNotificationsRead(): Promise<void>;
+  getUnreadPlatformNotificationCount(): Promise<number>;
+
+  // Platform Admin - Stats & Analytics
+  getPlatformStats(): Promise<{
+    totalActiveCompanies: number;
+    totalTrialCompanies: number;
+    totalSuspendedCompanies: number;
+    newRegistrationsThisMonth: number;
+    openTickets: number;
+    renewalsNext30Days: number;
+  }>;
+
+  getPlatformCompanies(filters?: { status?: string; planId?: string }): Promise<(typeof companies.$inferSelect & { usersCount: number; leadsCount: number })[]>;
+  getPlatformCompanyDetail(id: string): Promise<(typeof companies.$inferSelect & { users: (typeof users.$inferSelect)[] }) | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3376,6 +3426,148 @@ export class DatabaseStorage implements IStorage {
   async createInvoice(data: InsertInvoice): Promise<Invoice> {
     const [row] = await db.insert(invoices).values(data).returning();
     return row;
+  }
+
+  // Platform Admin - Plans
+  async getAllPlans(activeOnly?: boolean): Promise<Plan[]> {
+    if (activeOnly) {
+      return db.select().from(plans).where(eq(plans.isActive, true)).orderBy(plans.priceMonthly);
+    }
+    return db.select().from(plans).orderBy(plans.priceMonthly);
+  }
+
+  async getPlan(id: string): Promise<Plan | undefined> {
+    const [row] = await db.select().from(plans).where(eq(plans.id, id));
+    return row;
+  }
+
+  async createPlan(data: InsertPlan): Promise<Plan> {
+    const [row] = await db.insert(plans).values(data).returning();
+    return row;
+  }
+
+  async updatePlan(id: string, data: UpdatePlan): Promise<Plan | undefined> {
+    const [row] = await db.update(plans).set({ ...data, updatedAt: new Date() }).where(eq(plans.id, id)).returning();
+    return row;
+  }
+
+  async deletePlan(id: string): Promise<boolean> {
+    const [row] = await db.delete(plans).where(eq(plans.id, id)).returning();
+    return !!row;
+  }
+
+  // Platform Admin - Tickets
+  async getAllTickets(filters?: { status?: string; priority?: string; companyId?: string }): Promise<Ticket[]> {
+    let query = db.select().from(tickets).$dynamic();
+    const conditions = [];
+    if (filters?.status) conditions.push(eq(tickets.status, filters.status));
+    if (filters?.priority) conditions.push(eq(tickets.priority, filters.priority));
+    if (filters?.companyId) conditions.push(eq(tickets.companyId, filters.companyId));
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+    return query.orderBy(sql`${tickets.createdAt} DESC`);
+  }
+
+  async getTicket(id: string): Promise<Ticket | undefined> {
+    const [row] = await db.select().from(tickets).where(eq(tickets.id, id));
+    return row;
+  }
+
+  async createTicket(data: InsertTicket): Promise<Ticket> {
+    const [row] = await db.insert(tickets).values(data).returning();
+    return row;
+  }
+
+  async updateTicket(id: string, data: UpdateTicket): Promise<Ticket | undefined> {
+    const [row] = await db.update(tickets).set({ ...data, updatedAt: new Date() }).where(eq(tickets.id, id)).returning();
+    return row;
+  }
+
+  async getTicketReplies(ticketId: string): Promise<TicketReply[]> {
+    return db.select().from(ticketReplies).where(eq(ticketReplies.ticketId, ticketId)).orderBy(ticketReplies.createdAt);
+  }
+
+  async createTicketReply(data: InsertTicketReply): Promise<TicketReply> {
+    const [row] = await db.insert(ticketReplies).values(data).returning();
+    return row;
+  }
+
+  // Platform Admin - Platform Notifications
+  async getAllPlatformNotifications(unreadOnly?: boolean): Promise<PlatformNotification[]> {
+    if (unreadOnly) {
+      return db.select().from(platformNotifications).where(eq(platformNotifications.isRead, false)).orderBy(sql`${platformNotifications.createdAt} DESC`);
+    }
+    return db.select().from(platformNotifications).orderBy(sql`${platformNotifications.createdAt} DESC`);
+  }
+
+  async createPlatformNotification(data: InsertPlatformNotification): Promise<PlatformNotification> {
+    const [row] = await db.insert(platformNotifications).values(data).returning();
+    return row;
+  }
+
+  async markPlatformNotificationRead(id: string): Promise<PlatformNotification | undefined> {
+    const [row] = await db.update(platformNotifications).set({ isRead: true }).where(eq(platformNotifications.id, id)).returning();
+    return row;
+  }
+
+  async markAllPlatformNotificationsRead(): Promise<void> {
+    await db.update(platformNotifications).set({ isRead: true }).where(eq(platformNotifications.isRead, false));
+  }
+
+  async getUnreadPlatformNotificationCount(): Promise<number> {
+    const [row] = await db.select({ count: sql<number>`COUNT(*)` }).from(platformNotifications).where(eq(platformNotifications.isRead, false));
+    return row?.count ?? 0;
+  }
+
+  // Platform Admin - Stats & Analytics
+  async getPlatformStats(): Promise<{
+    totalActiveCompanies: number;
+    totalTrialCompanies: number;
+    totalSuspendedCompanies: number;
+    newRegistrationsThisMonth: number;
+    openTickets: number;
+    renewalsNext30Days: number;
+  }> {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const [activeRow] = await db.select({ count: sql<number>`COUNT(*)` }).from(companies).where(eq(companies.status, "active"));
+    const [trialRow] = await db.select({ count: sql<number>`COUNT(*)` }).from(companies).where(eq(companies.status, "trial"));
+    const [suspendedRow] = await db.select({ count: sql<number>`COUNT(*)` }).from(companies).where(eq(companies.status, "suspended"));
+    const [newRegRow] = await db.select({ count: sql<number>`COUNT(*)` }).from(companies).where(gte(companies.createdAt, startOfMonth));
+    const [openTicketsRow] = await db.select({ count: sql<number>`COUNT(*)` }).from(tickets).where(eq(tickets.status, "open"));
+
+    return {
+      totalActiveCompanies: activeRow?.count ?? 0,
+      totalTrialCompanies: trialRow?.count ?? 0,
+      totalSuspendedCompanies: suspendedRow?.count ?? 0,
+      newRegistrationsThisMonth: newRegRow?.count ?? 0,
+      openTickets: openTicketsRow?.count ?? 0,
+      renewalsNext30Days: 0,
+    };
+  }
+
+  async getPlatformCompanies(filters?: { status?: string; planId?: string }): Promise<(typeof companies.$inferSelect & { usersCount: number; leadsCount: number })[]> {
+    const allCompanies = await db.select().from(companies).orderBy(sql`${companies.createdAt} DESC`);
+    const result = [];
+    for (const company of allCompanies) {
+      if (filters?.status && company.status !== filters.status) continue;
+      if (filters?.planId && company.planId !== filters.planId) continue;
+      const [usersRow] = await db.select({ count: sql<number>`COUNT(*)` }).from(users).where(eq(users.companyId, company.id));
+      const [leadsRow] = await db.select({ count: sql<number>`COUNT(*)` }).from(leads).where(eq(leads.companyId, company.id));
+      result.push({ ...company, usersCount: usersRow?.count ?? 0, leadsCount: leadsRow?.count ?? 0 });
+    }
+    return result;
+  }
+
+  async getPlatformCompanyDetail(id: string): Promise<(typeof companies.$inferSelect & { users: (typeof users.$inferSelect)[] }) | undefined> {
+    const [company] = await db.select().from(companies).where(eq(companies.id, id));
+    if (!company) return undefined;
+    const companyUsers = await db.select().from(users).where(eq(users.companyId, id));
+    return { ...company, users: companyUsers };
+  }
   }
 }
 
