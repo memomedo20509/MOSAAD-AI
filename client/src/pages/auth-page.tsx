@@ -128,7 +128,7 @@ export default function AuthPage() {
                         variant="outline"
                         className="w-full"
                         onClick={() => {
-                          loginMutation.mutate({ username: "admin", password: "admin123" });
+                          loginMutation.mutate({ username: "admin", password: "Admin@123" });
                         }}
                         disabled={loginMutation.isPending}
                         data-testid="button-quick-login"
