@@ -1,5 +1,5 @@
 import { db, pool } from "./db";
-import { eq, and, ne, isNotNull, isNull, lt, gte, lte, sql } from "drizzle-orm";
+import { eq, and, or, ne, isNotNull, isNull, lt, gte, lte, sql } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { computeScore, getScoringConfig, type ScoringContext } from "./scoring";
@@ -124,70 +124,70 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  getAllUsers(): Promise<User[]>;
+  getAllUsers(companyId?: string | null): Promise<User[]>;
   updateUser(id: string, data: UpdateUser): Promise<User | undefined>;
   
   // Teams
-  getAllTeams(): Promise<Team[]>;
-  getTeam(id: string): Promise<Team | undefined>;
-  createTeam(team: InsertTeam): Promise<Team>;
-  updateTeam(id: string, data: Partial<Team>): Promise<Team | undefined>;
-  deleteTeam(id: string): Promise<boolean>;
+  getAllTeams(companyId?: string | null): Promise<Team[]>;
+  getTeam(id: string, companyId?: string | null): Promise<Team | undefined>;
+  createTeam(team: InsertTeam, companyId?: string | null): Promise<Team>;
+  updateTeam(id: string, data: Partial<Team>, companyId?: string | null): Promise<Team | undefined>;
+  deleteTeam(id: string, companyId?: string | null): Promise<boolean>;
 
   // Lead States
-  getAllStates(): Promise<LeadState[]>;
+  getAllStates(companyId?: string | null): Promise<LeadState[]>;
   getState(id: string): Promise<LeadState | undefined>;
   createState(state: InsertLeadState): Promise<LeadState>;
   updateState(id: string, data: Partial<LeadState>): Promise<LeadState | undefined>;
   deleteState(id: string): Promise<boolean>;
 
   // Leads
-  getAllLeads(): Promise<Lead[]>;
+  getAllLeads(companyId?: string | null): Promise<Lead[]>;
   getLead(id: string): Promise<Lead | undefined>;
-  createLead(lead: InsertLead, creatingUserTeamId?: string | null): Promise<Lead>;
+  createLead(lead: InsertLead, creatingUserTeamId?: string | null, companyId?: string | null): Promise<Lead>;
   updateLead(id: string, data: Partial<Lead>, performedByName?: string): Promise<Lead | undefined>;
   deleteLead(id: string): Promise<boolean>;
 
   // Clients
-  getAllClients(): Promise<Client[]>;
+  getAllClients(companyId?: string | null): Promise<Client[]>;
   getClient(id: string): Promise<Client | undefined>;
-  createClient(client: InsertClient): Promise<Client>;
+  createClient(client: InsertClient, companyId?: string | null): Promise<Client>;
   updateClient(id: string, data: Partial<Client>): Promise<Client | undefined>;
   deleteClient(id: string): Promise<boolean>;
 
   // Tasks
-  getAllTasks(): Promise<Task[]>;
+  getAllTasks(companyId?: string | null): Promise<Task[]>;
   getTasksByLeadId(leadId: string): Promise<Task[]>;
   getTask(id: string): Promise<Task | undefined>;
-  createTask(task: InsertTask): Promise<Task>;
+  createTask(task: InsertTask, companyId?: string | null): Promise<Task>;
   updateTask(id: string, data: Partial<Task>): Promise<Task | undefined>;
   deleteTask(id: string): Promise<boolean>;
 
   // Lead History
-  getAllHistory(): Promise<LeadHistory[]>;
+  getAllHistory(companyId?: string | null): Promise<LeadHistory[]>;
   getHistoryByLeadId(leadId: string): Promise<LeadHistory[]>;
-  createHistory(history: InsertLeadHistory): Promise<LeadHistory>;
+  createHistory(history: InsertLeadHistory, companyId?: string | null): Promise<LeadHistory>;
 
   // Developers
-  getAllDevelopers(): Promise<Developer[]>;
+  getAllDevelopers(companyId?: string | null): Promise<Developer[]>;
   getDeveloper(id: string): Promise<Developer | undefined>;
-  createDeveloper(developer: InsertDeveloper): Promise<Developer>;
+  createDeveloper(developer: InsertDeveloper, companyId?: string | null): Promise<Developer>;
   updateDeveloper(id: string, data: Partial<Developer>): Promise<Developer | undefined>;
   deleteDeveloper(id: string): Promise<boolean>;
 
   // Projects
-  getAllProjects(): Promise<Project[]>;
+  getAllProjects(companyId?: string | null): Promise<Project[]>;
   getProjectsByDeveloper(developerId: string): Promise<Project[]>;
   getProject(id: string): Promise<Project | undefined>;
-  createProject(project: InsertProject): Promise<Project>;
+  createProject(project: InsertProject, companyId?: string | null): Promise<Project>;
   updateProject(id: string, data: Partial<Project>): Promise<Project | undefined>;
   deleteProject(id: string): Promise<boolean>;
 
   // Units
-  getAllUnits(): Promise<Unit[]>;
+  getAllUnits(companyId?: string | null): Promise<Unit[]>;
   getUnitsByProject(projectId: string): Promise<Unit[]>;
   getUnit(id: string): Promise<Unit | undefined>;
-  createUnit(unit: InsertUnit): Promise<Unit>;
+  createUnit(unit: InsertUnit, companyId?: string | null): Promise<Unit>;
   updateUnit(id: string, data: Partial<Unit>): Promise<Unit | undefined>;
   deleteUnit(id: string): Promise<boolean>;
 
@@ -200,23 +200,23 @@ export interface IStorage {
 
   // Communications
   getCommunicationsByLead(leadId: string): Promise<Communication[]>;
-  createCommunication(comm: InsertCommunication): Promise<Communication>;
+  createCommunication(comm: InsertCommunication, companyId?: string | null): Promise<Communication>;
 
   // Scoring
   refreshLeadScore(id: string): Promise<Lead | undefined>;
   refreshAllLeadScores(): Promise<void>;
-  getAllLeadsWithRefreshedScores(): Promise<Lead[]>;
+  getAllLeadsWithRefreshedScores(companyId?: string | null): Promise<Lead[]>;
 
   // Team Load & Auto Assign
-  getTeamLoad(teamId?: string | null): Promise<{ userId: string; userName: string; leadCount: number; role: string }[]>;
+  getTeamLoad(teamId?: string | null, companyId?: string | null): Promise<{ userId: string; userName: string; leadCount: number; role: string }[]>;
   autoAssignLead(leadId: string, requestingUserTeamId?: string | null): Promise<Lead | undefined>;
 
   // Reminders
-  getAllReminders(): Promise<Reminder[]>;
+  getAllReminders(companyId?: string | null): Promise<Reminder[]>;
   getRemindersByUser(userId: string): Promise<Reminder[]>;
   getRemindersByLead(leadId: string): Promise<Reminder[]>;
   getReminder(id: string): Promise<Reminder | undefined>;
-  createReminder(reminder: InsertReminder): Promise<Reminder>;
+  createReminder(reminder: InsertReminder, companyId?: string | null): Promise<Reminder>;
   updateReminder(id: string, data: Partial<Reminder>): Promise<Reminder | undefined>;
   deleteReminder(id: string): Promise<boolean>;
 
@@ -228,7 +228,7 @@ export interface IStorage {
   deleteDocument(id: string): Promise<boolean>;
 
   // Response Time & Team Activity
-  getResponseTimeReport(): Promise<{
+  getResponseTimeReport(companyId?: string | null): Promise<{
     agentId: string;
     agentName: string;
     avgResponseMinutes: number | null;
@@ -236,7 +236,7 @@ export interface IStorage {
     slowestResponseMinutes: number | null;
     uncontactedCount: number;
   }[]>;
-  getTeamActivityToday(): Promise<{
+  getTeamActivityToday(companyId?: string | null): Promise<{
     agentId: string;
     agentName: string;
     leadsContactedToday: number;
@@ -246,13 +246,13 @@ export interface IStorage {
   }[]>;
 
   // Commissions
-  getAllCommissions(): Promise<Commission[]>;
+  getAllCommissions(companyId?: string | null): Promise<Commission[]>;
   getCommissionsByAgent(agentId: string): Promise<Commission[]>;
   getCommission(id: string): Promise<Commission | undefined>;
-  createCommission(commission: InsertCommission): Promise<Commission>;
+  createCommission(commission: InsertCommission, companyId?: string | null): Promise<Commission>;
   updateCommission(id: string, data: UpdateCommission): Promise<Commission | undefined>;
   deleteCommission(id: string): Promise<boolean>;
-  getCommissionSummary(agentId?: string, teamMemberIds?: string[]): Promise<{ agentId: string; agentName: string; month: string; total: number; count: number }[]>;
+  getCommissionSummary(agentId?: string, teamMemberIds?: string[], companyId?: string | null): Promise<{ agentId: string; agentName: string; month: string; total: number; count: number }[]>;
 
   // Role Permissions (dynamic, per super_admin)
   getRolePermissions(): Promise<Record<string, RolePermissions>>;
@@ -260,9 +260,9 @@ export interface IStorage {
   setRolePermissions(role: string, permissions: RolePermissions): Promise<void>;
   
   // Lead filtering by role
-  getLeadsByRole(userId: string, role: string, teamId?: string | null, username?: string | null): Promise<Lead[]>;
+  getLeadsByRole(userId: string, role: string, teamId?: string | null, username?: string | null, companyId?: string | null): Promise<Lead[]>;
   transferLead(leadId: string, toUserId: string, performedBy: string, options?: { showHistoryToNew?: boolean; transferNote?: string; resetState?: boolean; fromUserId?: string; fromUserName?: string }): Promise<Lead | undefined>;
-  getReassignmentReport(): Promise<{ leadId: string; leadName: string | null; fromUser: string | null; toUser: string | null; performedBy: string | null; note: string | null; historyVisible: boolean; createdAt: Date | null }[]>;
+  getReassignmentReport(companyId?: string | null): Promise<{ leadId: string; leadName: string | null; fromUser: string | null; toUser: string | null; performedBy: string | null; note: string | null; historyVisible: boolean; createdAt: Date | null }[]>;
 
   // Notifications
   getNotificationsByUser(userId: string): Promise<Notification[]>;
@@ -280,7 +280,7 @@ export interface IStorage {
   createCallLog(callLog: InsertCallLog): Promise<CallLog>;
 
   // My Day
-  getMyDayData(userId: string, userRole: string, teamId?: string | null, username?: string | null): Promise<{
+  getMyDayData(userId: string, userRole: string, teamId?: string | null, username?: string | null, companyId?: string | null): Promise<{
     todayFollowUps: (Reminder & { lead: Lead | null })[];
     newLeads: Lead[];
     overdueFollowUps: (Reminder & { lead: Lead | null })[];
@@ -294,9 +294,9 @@ export interface IStorage {
   }[]>;
 
   // WhatsApp Templates
-  getAllWhatsappTemplates(activeOnly?: boolean): Promise<WhatsappTemplate[]>;
+  getAllWhatsappTemplates(activeOnly?: boolean, companyId?: string | null): Promise<WhatsappTemplate[]>;
   getWhatsappTemplate(id: string): Promise<WhatsappTemplate | undefined>;
-  createWhatsappTemplate(template: InsertWhatsappTemplate): Promise<WhatsappTemplate>;
+  createWhatsappTemplate(template: InsertWhatsappTemplate, companyId?: string | null): Promise<WhatsappTemplate>;
   updateWhatsappTemplate(id: string, data: UpdateWhatsappTemplate): Promise<WhatsappTemplate | undefined>;
   deleteWhatsappTemplate(id: string): Promise<boolean>;
 
@@ -306,9 +306,9 @@ export interface IStorage {
   getWhatsappConversation(leadId: string): Promise<WhatsappMessagesLog[]>;
   countAgentMessagesInLastHour(agentId: string): Promise<number>;
   countAgentMessagesInLastDay(agentId: string): Promise<number>;
-  findLeadByPhone(phone: string): Promise<Lead | undefined>;
+  findLeadByPhone(phone: string, companyId?: string | null): Promise<Lead | undefined>;
   findMessageByWhatsAppId(messageId: string): Promise<WhatsappMessagesLog | undefined>;
-  getWhatsappInbox(userId: string, userRole: string, teamId?: string | null): Promise<{
+  getWhatsappInbox(userId: string, userRole: string, teamId?: string | null, companyId?: string | null): Promise<{
     leadId: string;
     leadName: string | null;
     phone: string;
@@ -338,9 +338,9 @@ export interface IStorage {
 
   // Monthly Targets
   getMonthlyTarget(userId: string, targetMonth: string): Promise<MonthlyTarget | undefined>;
-  getMonthlyTargetsByMonth(targetMonth: string): Promise<MonthlyTarget[]>;
+  getMonthlyTargetsByMonth(targetMonth: string, companyId?: string | null): Promise<MonthlyTarget[]>;
   upsertMonthlyTarget(data: InsertMonthlyTarget): Promise<MonthlyTarget>;
-  getLeaderboard(period: string, teamId?: string): Promise<{
+  getLeaderboard(period: string, teamId?: string, companyId?: string | null): Promise<{
     userId: string;
     userName: string;
     teamId: string | null;
@@ -356,15 +356,15 @@ export interface IStorage {
   updateChatbotSettings(userId: string, data: UpdateChatbotSettings): Promise<ChatbotSettings | undefined>;
 
   // WhatsApp Campaigns
-  getAllCampaigns(): Promise<WhatsappCampaign[]>;
+  getAllCampaigns(companyId?: string | null): Promise<WhatsappCampaign[]>;
   getCampaign(id: string): Promise<WhatsappCampaign | undefined>;
-  createCampaign(data: InsertWhatsappCampaign): Promise<WhatsappCampaign>;
+  createCampaign(data: InsertWhatsappCampaign, companyId?: string | null): Promise<WhatsappCampaign>;
   updateCampaign(id: string, data: Partial<WhatsappCampaign>): Promise<WhatsappCampaign | undefined>;
   deleteCampaign(id: string): Promise<boolean>;
   getCampaignRecipients(campaignId: string): Promise<WhatsappCampaignRecipient[]>;
   createCampaignRecipients(recipients: { campaignId: string; leadId: string; phone: string }[]): Promise<void>;
   updateRecipientStatus(id: string, status: string, sentAt?: Date, errorMessage?: string): Promise<void>;
-  getLeadsForCampaignFilter(filterStateId?: string | null, filterChannel?: string | null, filterDaysNoReply?: number | null): Promise<Lead[]>;
+  getLeadsForCampaignFilter(filterStateId?: string | null, filterChannel?: string | null, filterDaysNoReply?: number | null, companyId?: string | null): Promise<Lead[]>;
   getPendingCampaigns(): Promise<WhatsappCampaign[]>;
 
   // WhatsApp Follow-up Rules
@@ -391,11 +391,11 @@ export interface IStorage {
   // Social Messages Log
   logSocialMessage(data: InsertSocialMessagesLog): Promise<SocialMessagesLog>;
   getSocialMessagesByLead(leadId: string, platform?: string): Promise<SocialMessagesLog[]>;
-  findLeadBySenderId(senderId: string, platform: string): Promise<Lead | undefined>;
+  findLeadBySenderId(senderId: string, platform: string, companyId?: string | null): Promise<Lead | undefined>;
   findSocialMessageById(messageId: string): Promise<SocialMessagesLog | undefined>;
   markSocialMessagesRead(leadId: string, platform: string): Promise<void>;
-  getUnreadSocialCount(userId: string, userRole: string, teamId?: string | null): Promise<number>;
-  getSocialInbox(userId: string, userRole: string, teamId?: string | null): Promise<{
+  getUnreadSocialCount(userId: string, userRole: string, teamId?: string | null, companyId?: string | null): Promise<number>;
+  getSocialInbox(userId: string, userRole: string, teamId?: string | null, companyId?: string | null): Promise<{
     leadId: string;
     leadName: string | null;
     senderId: string;
@@ -407,7 +407,7 @@ export interface IStorage {
   }[]>;
 
   // Sales Performance Reports
-  getSalesActivityReport(from?: Date, to?: Date): Promise<{
+  getSalesActivityReport(from?: Date, to?: Date, companyId?: string | null): Promise<{
     agentId: string;
     agentName: string;
     callsCount: number;
@@ -427,7 +427,7 @@ export interface IStorage {
     monthTotalActions: number;
   }[]>;
 
-  getFollowUpReport(from?: Date, to?: Date): Promise<{
+  getFollowUpReport(from?: Date, to?: Date, companyId?: string | null): Promise<{
     agentId: string;
     agentName: string;
     scheduledFollowUps: number;
@@ -441,7 +441,7 @@ export interface IStorage {
     meetingsAttendanceRate: number;
   }[]>;
 
-  getSalesFunnelReport(): Promise<{
+  getSalesFunnelReport(companyId?: string | null): Promise<{
     stateId: string;
     stateName: string;
     stateColor: string;
@@ -451,7 +451,7 @@ export interface IStorage {
     avgDaysInState: number | null;
   }[]>;
 
-  getDailyActivityReport(): Promise<{
+  getDailyActivityReport(companyId?: string | null): Promise<{
     agentId: string;
     agentName: string;
     todayActions: number;
@@ -464,7 +464,7 @@ export interface IStorage {
     lastActivityAt: Date | null;
   }[]>;
 
-  getColdLeadsReport(): Promise<{
+  getColdLeadsReport(companyId?: string | null): Promise<{
     leadId: string;
     leadName: string | null;
     leadPhone: string | null;
@@ -476,7 +476,7 @@ export interface IStorage {
     stateName: string | null;
   }[]>;
 
-  getProjectPerformanceReport(): Promise<{
+  getProjectPerformanceReport(companyId?: string | null): Promise<{
     projectId: string;
     projectName: string;
     totalLeads: number;
@@ -485,7 +485,7 @@ export interface IStorage {
     avgDaysToClose: number | null;
   }[]>;
 
-  getWeeklyMonthlyComparison(): Promise<{
+  getWeeklyMonthlyComparison(companyId?: string | null): Promise<{
     period: string;
     label: string;
     newLeads: number;
@@ -495,7 +495,7 @@ export interface IStorage {
   }[]>;
 
   // Funnel Health Analytics
-  getFunnelOverview(): Promise<{
+  getFunnelOverview(companyId?: string | null): Promise<{
     stateId: string;
     stateName: string;
     stateColor: string;
@@ -504,7 +504,7 @@ export interface IStorage {
     count: number;
   }[]>;
 
-  getTimeInStage(): Promise<{
+  getTimeInStage(companyId?: string | null): Promise<{
     stateId: string;
     stateName: string;
     stateColor: string;
@@ -514,7 +514,7 @@ export interface IStorage {
     leadsCount: number;
   }[]>;
 
-  getStaleLeads(thresholds: Record<string, number>): Promise<{
+  getStaleLeads(thresholds: Record<string, number>, companyId?: string | null): Promise<{
     leadId: string;
     leadName: string | null;
     leadPhone: string | null;
@@ -526,7 +526,7 @@ export interface IStorage {
     threshold: number;
   }[]>;
 
-  getAgentFunnelPerformance(): Promise<{
+  getAgentFunnelPerformance(companyId?: string | null): Promise<{
     agentId: string;
     agentName: string;
     totalLeads: number;
@@ -536,7 +536,7 @@ export interface IStorage {
     leadsByState: { stateId: string; stateName: string; count: number }[];
   }[]>;
 
-  getLeadFlow(): Promise<{
+  getLeadFlow(companyId?: string | null): Promise<{
     today: number;
     thisWeek: number;
     thisMonth: number;
@@ -546,19 +546,20 @@ export interface IStorage {
   }>;
 
   // Stale Lead Settings
-  getAllStaleLeadSettings(): Promise<{ stateId: string; staleDays: number }[]>;
-  upsertStaleLeadSetting(stateId: string, staleDays: number): Promise<void>;
+  getAllStaleLeadSettings(companyId?: string | null): Promise<{ stateId: string; staleDays: number }[]>;
+  upsertStaleLeadSetting(stateId: string, staleDays: number, companyId?: string | null): Promise<void>;
 
   // Integration Settings (WhatsApp Cloud API, OpenAI, etc.)
-  getIntegrationSettings(): Promise<IntegrationSettings | undefined>;
-  upsertIntegrationSettings(data: UpdateIntegrationSettings): Promise<IntegrationSettings>;
+  getIntegrationSettings(companyId?: string | null): Promise<IntegrationSettings | undefined>;
+  getIntegrationSettingsByPhoneNumberId(phoneNumberId: string): Promise<IntegrationSettings | undefined>;
+  upsertIntegrationSettings(data: UpdateIntegrationSettings, companyId?: string | null): Promise<IntegrationSettings>;
 
   // Knowledge Base
-  getAllKnowledgeBaseItems(): Promise<KnowledgeBaseItem[]>;
+  getAllKnowledgeBaseItems(companyId?: string | null): Promise<KnowledgeBaseItem[]>;
   getKnowledgeBaseItem(id: string): Promise<KnowledgeBaseItem | undefined>;
-  createKnowledgeBaseItem(data: InsertKnowledgeBase): Promise<KnowledgeBaseItem>;
-  updateKnowledgeBaseItem(id: string, data: UpdateKnowledgeBase): Promise<KnowledgeBaseItem | undefined>;
-  deleteKnowledgeBaseItem(id: string): Promise<boolean>;
+  createKnowledgeBaseItem(data: InsertKnowledgeBase, companyId?: string | null): Promise<KnowledgeBaseItem>;
+  updateKnowledgeBaseItem(id: string, data: UpdateKnowledgeBase, companyId?: string | null): Promise<KnowledgeBaseItem | undefined>;
+  deleteKnowledgeBaseItem(id: string, companyId?: string | null): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -593,7 +594,10 @@ export class DatabaseStorage implements IStorage {
     return newUser;
   }
 
-  async getAllUsers(): Promise<User[]> {
+  async getAllUsers(companyId?: string | null): Promise<User[]> {
+    if (companyId) {
+      return db.select().from(users).where(eq(users.companyId, companyId)).orderBy(users.createdAt);
+    }
     return db.select().from(users).orderBy(users.createdAt);
   }
 
@@ -603,33 +607,46 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Teams
-  async getAllTeams(): Promise<Team[]> {
+  async getAllTeams(companyId?: string | null): Promise<Team[]> {
+    if (companyId) {
+      return db.select().from(teams).where(eq(teams.companyId, companyId)).orderBy(teams.createdAt);
+    }
     return db.select().from(teams).orderBy(teams.createdAt);
   }
 
-  async getTeam(id: string): Promise<Team | undefined> {
-    const [team] = await db.select().from(teams).where(eq(teams.id, id));
+  async getTeam(id: string, companyId?: string | null): Promise<Team | undefined> {
+    const [team] = companyId
+      ? await db.select().from(teams).where(and(eq(teams.id, id), eq(teams.companyId, companyId)))
+      : await db.select().from(teams).where(eq(teams.id, id));
     return team;
   }
 
-  async createTeam(team: InsertTeam): Promise<Team> {
-    const [newTeam] = await db.insert(teams).values(team).returning();
+  async createTeam(team: InsertTeam, companyId?: string | null): Promise<Team> {
+    const [newTeam] = await db.insert(teams).values({ ...team, ...(companyId ? { companyId } : {}) }).returning();
     return newTeam;
   }
 
-  async updateTeam(id: string, data: Partial<Team>): Promise<Team | undefined> {
-    const [updated] = await db.update(teams).set(data).where(eq(teams.id, id)).returning();
+  async updateTeam(id: string, data: Partial<Team>, companyId?: string | null): Promise<Team | undefined> {
+    const whereClause = companyId ? and(eq(teams.id, id), eq(teams.companyId, companyId)) : eq(teams.id, id);
+    const [updated] = await db.update(teams).set(data).where(whereClause).returning();
     return updated;
   }
 
-  async deleteTeam(id: string): Promise<boolean> {
-    const result = await db.delete(teams).where(eq(teams.id, id)).returning();
+  async deleteTeam(id: string, companyId?: string | null): Promise<boolean> {
+    const whereClause = companyId ? and(eq(teams.id, id), eq(teams.companyId, companyId)) : eq(teams.id, id);
+    const result = await db.delete(teams).where(whereClause).returning();
     return result.length > 0;
   }
 
   // Lead States
-  async getAllStates(): Promise<LeadState[]> {
-    return db.select().from(leadStates).orderBy(leadStates.order);
+  async getAllStates(companyId?: string | null): Promise<LeadState[]> {
+    if (!companyId) {
+      return db.select().from(leadStates).orderBy(leadStates.order);
+    }
+    // Include system/global states (company_id IS NULL) plus this company's states
+    return db.select().from(leadStates)
+      .where(sql`(${leadStates.companyId} IS NULL OR ${leadStates.companyId} = ${companyId})`)
+      .orderBy(leadStates.order);
   }
 
   async getState(id: string): Promise<LeadState | undefined> {
@@ -638,8 +655,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createState(state: InsertLeadState): Promise<LeadState> {
-    const allStates = await this.getAllStates();
-    const maxOrder = allStates.length > 0 ? Math.max(...allStates.map(s => s.order)) : -1;
+    // Scope ordering to the same company so each tenant's order is independent
+    const companyStates = await this.getAllStates(state.companyId ?? null);
+    const maxOrder = companyStates.length > 0 ? Math.max(...companyStates.map(s => s.order)) : -1;
     const [newState] = await db.insert(leadStates).values({ ...state, order: maxOrder + 1 }).returning();
     return newState;
   }
@@ -655,7 +673,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Leads
-  async getAllLeads(): Promise<Lead[]> {
+  async getAllLeads(companyId?: string | null): Promise<Lead[]> {
+    if (companyId) {
+      return db.select().from(leads).where(eq(leads.companyId, companyId)).orderBy(leads.createdAt);
+    }
     return db.select().from(leads).orderBy(leads.createdAt);
   }
 
@@ -675,7 +696,7 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async createLead(lead: InsertLead, creatingUserTeamId?: string | null): Promise<Lead> {
+  async createLead(lead: InsertLead, creatingUserTeamId?: string | null, companyId?: string | null): Promise<Lead> {
     const leadForScoring: Lead = {
       id: "",
       createdAt: new Date(),
@@ -712,7 +733,8 @@ export class DatabaseStorage implements IStorage {
     const config = await getScoringConfig();
     const score = computeScore(leadForScoring, { commCount: 0, completedTaskCount: 0 }, config);
     const { firstContactAt: _fca, responseTimeMinutes: _rtm, ...safeLeadData } = lead as any;
-    const [newLead] = await db.insert(leads).values({ ...safeLeadData, score }).returning();
+    const effectiveCompanyId = companyId !== undefined ? companyId : (lead.companyId ?? null);
+    const [newLead] = await db.insert(leads).values({ ...safeLeadData, score, companyId: effectiveCompanyId }).returning();
     await this.createHistory({
       leadId: newLead.id,
       action: "دخل السيستم",
@@ -786,8 +808,10 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async getAllLeadsWithRefreshedScores(): Promise<Lead[]> {
-    const allLeads = await db.select().from(leads).orderBy(leads.createdAt);
+  async getAllLeadsWithRefreshedScores(companyId?: string | null): Promise<Lead[]> {
+    const allLeads = companyId
+      ? await db.select().from(leads).where(eq(leads.companyId, companyId)).orderBy(leads.createdAt)
+      : await db.select().from(leads).orderBy(leads.createdAt);
     const config = await getScoringConfig();
     const updated: Lead[] = [];
     for (const lead of allLeads) {
@@ -841,7 +865,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Clients
-  async getAllClients(): Promise<Client[]> {
+  async getAllClients(companyId?: string | null): Promise<Client[]> {
+    if (companyId) {
+      return db.select().from(clients).where(eq(clients.companyId, companyId)).orderBy(clients.createdAt);
+    }
     return db.select().from(clients).orderBy(clients.createdAt);
   }
 
@@ -850,8 +877,8 @@ export class DatabaseStorage implements IStorage {
     return client;
   }
 
-  async createClient(client: InsertClient): Promise<Client> {
-    const [newClient] = await db.insert(clients).values(client).returning();
+  async createClient(client: InsertClient, companyId?: string | null): Promise<Client> {
+    const [newClient] = await db.insert(clients).values({ ...client, companyId: companyId ?? null }).returning();
     return newClient;
   }
 
@@ -866,7 +893,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Tasks
-  async getAllTasks(): Promise<Task[]> {
+  async getAllTasks(companyId?: string | null): Promise<Task[]> {
+    if (companyId) {
+      return db.select().from(tasks).where(eq(tasks.companyId, companyId)).orderBy(tasks.createdAt);
+    }
     return db.select().from(tasks).orderBy(tasks.createdAt);
   }
 
@@ -879,8 +909,8 @@ export class DatabaseStorage implements IStorage {
     return task;
   }
 
-  async createTask(task: InsertTask): Promise<Task> {
-    const [newTask] = await db.insert(tasks).values(task).returning();
+  async createTask(task: InsertTask, companyId?: string | null): Promise<Task> {
+    const [newTask] = await db.insert(tasks).values({ ...task, companyId: companyId ?? null }).returning();
     if (task.leadId) {
       await this.createHistory({
         leadId: task.leadId,
@@ -904,7 +934,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Lead History
-  async getAllHistory(): Promise<LeadHistory[]> {
+  async getAllHistory(companyId?: string | null): Promise<LeadHistory[]> {
+    if (companyId) {
+      return db.select().from(leadHistory).where(eq(leadHistory.companyId, companyId)).orderBy(leadHistory.createdAt);
+    }
     return db.select().from(leadHistory).orderBy(leadHistory.createdAt);
   }
 
@@ -912,13 +945,22 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(leadHistory).where(eq(leadHistory.leadId, leadId)).orderBy(leadHistory.createdAt);
   }
 
-  async createHistory(history: InsertLeadHistory): Promise<LeadHistory> {
-    const [newHistory] = await db.insert(leadHistory).values(history).returning();
+  async createHistory(history: InsertLeadHistory, companyId?: string | null): Promise<LeadHistory> {
+    let resolvedCompanyId = companyId ?? history.companyId ?? null;
+    // Auto-inherit company from lead when not provided
+    if (!resolvedCompanyId && history.leadId) {
+      const [lead] = await db.select({ companyId: leads.companyId }).from(leads).where(eq(leads.id, history.leadId)).limit(1);
+      resolvedCompanyId = lead?.companyId ?? null;
+    }
+    const [newHistory] = await db.insert(leadHistory).values({ ...history, companyId: resolvedCompanyId }).returning();
     return newHistory;
   }
 
   // Developers
-  async getAllDevelopers(): Promise<Developer[]> {
+  async getAllDevelopers(companyId?: string | null): Promise<Developer[]> {
+    if (companyId) {
+      return db.select().from(developers).where(eq(developers.companyId, companyId)).orderBy(developers.name);
+    }
     return db.select().from(developers).orderBy(developers.name);
   }
 
@@ -927,8 +969,8 @@ export class DatabaseStorage implements IStorage {
     return developer;
   }
 
-  async createDeveloper(developer: InsertDeveloper): Promise<Developer> {
-    const [newDeveloper] = await db.insert(developers).values(developer).returning();
+  async createDeveloper(developer: InsertDeveloper, companyId?: string | null): Promise<Developer> {
+    const [newDeveloper] = await db.insert(developers).values({ ...developer, companyId: companyId ?? null }).returning();
     return newDeveloper;
   }
 
@@ -943,7 +985,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Projects
-  async getAllProjects(): Promise<Project[]> {
+  async getAllProjects(companyId?: string | null): Promise<Project[]> {
+    if (companyId) {
+      return db.select().from(projects).where(eq(projects.companyId, companyId)).orderBy(projects.name);
+    }
     return db.select().from(projects).orderBy(projects.name);
   }
 
@@ -956,8 +1001,8 @@ export class DatabaseStorage implements IStorage {
     return project;
   }
 
-  async createProject(project: InsertProject): Promise<Project> {
-    const [newProject] = await db.insert(projects).values(project).returning();
+  async createProject(project: InsertProject, companyId?: string | null): Promise<Project> {
+    const [newProject] = await db.insert(projects).values({ ...project, companyId: companyId ?? null }).returning();
     return newProject;
   }
 
@@ -972,7 +1017,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Units
-  async getAllUnits(): Promise<Unit[]> {
+  async getAllUnits(companyId?: string | null): Promise<Unit[]> {
+    if (companyId) {
+      return db.select().from(units).where(eq(units.companyId, companyId)).orderBy(units.unitNumber);
+    }
     return db.select().from(units).orderBy(units.unitNumber);
   }
 
@@ -985,8 +1033,8 @@ export class DatabaseStorage implements IStorage {
     return unit;
   }
 
-  async createUnit(unit: InsertUnit): Promise<Unit> {
-    const [newUnit] = await db.insert(units).values(unit).returning();
+  async createUnit(unit: InsertUnit, companyId?: string | null): Promise<Unit> {
+    const [newUnit] = await db.insert(units).values({ ...unit, companyId: companyId ?? null }).returning();
     return newUnit;
   }
 
@@ -1029,8 +1077,14 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(communications).where(eq(communications.leadId, leadId)).orderBy(communications.createdAt);
   }
 
-  async createCommunication(comm: InsertCommunication): Promise<Communication> {
-    const [newComm] = await db.insert(communications).values(comm).returning();
+  async createCommunication(comm: InsertCommunication, companyId?: string | null): Promise<Communication> {
+    let resolvedCompanyId = companyId ?? comm.companyId ?? null;
+    // Auto-inherit company from lead when not provided
+    if (!resolvedCompanyId && comm.leadId) {
+      const [lead] = await db.select({ companyId: leads.companyId }).from(leads).where(eq(leads.id, comm.leadId)).limit(1);
+      resolvedCompanyId = lead?.companyId ?? null;
+    }
+    const [newComm] = await db.insert(communications).values({ ...comm, companyId: resolvedCompanyId }).returning();
     const lead = await this.getLead(comm.leadId);
     const now = newComm.createdAt ?? new Date();
     // Set firstContactAt and responseTimeMinutes on lead if this is the first communication
@@ -1073,13 +1127,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Team Load & Auto Assign
-  async getTeamLoad(teamId?: string | null): Promise<{ userId: string; userName: string; leadCount: number; role: string }[]> {
-    const allUsers = await db.select().from(users).where(eq(users.isActive, true));
+  async getTeamLoad(teamId?: string | null, companyId?: string | null): Promise<{ userId: string; userName: string; leadCount: number; role: string }[]> {
+    const allUsers = companyId
+      ? await db.select().from(users).where(and(eq(users.isActive, true), eq(users.companyId, companyId)))
+      : await db.select().from(users).where(eq(users.isActive, true));
     let agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "sales_manager");
     if (teamId) {
       agents = agents.filter(u => u.teamId === teamId);
     }
-    const allLeads = await db.select().from(leads);
+    const allLeads = companyId
+      ? await db.select().from(leads).where(eq(leads.companyId, companyId))
+      : await db.select().from(leads);
     const doneStates = (await db.select().from(leadStates)).filter(s => ["Done Deal", "Canceled", "Not Interested", "تم الصفقة", "ملغي", "غير مهتم"].includes(s.name)).map(s => s.id);
     return agents.map(agent => {
       const userName = `${agent.firstName || ""} ${agent.lastName || ""}`.trim() || agent.username;
@@ -1092,13 +1150,19 @@ export class DatabaseStorage implements IStorage {
     const lead = await this.getLead(leadId);
     if (!lead) return undefined;
     if (lead.assignedTo) return lead;
-    const allUsers = await db.select().from(users).where(eq(users.isActive, true));
+    // Scope users and leads to the same company as the lead
+    const leadCompanyId = lead.companyId;
+    const allUsers = leadCompanyId
+      ? await db.select().from(users).where(and(eq(users.isActive, true), eq(users.companyId, leadCompanyId)))
+      : await db.select().from(users).where(eq(users.isActive, true));
     let candidates = allUsers.filter(u => u.role === "sales_agent");
     if (requestingUserTeamId) {
       candidates = candidates.filter(u => u.teamId === requestingUserTeamId);
     }
     if (candidates.length === 0) return undefined;
-    const allLeads = await db.select().from(leads);
+    const allLeads = leadCompanyId
+      ? await db.select().from(leads).where(eq(leads.companyId, leadCompanyId))
+      : await db.select().from(leads);
     const doneStates = (await db.select().from(leadStates))
       .filter(s => ["Done Deal", "Canceled", "Not Interested", "تم الصفقة", "ملغي", "غير مهتم"].includes(s.name))
       .map(s => s.id);
@@ -1124,7 +1188,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Reminders
-  async getAllReminders(): Promise<Reminder[]> {
+  async getAllReminders(companyId?: string | null): Promise<Reminder[]> {
+    if (companyId) {
+      return db.select().from(reminders).where(eq(reminders.companyId, companyId)).orderBy(reminders.dueDate);
+    }
     return db.select().from(reminders).orderBy(reminders.dueDate);
   }
 
@@ -1141,8 +1208,8 @@ export class DatabaseStorage implements IStorage {
     return reminder;
   }
 
-  async createReminder(reminder: InsertReminder): Promise<Reminder> {
-    const [newReminder] = await db.insert(reminders).values(reminder).returning();
+  async createReminder(reminder: InsertReminder, companyId?: string | null): Promise<Reminder> {
+    const [newReminder] = await db.insert(reminders).values({ ...reminder, ...(companyId ? { companyId } : {}) }).returning();
     // If linked to a lead, write to lead_history so it shows in the History tab
     if (reminder.leadId) {
       const user = reminder.userId
@@ -1173,7 +1240,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Response Time & Team Activity
-  async getResponseTimeReport(): Promise<{
+  async getResponseTimeReport(companyId?: string | null): Promise<{
     agentId: string;
     agentName: string;
     avgResponseMinutes: number | null;
@@ -1181,14 +1248,18 @@ export class DatabaseStorage implements IStorage {
     slowestResponseMinutes: number | null;
     uncontactedCount: number;
   }[]> {
-    const allUsers = await db.select().from(users).where(eq(users.isActive, true));
+    const allUsers = companyId
+      ? await db.select().from(users).where(and(eq(users.isActive, true), eq(users.companyId, companyId)))
+      : await db.select().from(users).where(eq(users.isActive, true));
     const agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "sales_manager");
     
     // Period for stats (this month)
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     
-    const allLeads = await db.select().from(leads);
+    const allLeads = companyId
+      ? await db.select().from(leads).where(eq(leads.companyId, companyId))
+      : await db.select().from(leads);
     
     return agents.map(agent => {
       const agentName = `${agent.firstName || ""} ${agent.lastName || ""}`.trim() || agent.username;
@@ -1218,7 +1289,7 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async getTeamActivityToday(): Promise<{
+  async getTeamActivityToday(companyId?: string | null): Promise<{
     agentId: string;
     agentName: string;
     leadsContactedToday: number;
@@ -1226,11 +1297,17 @@ export class DatabaseStorage implements IStorage {
     avgResponseMinutesThisWeek: number | null;
     uncontactedOver24h: number;
   }[]> {
-    const allUsers = await db.select().from(users).where(eq(users.isActive, true));
+    const allUsers = companyId
+      ? await db.select().from(users).where(and(eq(users.isActive, true), eq(users.companyId, companyId)))
+      : await db.select().from(users).where(eq(users.isActive, true));
     const agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "sales_manager");
     
-    const allLeads = await db.select().from(leads);
-    const allComms = await db.select().from(communications);
+    const allLeads = companyId
+      ? await db.select().from(leads).where(eq(leads.companyId, companyId))
+      : await db.select().from(leads);
+    const allComms = companyId
+      ? await db.select().from(communications).where(eq(communications.companyId, companyId))
+      : await db.select().from(communications);
     
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -1302,8 +1379,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Commissions
-  async getAllCommissions(): Promise<Commission[]> {
-    return db.select().from(commissions).orderBy(commissions.createdAt);
+  async getAllCommissions(companyId?: string | null): Promise<Commission[]> {
+    if (!companyId) {
+      return db.select().from(commissions).orderBy(commissions.createdAt);
+    }
+    return db.select().from(commissions)
+      .where(eq(commissions.companyId, companyId))
+      .orderBy(commissions.createdAt);
   }
 
   async getCommissionsByAgent(agentId: string): Promise<Commission[]> {
@@ -1315,8 +1397,8 @@ export class DatabaseStorage implements IStorage {
     return commission;
   }
 
-  async createCommission(commission: InsertCommission): Promise<Commission> {
-    const [newCommission] = await db.insert(commissions).values(commission).returning();
+  async createCommission(commission: InsertCommission, companyId?: string | null): Promise<Commission> {
+    const [newCommission] = await db.insert(commissions).values({ ...commission, ...(companyId ? { companyId } : {}) }).returning();
     return newCommission;
   }
 
@@ -1330,10 +1412,12 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0;
   }
 
-  async getCommissionSummary(agentId?: string, teamMemberIds?: string[]): Promise<{ agentId: string; agentName: string; month: string; total: number; count: number }[]> {
+  async getCommissionSummary(agentId?: string, teamMemberIds?: string[], companyId?: string | null): Promise<{ agentId: string; agentName: string; month: string; total: number; count: number }[]> {
     const all = agentId
-      ? await db.select().from(commissions).where(eq(commissions.agentId, agentId))
-      : await db.select().from(commissions);
+      ? await db.select().from(commissions).where(and(eq(commissions.agentId, agentId), ...(companyId ? [eq(commissions.companyId, companyId)] : [])))
+      : companyId
+        ? await db.select().from(commissions).where(eq(commissions.companyId, companyId))
+        : await db.select().from(commissions);
     
     const filtered = teamMemberIds
       ? all.filter(c => c.agentId && teamMemberIds.includes(c.agentId))
@@ -1378,14 +1462,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Lead filtering by role
-  async getLeadsByRole(userId: string, role: string, teamId?: string | null, username?: string | null): Promise<Lead[]> {
-    const allLeads = await this.getAllLeadsWithRefreshedScores();
+  async getLeadsByRole(userId: string, role: string, teamId?: string | null, username?: string | null, companyId?: string | null): Promise<Lead[]> {
+    const allLeads = await this.getAllLeadsWithRefreshedScores(companyId);
     if (role === "sales_agent") {
       // Support both id-based and legacy username-based assignment
       return allLeads.filter(l => l.assignedTo === userId || (username && l.assignedTo === username));
     }
     if (role === "team_leader" && teamId) {
-      const teamUsers = await this.getAllUsers().then(users => users.filter(u => u.teamId === teamId).map(u => u.id));
+      const teamUsers = await this.getAllUsers(companyId).then(users => users.filter(u => u.teamId === teamId).map(u => u.id));
       return allLeads.filter(l => l.assignedTo && teamUsers.includes(l.assignedTo));
     }
     return allLeads;
@@ -1436,17 +1520,28 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async getReassignmentReport(): Promise<{ leadId: string; leadName: string | null; fromUser: string | null; toUser: string | null; performedBy: string | null; note: string | null; historyVisible: boolean; createdAt: Date | null }[]> {
-    const reassignments = await db
-      .select()
-      .from(leadHistory)
-      .where(eq(leadHistory.type, "reassignment"))
-      .orderBy(sql`${leadHistory.createdAt} DESC`);
+  async getReassignmentReport(companyId?: string | null): Promise<{ leadId: string; leadName: string | null; fromUser: string | null; toUser: string | null; performedBy: string | null; note: string | null; historyVisible: boolean; createdAt: Date | null }[]> {
+    // When companyId is provided, scope to leads belonging to that company
+    let scopedLeadIds: string[] | null = null;
+    if (companyId) {
+      const companyLeads = await db.select({ id: leads.id, name: leads.name }).from(leads).where(eq(leads.companyId, companyId));
+      scopedLeadIds = companyLeads.map(l => l.id);
+      if (scopedLeadIds.length === 0) return [];
+    }
+
+    const historyQuery = db.select().from(leadHistory).where(eq(leadHistory.type, "reassignment"));
+    const allHistory = await historyQuery.orderBy(sql`${leadHistory.createdAt} DESC`);
+    const reassignments = scopedLeadIds
+      ? allHistory.filter(h => h.leadId && scopedLeadIds!.includes(h.leadId))
+      : allHistory;
 
     const leadIds = [...new Set(reassignments.map((h) => h.leadId).filter(Boolean))] as string[];
     const leadMap: Record<string, string | null> = {};
     if (leadIds.length > 0) {
-      const leadRecords = await db.select({ id: leads.id, name: leads.name }).from(leads);
+      const leadsQ = db.select({ id: leads.id, name: leads.name }).from(leads);
+      const leadRecords = companyId
+        ? await leadsQ.where(eq(leads.companyId, companyId))
+        : await leadsQ;
       for (const l of leadRecords) {
         if (leadIds.includes(l.id)) leadMap[l.id] = l.name;
       }
@@ -1584,7 +1679,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // My Day
-  async getMyDayData(userId: string, userRole: string, teamId?: string | null, username?: string | null): Promise<{
+  async getMyDayData(userId: string, userRole: string, teamId?: string | null, username?: string | null, companyId?: string | null): Promise<{
     todayFollowUps: (Reminder & { lead: Lead | null })[];
     newLeads: Lead[];
     overdueFollowUps: (Reminder & { lead: Lead | null })[];
@@ -1599,7 +1694,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(reminders.userId, userId));
 
     // Get accessible leads
-    const accessibleLeads = await this.getLeadsByRole(userId, userRole, teamId, username);
+    const accessibleLeads = await this.getLeadsByRole(userId, userRole, teamId, username, companyId);
     const accessibleLeadIds = new Set(accessibleLeads.map(l => l.id));
     const leadMap = new Map(accessibleLeads.map(l => [l.id, l]));
 
@@ -1718,9 +1813,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   // WhatsApp Templates
-  async getAllWhatsappTemplates(activeOnly = false): Promise<WhatsappTemplate[]> {
+  async getAllWhatsappTemplates(activeOnly = false, companyId?: string | null): Promise<WhatsappTemplate[]> {
+    if (activeOnly && companyId) {
+      return db.select().from(whatsappTemplates).where(and(eq(whatsappTemplates.isActive, true), eq(whatsappTemplates.companyId, companyId))).orderBy(whatsappTemplates.createdAt);
+    }
     if (activeOnly) {
       return db.select().from(whatsappTemplates).where(eq(whatsappTemplates.isActive, true)).orderBy(whatsappTemplates.createdAt);
+    }
+    if (companyId) {
+      return db.select().from(whatsappTemplates).where(eq(whatsappTemplates.companyId, companyId)).orderBy(whatsappTemplates.createdAt);
     }
     return db.select().from(whatsappTemplates).orderBy(whatsappTemplates.createdAt);
   }
@@ -1730,8 +1831,8 @@ export class DatabaseStorage implements IStorage {
     return template;
   }
 
-  async createWhatsappTemplate(template: InsertWhatsappTemplate): Promise<WhatsappTemplate> {
-    const [newTemplate] = await db.insert(whatsappTemplates).values(template).returning();
+  async createWhatsappTemplate(template: InsertWhatsappTemplate, companyId?: string | null): Promise<WhatsappTemplate> {
+    const [newTemplate] = await db.insert(whatsappTemplates).values({ ...template, companyId: companyId ?? null }).returning();
     return newTemplate;
   }
 
@@ -1770,7 +1871,7 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(whatsappMessagesLog).where(eq(whatsappMessagesLog.leadId, leadId)).orderBy(whatsappMessagesLog.createdAt);
   }
 
-  async findLeadByPhone(phone: string): Promise<Lead | undefined> {
+  async findLeadByPhone(phone: string, companyId?: string | null): Promise<Lead | undefined> {
     const cleaned = phone.replace(/\D/g, "");
     if (!cleaned) return undefined;
     const variants: string[] = [cleaned];
@@ -1778,12 +1879,12 @@ export class DatabaseStorage implements IStorage {
     else if (cleaned.startsWith("0")) variants.push("20" + cleaned.slice(1));
     else variants.push("20" + cleaned, "0" + cleaned);
 
-    // Search primary phone — return newest match
+    // Search primary phone — return newest match (scoped to company if provided)
     const primaryMatches: Lead[] = [];
     for (const variant of variants) {
-      const rows = await db.select().from(leads)
-        .where(eq(leads.phone, variant))
-        .orderBy(sql`${leads.createdAt} DESC`);
+      const rows = companyId
+        ? await db.select().from(leads).where(and(eq(leads.phone, variant), eq(leads.companyId, companyId))).orderBy(sql`${leads.createdAt} DESC`)
+        : await db.select().from(leads).where(eq(leads.phone, variant)).orderBy(sql`${leads.createdAt} DESC`);
       primaryMatches.push(...rows);
     }
     if (primaryMatches.length > 0) {
@@ -1791,8 +1892,10 @@ export class DatabaseStorage implements IStorage {
       return primaryMatches[0];
     }
 
-    // Search phone2 — return newest match
-    const allLeads = await db.select().from(leads).orderBy(sql`${leads.createdAt} DESC`);
+    // Search phone2 — return newest match (scoped to company if provided)
+    const allLeads = companyId
+      ? await db.select().from(leads).where(eq(leads.companyId, companyId)).orderBy(sql`${leads.createdAt} DESC`)
+      : await db.select().from(leads).orderBy(sql`${leads.createdAt} DESC`);
     const phone2Match = allLeads.filter(l => l.phone2 && variants.includes(l.phone2.replace(/\D/g, "")));
     if (phone2Match.length > 0) return phone2Match[0];
 
@@ -1804,7 +1907,7 @@ export class DatabaseStorage implements IStorage {
     return msg;
   }
 
-  async getWhatsappInbox(userId: string, userRole: string, teamId?: string | null): Promise<{
+  async getWhatsappInbox(userId: string, userRole: string, teamId?: string | null, companyId?: string | null): Promise<{
     leadId: string;
     leadName: string | null;
     phone: string;
@@ -1815,7 +1918,7 @@ export class DatabaseStorage implements IStorage {
     totalCount: number;
   }[]> {
     // Get leads accessible by this user
-    const accessibleLeads = await this.getLeadsByRole(userId, userRole, teamId ?? null);
+    const accessibleLeads = await this.getLeadsByRole(userId, userRole, teamId ?? null, null, companyId);
     if (accessibleLeads.length === 0) return [];
 
     const accessibleLeadIds = accessibleLeads.map(l => l.id);
@@ -1978,8 +2081,10 @@ export class DatabaseStorage implements IStorage {
     return target;
   }
 
-  async getMonthlyTargetsByMonth(targetMonth: string): Promise<MonthlyTarget[]> {
-    return db.select().from(monthlyTargets).where(eq(monthlyTargets.targetMonth, targetMonth));
+  async getMonthlyTargetsByMonth(targetMonth: string, companyId?: string | null): Promise<MonthlyTarget[]> {
+    return companyId
+      ? db.select().from(monthlyTargets).where(and(eq(monthlyTargets.targetMonth, targetMonth), eq(monthlyTargets.companyId, companyId)))
+      : db.select().from(monthlyTargets).where(eq(monthlyTargets.targetMonth, targetMonth));
   }
 
   async upsertMonthlyTarget(data: InsertMonthlyTarget): Promise<MonthlyTarget> {
@@ -1995,7 +2100,7 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async getLeaderboard(period: string, teamId?: string): Promise<{
+  async getLeaderboard(period: string, teamId?: string, companyId?: string | null): Promise<{
     userId: string;
     userName: string;
     teamId: string | null;
@@ -2004,7 +2109,9 @@ export class DatabaseStorage implements IStorage {
     leadsCount: number;
     commissionTotal: number;
   }[]> {
-    const allUsers = await db.select().from(users).where(eq(users.isActive, true));
+    const allUsers = companyId
+      ? await db.select().from(users).where(and(eq(users.isActive, true), eq(users.companyId, companyId)))
+      : await db.select().from(users).where(eq(users.isActive, true));
     const allTeams = await db.select().from(teams);
     const teamMap = new Map(allTeams.map(t => [t.id, t.name]));
 
@@ -2033,16 +2140,22 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Get done deal state ids
-    const allStates = await db.select().from(leadStates);
+    const allStates = companyId
+      ? await db.select().from(leadStates).where(or(eq(leadStates.companyId, companyId), isNull(leadStates.companyId)))
+      : await db.select().from(leadStates);
     const doneStateIds = new Set(
       allStates.filter(s => s.name === "Done Deal" || s.name === "تم الصفقة").map(s => s.id)
     );
 
     // Get all leads assigned to any agent (we'll filter per-agent)
-    const allLeads = await db.select().from(leads);
+    const allLeads = companyId
+      ? await db.select().from(leads).where(eq(leads.companyId, companyId))
+      : await db.select().from(leads);
 
     // Get all commissions
-    const allCommissions = await db.select().from(commissions);
+    const allCommissions = companyId
+      ? await db.select().from(commissions).where(eq(commissions.companyId, companyId))
+      : await db.select().from(commissions);
 
     return agents.map(agent => {
       const agentName = `${agent.firstName || ""} ${agent.lastName || ""}`.trim() || agent.username;
@@ -2113,7 +2226,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // WhatsApp Campaigns
-  async getAllCampaigns(): Promise<WhatsappCampaign[]> {
+  async getAllCampaigns(companyId?: string | null): Promise<WhatsappCampaign[]> {
+    if (companyId) {
+      return db.select().from(whatsappCampaigns).where(eq(whatsappCampaigns.companyId, companyId)).orderBy(sql`created_at DESC`);
+    }
     return db.select().from(whatsappCampaigns).orderBy(sql`created_at DESC`);
   }
 
@@ -2122,8 +2238,8 @@ export class DatabaseStorage implements IStorage {
     return c;
   }
 
-  async createCampaign(data: InsertWhatsappCampaign): Promise<WhatsappCampaign> {
-    const [c] = await db.insert(whatsappCampaigns).values({ ...data, status: "scheduled" }).returning();
+  async createCampaign(data: InsertWhatsappCampaign, companyId?: string | null): Promise<WhatsappCampaign> {
+    const [c] = await db.insert(whatsappCampaigns).values({ ...data, status: "scheduled", companyId: companyId ?? null }).returning();
     return c;
   }
 
@@ -2156,9 +2272,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(whatsappCampaignRecipients.id, id));
   }
 
-  async getLeadsForCampaignFilter(filterStateId?: string | null, filterChannel?: string | null, filterDaysNoReply?: number | null): Promise<Lead[]> {
+  async getLeadsForCampaignFilter(filterStateId?: string | null, filterChannel?: string | null, filterDaysNoReply?: number | null, companyId?: string | null): Promise<Lead[]> {
     let query = db.select().from(leads).$dynamic();
     const conditions = [isNotNull(leads.phone)];
+    if (companyId) conditions.push(eq(leads.companyId, companyId));
     if (filterStateId) conditions.push(eq(leads.stateId, filterStateId));
     if (filterChannel) conditions.push(eq(leads.channel, filterChannel));
     if (filterDaysNoReply && filterDaysNoReply > 0) {
@@ -2298,15 +2415,14 @@ export class DatabaseStorage implements IStorage {
       .orderBy(socialMessagesLog.createdAt);
   }
 
-  async findLeadBySenderId(senderId: string, platform: string): Promise<Lead | undefined> {
+  async findLeadBySenderId(senderId: string, platform: string, companyId?: string | null): Promise<Lead | undefined> {
     const channelLabel = platform === "instagram" ? "إنستجرام" : "ماسنجر";
 
-    // Primary lookup: find lead by phone (senderId) and matching channel label
-    const [leadByPhone] = await db
-      .select()
-      .from(leads)
-      .where(and(eq(leads.phone, senderId), eq(leads.channel, channelLabel)))
-      .limit(1);
+    // Primary lookup: find lead by phone (senderId) and matching channel label (scoped to company if provided)
+    const primaryCondition = companyId
+      ? and(eq(leads.phone, senderId), eq(leads.channel, channelLabel), eq(leads.companyId, companyId))
+      : and(eq(leads.phone, senderId), eq(leads.channel, channelLabel));
+    const [leadByPhone] = await db.select().from(leads).where(primaryCondition).limit(1);
     if (leadByPhone) return leadByPhone;
 
     // Secondary lookup: find via social messages log (handles pre-existing logs)
@@ -2318,7 +2434,10 @@ export class DatabaseStorage implements IStorage {
     if (msgs.length === 0) return undefined;
     const leadId = msgs[0].leadId;
     if (!leadId) return undefined;
-    const [lead] = await db.select().from(leads).where(eq(leads.id, leadId));
+    const condition = companyId
+      ? and(eq(leads.id, leadId), eq(leads.companyId, companyId))
+      : eq(leads.id, leadId);
+    const [lead] = await db.select().from(leads).where(condition);
     return lead;
   }
 
@@ -2345,7 +2464,7 @@ export class DatabaseStorage implements IStorage {
       );
   }
 
-  async getUnreadSocialCount(userId: string, userRole: string, teamId?: string | null): Promise<number> {
+  async getUnreadSocialCount(userId: string, userRole: string, teamId?: string | null, companyId?: string | null): Promise<number> {
     try {
       const adminRoles = ["super_admin", "company_owner", "sales_admin", "admin", "sales_manager"];
       const isAdmin = adminRoles.includes(userRole);
@@ -2353,16 +2472,31 @@ export class DatabaseStorage implements IStorage {
       let query: string;
       let params: unknown[];
       if (isAdmin) {
-        query = `SELECT COUNT(*) FROM social_messages_log WHERE is_read = false AND direction = 'inbound'`;
-        params = [];
+        if (companyId) {
+          query = `SELECT COUNT(*) FROM social_messages_log WHERE is_read = false AND direction = 'inbound' AND company_id = $1`;
+          params = [companyId];
+        } else {
+          query = `SELECT COUNT(*) FROM social_messages_log WHERE is_read = false AND direction = 'inbound'`;
+          params = [];
+        }
       } else {
-        query = `
-          SELECT COUNT(*) FROM social_messages_log sm
-          JOIN leads l ON sm.lead_id = l.id
-          WHERE sm.is_read = false AND sm.direction = 'inbound'
-          AND l.assigned_to = $1
-        `;
-        params = [userId];
+        if (companyId) {
+          query = `
+            SELECT COUNT(*) FROM social_messages_log sm
+            JOIN leads l ON sm.lead_id = l.id
+            WHERE sm.is_read = false AND sm.direction = 'inbound'
+            AND l.assigned_to = $1 AND l.company_id = $2
+          `;
+          params = [userId, companyId];
+        } else {
+          query = `
+            SELECT COUNT(*) FROM social_messages_log sm
+            JOIN leads l ON sm.lead_id = l.id
+            WHERE sm.is_read = false AND sm.direction = 'inbound'
+            AND l.assigned_to = $1
+          `;
+          params = [userId];
+        }
       }
       const result = await pool.query<{ count: string }>(query, params);
       return parseInt(result.rows[0]?.count ?? "0", 10);
@@ -2371,7 +2505,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getSocialInbox(userId: string, userRole: string, teamId?: string | null): Promise<{
+  async getSocialInbox(userId: string, userRole: string, teamId?: string | null, companyId?: string | null): Promise<{
     leadId: string;
     leadName: string | null;
     senderId: string;
@@ -2381,7 +2515,7 @@ export class DatabaseStorage implements IStorage {
     unreadCount: number;
     totalCount: number;
   }[]> {
-    const accessibleLeads = await this.getLeadsByRole(userId, userRole, teamId ?? null);
+    const accessibleLeads = await this.getLeadsByRole(userId, userRole, teamId ?? null, null, companyId);
     if (accessibleLeads.length === 0) return [];
 
     const accessibleLeadIds = accessibleLeads.map(l => l.id);
@@ -2417,7 +2551,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Sales Performance Reports
-  async getSalesActivityReport(from?: Date, to?: Date): Promise<{
+  async getSalesActivityReport(from?: Date, to?: Date, companyId?: string | null): Promise<{
     agentId: string;
     agentName: string;
     callsCount: number;
@@ -2436,7 +2570,9 @@ export class DatabaseStorage implements IStorage {
     monthMeetingsCount: number;
     monthTotalActions: number;
   }[]> {
-    const allUsers = await db.select().from(users);
+    const allUsers = companyId
+      ? await db.select().from(users).where(eq(users.companyId, companyId))
+      : await db.select().from(users);
     const agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "team_leader");
 
     const now = new Date();
@@ -2447,12 +2583,16 @@ export class DatabaseStorage implements IStorage {
 
     // Fetch enough history for weekly/monthly breakdowns
     const earliestDate = monthStart < fromDate ? monthStart : fromDate;
-    const allComms = await db.select().from(communications)
-      .where(and(gte(communications.createdAt, earliestDate), lte(communications.createdAt, toDate)));
+    const allComms = companyId
+      ? await db.select().from(communications).where(and(eq(communications.companyId, companyId), gte(communications.createdAt, earliestDate), lte(communications.createdAt, toDate)))
+      : await db.select().from(communications).where(and(gte(communications.createdAt, earliestDate), lte(communications.createdAt, toDate)));
 
     // Fetch WhatsApp messages log to compute inbound/outbound reply rates
-    const allWaLog = await db.select().from(whatsappMessagesLog)
-      .where(and(gte(whatsappMessagesLog.createdAt, earliestDate), lte(whatsappMessagesLog.createdAt, toDate)));
+    const allWaLog = companyId
+      ? await db.select().from(whatsappMessagesLog)
+          .where(and(eq(whatsappMessagesLog.companyId, companyId), gte(whatsappMessagesLog.createdAt, earliestDate), lte(whatsappMessagesLog.createdAt, toDate)))
+      : await db.select().from(whatsappMessagesLog)
+          .where(and(gte(whatsappMessagesLog.createdAt, earliestDate), lte(whatsappMessagesLog.createdAt, toDate)));
 
     return agents.map(agent => {
       const agentComms = allComms.filter(c => c.userId === agent.id);
@@ -2487,7 +2627,7 @@ export class DatabaseStorage implements IStorage {
     }).sort((a, b) => b.totalActions - a.totalActions);
   }
 
-  async getFollowUpReport(from?: Date, to?: Date): Promise<{
+  async getFollowUpReport(from?: Date, to?: Date, companyId?: string | null): Promise<{
     agentId: string;
     agentName: string;
     scheduledFollowUps: number;
@@ -2500,18 +2640,24 @@ export class DatabaseStorage implements IStorage {
     meetingsHeld: number;
     meetingsAttendanceRate: number;
   }[]> {
-    const allUsers = await db.select().from(users);
+    const allUsers = companyId
+      ? await db.select().from(users).where(eq(users.companyId, companyId))
+      : await db.select().from(users);
     const agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "team_leader");
 
     const now = new Date();
     const fromDate = from ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const toDate = to ?? now;
 
-    const allReminders = await db.select().from(reminders)
-      .where(and(gte(reminders.createdAt, fromDate), lte(reminders.createdAt, toDate)));
-    const allLeads = await db.select().from(leads);
-    const allComms = await db.select().from(communications)
-      .where(and(gte(communications.createdAt, fromDate), lte(communications.createdAt, toDate)));
+    const allReminders = companyId
+      ? await db.select().from(reminders).where(and(eq(reminders.companyId, companyId), gte(reminders.createdAt, fromDate), lte(reminders.createdAt, toDate)))
+      : await db.select().from(reminders).where(and(gte(reminders.createdAt, fromDate), lte(reminders.createdAt, toDate)));
+    const allLeads = companyId
+      ? await db.select().from(leads).where(eq(leads.companyId, companyId))
+      : await db.select().from(leads);
+    const allComms = companyId
+      ? await db.select().from(communications).where(and(eq(communications.companyId, companyId), gte(communications.createdAt, fromDate), lte(communications.createdAt, toDate)))
+      : await db.select().from(communications).where(and(gte(communications.createdAt, fromDate), lte(communications.createdAt, toDate)));
 
     return agents.map(agent => {
       const agentReminders = allReminders.filter(r => r.userId === agent.id);
@@ -2543,7 +2689,7 @@ export class DatabaseStorage implements IStorage {
     }).sort((a, b) => b.scheduledFollowUps - a.scheduledFollowUps);
   }
 
-  async getSalesFunnelReport(): Promise<{
+  async getSalesFunnelReport(companyId?: string | null): Promise<{
     stateId: string;
     stateName: string;
     stateColor: string;
@@ -2552,8 +2698,12 @@ export class DatabaseStorage implements IStorage {
     conversionToNext: number | null;
     avgDaysInState: number | null;
   }[]> {
-    const allStates = await db.select().from(leadStates).orderBy(leadStates.order);
-    const allLeads = await db.select().from(leads);
+    const allStates = companyId
+      ? await db.select().from(leadStates).where(or(eq(leadStates.companyId, companyId), isNull(leadStates.companyId))).orderBy(leadStates.order)
+      : await db.select().from(leadStates).orderBy(leadStates.order);
+    const allLeads = companyId
+      ? await db.select().from(leads).where(eq(leads.companyId, companyId))
+      : await db.select().from(leads);
 
     const stateCountMap: Record<string, number> = {};
     for (const s of allStates) stateCountMap[s.id] = 0;
@@ -2602,7 +2752,7 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async getDailyActivityReport(): Promise<{
+  async getDailyActivityReport(companyId?: string | null): Promise<{
     agentId: string;
     agentName: string;
     todayActions: number;
@@ -2614,7 +2764,9 @@ export class DatabaseStorage implements IStorage {
     isInactive: boolean;
     lastActivityAt: Date | null;
   }[]> {
-    const allUsers = await db.select().from(users);
+    const allUsers = companyId
+      ? await db.select().from(users).where(eq(users.companyId, companyId))
+      : await db.select().from(users);
     const agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "team_leader");
 
     const now = new Date();
@@ -2622,8 +2774,9 @@ export class DatabaseStorage implements IStorage {
     const weekStart = new Date(todayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
     const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    const allComms = await db.select().from(communications)
-      .where(gte(communications.createdAt, weekStart));
+    const allComms = companyId
+      ? await db.select().from(communications).where(and(gte(communications.createdAt, weekStart), eq(communications.companyId, companyId)))
+      : await db.select().from(communications).where(gte(communications.createdAt, weekStart));
 
     return agents.map(agent => {
       const agentComms = allComms.filter(c => c.userId === agent.id);
@@ -2642,7 +2795,7 @@ export class DatabaseStorage implements IStorage {
     }).sort((a, b) => b.todayActions - a.todayActions);
   }
 
-  async getColdLeadsReport(): Promise<{
+  async getColdLeadsReport(companyId?: string | null): Promise<{
     leadId: string;
     leadName: string | null;
     leadPhone: string | null;
@@ -2653,9 +2806,15 @@ export class DatabaseStorage implements IStorage {
     stateId: string | null;
     stateName: string | null;
   }[]> {
-    const allLeads = await db.select().from(leads);
-    const allUsers = await db.select().from(users);
-    const allStates = await db.select().from(leadStates);
+    const allLeads = companyId
+      ? await db.select().from(leads).where(eq(leads.companyId, companyId))
+      : await db.select().from(leads);
+    const allUsers = companyId
+      ? await db.select().from(users).where(eq(users.companyId, companyId))
+      : await db.select().from(users);
+    const allStates = companyId
+      ? await db.select().from(leadStates).where(or(eq(leadStates.companyId, companyId), isNull(leadStates.companyId)))
+      : await db.select().from(leadStates);
 
     const now = new Date();
     const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
@@ -2689,7 +2848,7 @@ export class DatabaseStorage implements IStorage {
     }).sort((a, b) => b.daysSinceContact - a.daysSinceContact);
   }
 
-  async getProjectPerformanceReport(): Promise<{
+  async getProjectPerformanceReport(companyId?: string | null): Promise<{
     projectId: string;
     projectName: string;
     totalLeads: number;
@@ -2697,9 +2856,15 @@ export class DatabaseStorage implements IStorage {
     conversionRate: number;
     avgDaysToClose: number | null;
   }[]> {
-    const allProjects = await db.select().from(projects).where(eq(projects.isActive, true));
-    const allLeads = await db.select().from(leads);
-    const allStates = await db.select().from(leadStates);
+    const allProjects = companyId
+      ? await db.select().from(projects).where(and(eq(projects.isActive, true), eq(projects.companyId, companyId)))
+      : await db.select().from(projects).where(eq(projects.isActive, true));
+    const allLeads = companyId
+      ? await db.select().from(leads).where(eq(leads.companyId, companyId))
+      : await db.select().from(leads);
+    const allStates = companyId
+      ? await db.select().from(leadStates).where(or(eq(leadStates.companyId, companyId), isNull(leadStates.companyId)))
+      : await db.select().from(leadStates);
 
     const bookingStates = new Set(
       allStates.filter(s => s.name.toLowerCase().includes("done") || s.name.toLowerCase().includes("closed") || s.name.includes("صفقة") || s.name.includes("محجوز") || s.name.toLowerCase().includes("book") || s.name.toLowerCase().includes("reserved")).map(s => s.id)
@@ -2723,7 +2888,7 @@ export class DatabaseStorage implements IStorage {
     }).sort((a, b) => b.totalLeads - a.totalLeads);
   }
 
-  async getWeeklyMonthlyComparison(): Promise<{
+  async getWeeklyMonthlyComparison(companyId?: string | null): Promise<{
     period: string;
     label: string;
     newLeads: number;
@@ -2741,9 +2906,15 @@ export class DatabaseStorage implements IStorage {
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
-    const allLeads = await db.select().from(leads);
-    const allComms = await db.select().from(communications);
-    const allStates = await db.select().from(leadStates);
+    const allLeads = companyId
+      ? await db.select().from(leads).where(eq(leads.companyId, companyId))
+      : await db.select().from(leads);
+    const allComms = companyId
+      ? await db.select().from(communications).where(eq(communications.companyId, companyId))
+      : await db.select().from(communications);
+    const allStates = companyId
+      ? await db.select().from(leadStates).where(or(eq(leadStates.companyId, companyId), isNull(leadStates.companyId)))
+      : await db.select().from(leadStates);
     const bookingStates = new Set(
       allStates.filter(s => s.name.toLowerCase().includes("done") || s.name.toLowerCase().includes("closed") || s.name.includes("صفقة") || s.name.includes("محجوز")).map(s => s.id)
     );
@@ -2772,7 +2943,7 @@ export class DatabaseStorage implements IStorage {
 
   // ─── Funnel Health Analytics ────────────────────────────────────────────────
 
-  async getFunnelOverview(): Promise<{
+  async getFunnelOverview(companyId?: string | null): Promise<{
     stateId: string;
     stateName: string;
     stateColor: string;
@@ -2780,8 +2951,14 @@ export class DatabaseStorage implements IStorage {
     category: string;
     count: number;
   }[]> {
-    const allStates = await db.select().from(leadStates).orderBy(leadStates.order);
-    const allLeads = await db.select({ stateId: leads.stateId }).from(leads);
+    const statesQuery = db.select().from(leadStates).orderBy(leadStates.order);
+    const allStates = companyId
+      ? await statesQuery.where(or(eq(leadStates.companyId, companyId), isNull(leadStates.companyId)))
+      : await statesQuery;
+    const leadsQuery = db.select({ stateId: leads.stateId }).from(leads);
+    const allLeads = companyId
+      ? await leadsQuery.where(eq(leads.companyId, companyId))
+      : await leadsQuery;
 
     const countMap: Record<string, number> = {};
     for (const s of allStates) countMap[s.id] = 0;
@@ -2799,7 +2976,7 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getTimeInStage(): Promise<{
+  async getTimeInStage(companyId?: string | null): Promise<{
     stateId: string;
     stateName: string;
     stateColor: string;
@@ -2808,8 +2985,12 @@ export class DatabaseStorage implements IStorage {
     maxDays: number | null;
     leadsCount: number;
   }[]> {
-    const allStates = await db.select().from(leadStates).orderBy(leadStates.order);
-    const allLeads = await db.select({ stateId: leads.stateId, updatedAt: leads.updatedAt }).from(leads);
+    const statesQuery = db.select().from(leadStates).orderBy(leadStates.order);
+    const allStates = companyId
+      ? await statesQuery.where(or(eq(leadStates.companyId, companyId), isNull(leadStates.companyId)))
+      : await statesQuery;
+    const leadsQuery = db.select({ stateId: leads.stateId, updatedAt: leads.updatedAt }).from(leads);
+    const allLeads = companyId ? await leadsQuery.where(eq(leads.companyId, companyId)) : await leadsQuery;
 
     const now = new Date();
 
@@ -2826,7 +3007,7 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async getStaleLeads(thresholds: Record<string, number>): Promise<{
+  async getStaleLeads(thresholds: Record<string, number>, companyId?: string | null): Promise<{
     leadId: string;
     leadName: string | null;
     leadPhone: string | null;
@@ -2837,9 +3018,14 @@ export class DatabaseStorage implements IStorage {
     daysInState: number;
     threshold: number;
   }[]> {
-    const allLeads = await db.select().from(leads);
-    const allUsers = await db.select().from(users);
-    const allStates = await db.select().from(leadStates);
+    const leadsQ = db.select().from(leads);
+    const allLeads = companyId ? await leadsQ.where(eq(leads.companyId, companyId)) : await leadsQ;
+    const usersQ = db.select().from(users);
+    const allUsers = companyId ? await usersQ.where(eq(users.companyId, companyId)) : await usersQ;
+    const statesQ = db.select().from(leadStates);
+    const allStates = companyId
+      ? await statesQ.where(or(eq(leadStates.companyId, companyId), isNull(leadStates.companyId)))
+      : await statesQ;
 
     const userMap = new Map(allUsers.map(u => [u.id, `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.username]));
     const stateMap = new Map(allStates.map(s => [s.id, s.name]));
@@ -2881,7 +3067,7 @@ export class DatabaseStorage implements IStorage {
     return result.sort((a, b) => b.daysInState - a.daysInState);
   }
 
-  async getAgentFunnelPerformance(): Promise<{
+  async getAgentFunnelPerformance(companyId?: string | null): Promise<{
     agentId: string;
     agentName: string;
     totalLeads: number;
@@ -2890,9 +3076,14 @@ export class DatabaseStorage implements IStorage {
     avgResponseMinutes: number | null;
     leadsByState: { stateId: string; stateName: string; count: number }[];
   }[]> {
-    const allUsers = await db.select().from(users);
-    const allLeads = await db.select().from(leads);
-    const allStates = await db.select().from(leadStates).orderBy(leadStates.order);
+    const usersQ = db.select().from(users);
+    const allUsers = companyId ? await usersQ.where(eq(users.companyId, companyId)) : await usersQ;
+    const leadsQ = db.select().from(leads);
+    const allLeads = companyId ? await leadsQ.where(eq(leads.companyId, companyId)) : await leadsQ;
+    const statesQ = db.select().from(leadStates).orderBy(leadStates.order);
+    const allStates = companyId
+      ? await statesQ.where(or(eq(leadStates.companyId, companyId), isNull(leadStates.companyId)))
+      : await statesQ;
 
     const agents = allUsers.filter(u => u.role === "sales_agent" || u.role === "team_leader");
     const doneStateIds = new Set(
@@ -2921,7 +3112,7 @@ export class DatabaseStorage implements IStorage {
     }).sort((a, b) => b.doneDeals - a.doneDeals);
   }
 
-  async getLeadFlow(): Promise<{
+  async getLeadFlow(companyId?: string | null): Promise<{
     today: number;
     thisWeek: number;
     thisMonth: number;
@@ -2934,8 +3125,12 @@ export class DatabaseStorage implements IStorage {
     const weekStart = new Date(todayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const allLeads = await db.select().from(leads);
-    const allStates = await db.select().from(leadStates);
+    const leadsQ = db.select().from(leads);
+    const allLeads = companyId ? await leadsQ.where(eq(leads.companyId, companyId)) : await leadsQ;
+    const statesQ = db.select().from(leadStates);
+    const allStates = companyId
+      ? await statesQ.where(or(eq(leadStates.companyId, companyId), isNull(leadStates.companyId)))
+      : await statesQ;
     const closedStateIds = new Set(allStates.filter(s => s.category === "won" || s.category === "lost").map(s => s.id));
 
     const inRange = (date: Date | null | undefined, start: Date) => date && date >= start;
@@ -2950,34 +3145,79 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getAllStaleLeadSettings(): Promise<{ stateId: string; staleDays: number }[]> {
-    const rows = await db.select().from(staleLeadSettings);
+  async getAllStaleLeadSettings(companyId?: string | null): Promise<{ stateId: string; staleDays: number }[]> {
+    const q = db.select().from(staleLeadSettings);
+    const rows = companyId ? await q.where(eq(staleLeadSettings.companyId, companyId)) : await q;
     return rows.map(r => ({ stateId: r.stateId, staleDays: r.staleDays }));
   }
 
-  async upsertStaleLeadSetting(stateId: string, staleDays: number): Promise<void> {
-    await db
-      .insert(staleLeadSettings)
-      .values({ stateId, staleDays })
-      .onConflictDoUpdate({ target: staleLeadSettings.stateId, set: { staleDays, updatedAt: new Date() } });
+  async upsertStaleLeadSetting(stateId: string, staleDays: number, companyId?: string | null): Promise<void> {
+    // Use SELECT-then-UPDATE/INSERT pattern because the unique constraint uses
+    // COALESCE(company_id,'') which cannot be expressed as an ON CONFLICT target.
+    const existing = companyId
+      ? await db.select().from(staleLeadSettings)
+          .where(and(eq(staleLeadSettings.stateId, stateId), eq(staleLeadSettings.companyId, companyId)))
+          .limit(1)
+      : await db.select().from(staleLeadSettings)
+          .where(and(eq(staleLeadSettings.stateId, stateId), isNull(staleLeadSettings.companyId)))
+          .limit(1);
+
+    if (existing.length > 0) {
+      await db.update(staleLeadSettings)
+        .set({ staleDays, updatedAt: new Date() })
+        .where(eq(staleLeadSettings.id, existing[0].id));
+    } else {
+      await db.insert(staleLeadSettings)
+        .values({ stateId, staleDays, ...(companyId ? { companyId } : {}) });
+    }
   }
 
-  async getIntegrationSettings(): Promise<IntegrationSettings | undefined> {
-    const [row] = await db.select().from(integrationSettings).where(eq(integrationSettings.id, 1));
+  async getIntegrationSettings(companyId?: string | null): Promise<IntegrationSettings | undefined> {
+    if (companyId) {
+      // Strict tenant scope: return only this company's row; never fall back to
+      // another tenant's secrets to prevent cross-tenant credential leakage.
+      const [row] = await db.select().from(integrationSettings).where(eq(integrationSettings.companyId, companyId)).limit(1);
+      return row;
+    }
+    // Legacy/global path: return the id=1 row for backward-compatible callers
+    // (e.g., scoring, ai.ts) that have no company context yet.
+    const [row] = await db.select().from(integrationSettings).where(eq(integrationSettings.id, 1)).limit(1);
     return row;
   }
 
-  async upsertIntegrationSettings(data: UpdateIntegrationSettings): Promise<IntegrationSettings> {
-    const [row] = await db
-      .insert(integrationSettings)
-      .values({ id: 1, ...data, updatedAt: new Date() })
-      .onConflictDoUpdate({ target: integrationSettings.id, set: { ...data, updatedAt: new Date() } })
-      .returning();
+  async getIntegrationSettingsByPhoneNumberId(phoneNumberId: string): Promise<IntegrationSettings | undefined> {
+    const [row] = await db.select().from(integrationSettings)
+      .where(eq(integrationSettings.whatsappPhoneNumberId, phoneNumberId))
+      .limit(1);
     return row;
   }
 
-  async getAllKnowledgeBaseItems(): Promise<KnowledgeBaseItem[]> {
-    return db.select().from(knowledgeBase);
+  async upsertIntegrationSettings(data: UpdateIntegrationSettings, companyId?: string | null): Promise<IntegrationSettings> {
+    // Find existing row by companyId if provided, else use id=1 legacy row
+    const existing = companyId
+      ? await db.select().from(integrationSettings).where(eq(integrationSettings.companyId, companyId)).limit(1)
+      : await db.select().from(integrationSettings).where(eq(integrationSettings.id, 1)).limit(1);
+    if (existing.length > 0) {
+      const [row] = await db.update(integrationSettings)
+        .set({ ...data, companyId: companyId ?? existing[0].companyId, updatedAt: new Date() })
+        .where(eq(integrationSettings.id, existing[0].id))
+        .returning();
+      return row;
+    } else {
+      // Insert new row for this company with next available id
+      const [maxRow] = await db.select({ maxId: sql<number>`COALESCE(MAX(id), 0)` }).from(integrationSettings);
+      const nextId = (maxRow?.maxId ?? 0) + 1;
+      const [row] = await db.insert(integrationSettings)
+        .values({ id: nextId, ...data, companyId: companyId ?? null, updatedAt: new Date() })
+        .returning();
+      return row;
+    }
+  }
+
+  async getAllKnowledgeBaseItems(companyId?: string | null): Promise<KnowledgeBaseItem[]> {
+    return companyId
+      ? db.select().from(knowledgeBase).where(eq(knowledgeBase.companyId, companyId))
+      : db.select().from(knowledgeBase);
   }
 
   async getKnowledgeBaseItem(id: string): Promise<KnowledgeBaseItem | undefined> {
@@ -2985,17 +3225,23 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
-  async createKnowledgeBaseItem(data: InsertKnowledgeBase): Promise<KnowledgeBaseItem> {
-    const [row] = await db.insert(knowledgeBase).values(data).returning();
+  async createKnowledgeBaseItem(data: InsertKnowledgeBase, companyId?: string | null): Promise<KnowledgeBaseItem> {
+    const [row] = await db.insert(knowledgeBase).values({ ...data, companyId: companyId ?? data.companyId ?? null }).returning();
     return row;
   }
 
-  async updateKnowledgeBaseItem(id: string, data: UpdateKnowledgeBase): Promise<KnowledgeBaseItem | undefined> {
+  async updateKnowledgeBaseItem(id: string, data: UpdateKnowledgeBase, companyId?: string | null): Promise<KnowledgeBaseItem | undefined> {
+    const existing = await this.getKnowledgeBaseItem(id);
+    if (!existing) return undefined;
+    if (companyId && existing.companyId !== companyId) return undefined;
     const [row] = await db.update(knowledgeBase).set({ ...data, updatedAt: new Date() }).where(eq(knowledgeBase.id, id)).returning();
     return row;
   }
 
-  async deleteKnowledgeBaseItem(id: string): Promise<boolean> {
+  async deleteKnowledgeBaseItem(id: string, companyId?: string | null): Promise<boolean> {
+    const existing = await this.getKnowledgeBaseItem(id);
+    if (!existing) return false;
+    if (companyId && existing.companyId !== companyId) return false;
     const [row] = await db.delete(knowledgeBase).where(eq(knowledgeBase.id, id)).returning();
     return !!row;
   }

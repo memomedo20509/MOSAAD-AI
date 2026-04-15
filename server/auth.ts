@@ -5,7 +5,8 @@ import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
-import { User as SelectUser, UserRole, ROLE_ARABIC_NAMES, DEFAULT_ROLE_PERMISSIONS, type RolePermissions, normalizeRole } from "@shared/models/auth";
+import { pool } from "./db";
+import { User as SelectUser, UserRole, ROLE_ARABIC_NAMES, DEFAULT_ROLE_PERMISSIONS, type RolePermissions, normalizeRole, isPlatformAdmin } from "@shared/models/auth";
 
 declare global {
   namespace Express {
@@ -103,6 +104,12 @@ export function registerAuthRoutes(app: Express) {
       }
 
       const hashedPassword = await hashPassword(password);
+      // Assign new self-registered users to the Demo Company so they are never orphaned
+      let defaultCompanyId: string | null = null;
+      try {
+        const { rows } = await pool.query(`SELECT id FROM companies WHERE slug = 'demo-company' LIMIT 1`);
+        if (rows.length > 0) defaultCompanyId = rows[0].id;
+      } catch { /* ignore if companies table not ready */ }
       const user = await storage.createUser({
         username,
         password: hashedPassword,
@@ -111,6 +118,7 @@ export function registerAuthRoutes(app: Express) {
         lastName: lastName || null,
         role: "sales_agent",
         isActive: true,
+        companyId: defaultCompanyId,
       });
 
       req.login(user, (err) => {
@@ -174,6 +182,8 @@ export function requireRole(...roles: UserRole[]) {
       return res.status(401).json({ error: "Unauthorized" });
     }
     const user = req.user as SelectUser;
+    // platform_admin bypasses all role restrictions
+    if (isPlatformAdmin(user.role)) return next();
     if (!roles.includes(normalizeRole(user.role))) {
       return res.status(403).json({ error: "Forbidden" });
     }
@@ -187,6 +197,8 @@ export function requirePermission(permission: keyof RolePermissions) {
       return res.status(401).json({ error: "Unauthorized" });
     }
     const user = req.user as SelectUser;
+    // platform_admin bypasses all permission checks
+    if (isPlatformAdmin(user.role)) return next();
     const role = normalizeRole(user.role);
 
     let perms: RolePermissions;

@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import type { BotStage } from "./ai";
 import { createServer, type Server } from "http";
 import { addSseClient, removeSseClient, broadcastToUser, broadcastToAll } from "./sse";
@@ -9,6 +9,17 @@ import nodemailer from "nodemailer";
 import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated, requireRole, requirePermission } from "./auth";
 import { hashPassword } from "./auth";
+import { isPlatformAdmin } from "@shared/models/auth";
+
+// Helper: extract company_id from authenticated request
+// Returns null for platform_admin (no company filter — sees all data)
+// Returns the user's companyId for all other roles
+function getCompanyId(req: Request): string | null {
+  const user = req.user;
+  if (!user) return null;
+  if (isPlatformAdmin(user.role)) return null;
+  return user.companyId ?? null;
+}
 import { updateScoringConfig } from "./scoring";
 import {
   startConnection,
@@ -102,7 +113,7 @@ export async function registerRoutes(
   // Teams endpoints (admin only for mutations, all authenticated can view)
   app.get("/api/teams", isAuthenticated, async (req, res) => {
     try {
-      const teams = await storage.getAllTeams();
+      const teams = await storage.getAllTeams(getCompanyId(req));
       res.json(teams);
     } catch (error) {
       console.error("Error fetching teams:", error);
@@ -113,7 +124,7 @@ export async function registerRoutes(
   app.post("/api/teams", isAuthenticated, requirePermission("canManageTeams"), async (req, res) => {
     try {
       const data = insertTeamSchema.parse(req.body);
-      const team = await storage.createTeam(data);
+      const team = await storage.createTeam(data, getCompanyId(req));
       res.status(201).json(team);
     } catch (error) {
       console.error("Error creating team:", error);
@@ -125,7 +136,7 @@ export async function registerRoutes(
     try {
       const id = req.params.id as string;
       const data = updateTeamSchema.parse(req.body);
-      const team = await storage.updateTeam(id, data);
+      const team = await storage.updateTeam(id, data, getCompanyId(req));
       if (!team) {
         return res.status(404).json({ error: "Team not found" });
       }
@@ -139,7 +150,7 @@ export async function registerRoutes(
   app.delete("/api/teams/:id", isAuthenticated, requireRole("super_admin"), async (req, res) => {
     try {
       const id = req.params.id as string;
-      const deleted = await storage.deleteTeam(id);
+      const deleted = await storage.deleteTeam(id, getCompanyId(req));
       if (!deleted) {
         return res.status(404).json({ error: "Team not found" });
       }
@@ -153,7 +164,8 @@ export async function registerRoutes(
   // Users list - all authenticated users can read (for agent filters, etc.)
   app.get("/api/users", isAuthenticated, async (req, res) => {
     try {
-      const users = await storage.getAllUsers();
+      const companyId = getCompanyId(req);
+      const users = await storage.getAllUsers(companyId);
       const safeUsers = users.map(({ password: _, ...u }) => u);
       res.json(safeUsers);
     } catch (error) {
@@ -169,6 +181,12 @@ export async function registerRoutes(
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
+      // Company isolation: non-platform-admins can ONLY view users in their own company.
+      // Deny access even if the target user has companyId=null (platform/unassigned accounts).
+      const requestingCompanyId = getCompanyId(req);
+      if (requestingCompanyId && user.companyId !== requestingCompanyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       res.json(user);
     } catch (error) {
       console.error("Error fetching user:", error);
@@ -179,11 +197,25 @@ export async function registerRoutes(
   app.patch("/api/users/:id", isAuthenticated, requirePermission("canManageUsers"), async (req, res) => {
     try {
       const id = req.params.id as string;
-      const data = updateUserSchema.parse(req.body);
       const requestingUserRole = req.user?.role;
+      // Only platform_admin may update companyId; strip it from the schema for everyone else
+      const userUpdateSchema = isPlatformAdmin(requestingUserRole)
+        ? updateUserSchema
+        : updateUserSchema.omit({ companyId: true });
+      const data = userUpdateSchema.parse(req.body);
+      // Prevent privilege escalation: only platform_admin can assign platform_admin role
+      if (!isPlatformAdmin(requestingUserRole) && data.role === "platform_admin") {
+        return res.status(403).json({ error: "Only platform admins can assign platform_admin role" });
+      }
       const privilegedRoles = ["super_admin", "company_owner"];
-      if (requestingUserRole !== "super_admin" && data.role && privilegedRoles.includes(data.role)) {
+      if (requestingUserRole !== "super_admin" && !isPlatformAdmin(requestingUserRole) && data.role && privilegedRoles.includes(data.role)) {
         return res.status(403).json({ error: "Insufficient permissions to assign this role" });
+      }
+      // Company isolation: non-platform-admins can only update users in their own company
+      const existingUser = await storage.getUser(id);
+      const requestingCompanyId = getCompanyId(req);
+      if (requestingCompanyId && existingUser?.companyId !== requestingCompanyId) {
+        return res.status(403).json({ error: "Access denied" });
       }
       if (data.password) {
         data.password = await hashPassword(data.password);
@@ -207,8 +239,12 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Username and password are required" });
       }
       const requestingUserRole = req.user?.role;
+      // Prevent privilege escalation: only platform_admin can assign platform_admin role
+      if (!isPlatformAdmin(requestingUserRole) && role === "platform_admin") {
+        return res.status(403).json({ error: "Only platform admins can assign platform_admin role" });
+      }
       const privilegedRoles = ["super_admin", "company_owner"];
-      if (requestingUserRole !== "super_admin" && role && privilegedRoles.includes(role)) {
+      if (requestingUserRole !== "super_admin" && !isPlatformAdmin(requestingUserRole) && role && privilegedRoles.includes(role)) {
         return res.status(403).json({ error: "Insufficient permissions to assign this role" });
       }
       const existingUser = await storage.getUserByUsername(username);
@@ -222,6 +258,11 @@ export async function registerRoutes(
         }
       }
       const hashedPassword = await hashPassword(password);
+      // New users inherit the creating user's company.
+      // Only platform_admin can override companyId via request body.
+      const assignedCompanyId = isPlatformAdmin(req.user?.role)
+        ? (req.body.companyId ?? req.user?.companyId ?? null)
+        : (req.user?.companyId ?? null);
       const newUser = await storage.createUser({
         username,
         password: hashedPassword,
@@ -232,6 +273,7 @@ export async function registerRoutes(
         role: role || "sales_agent",
         teamId: teamId || null,
         isActive: isActive !== undefined ? isActive : true,
+        companyId: assignedCompanyId,
       });
       const { password: _, ...userWithoutPassword } = newUser;
       res.status(201).json(userWithoutPassword);
@@ -242,9 +284,10 @@ export async function registerRoutes(
   });
 
   // Lead States
-  app.get("/api/states", async (req, res) => {
+  app.get("/api/states", isAuthenticated, async (req, res) => {
     try {
-      const states = await storage.getAllStates();
+      const companyId = getCompanyId(req);
+      const states = await storage.getAllStates(companyId);
       res.json(states);
     } catch (error) {
       console.error("Error fetching states:", error);
@@ -262,10 +305,12 @@ export async function registerRoutes(
 
   app.post("/api/states", isAuthenticated, requireRole("super_admin", "admin", "sales_admin", "company_owner"), async (req, res) => {
     try {
+      const companyId = getCompanyId(req);
       const data = insertLeadStateSchema.parse(req.body);
       // Always derive zone from category to keep them in sync
       const zone = categoryToZone[data.category ?? "active"] ?? 2;
-      const state = await storage.createState({ ...data, zone });
+      // Inject server-side companyId; client-provided companyId is ignored for non-platform-admins
+      const state = await storage.createState({ ...data, zone, companyId: isPlatformAdmin(req.user?.role) ? (data.companyId ?? null) : companyId });
       res.status(201).json(state);
     } catch (error) {
       console.error("Error creating state:", error);
@@ -276,6 +321,14 @@ export async function registerRoutes(
   app.patch("/api/states/:id", isAuthenticated, requireRole("super_admin", "admin", "sales_admin", "company_owner"), async (req, res) => {
     try {
       const { id } = req.params;
+      const existing = await storage.getState(id);
+      if (!existing) {
+        return res.status(404).json({ error: "State not found" });
+      }
+      const companyId = getCompanyId(req);
+      if (companyId && existing.companyId !== companyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const data = updateLeadStateSchema.parse(req.body);
       // If category is being updated, sync zone automatically
       const zone = data.category ? (categoryToZone[data.category] ?? 2) : undefined;
@@ -296,6 +349,10 @@ export async function registerRoutes(
       const state = await storage.getState(id);
       if (!state) {
         return res.status(404).json({ error: "State not found" });
+      }
+      const companyId = getCompanyId(req);
+      if (companyId && state.companyId !== companyId) {
+        return res.status(403).json({ error: "Access denied" });
       }
       if (state.isSystemState) {
         return res.status(403).json({ error: "لا يمكن حذف الحالات الأساسية للنظام" });
@@ -318,11 +375,12 @@ export async function registerRoutes(
       const role = user?.role ?? "sales_agent";
       const userId = user?.id ?? "";
       const teamId = user?.teamId ?? null;
+      const companyId = getCompanyId(req);
       let leads;
       if (role === "sales_agent" || role === "team_leader") {
-        leads = await storage.getLeadsByRole(userId, role, teamId, user?.username);
+        leads = await storage.getLeadsByRole(userId, role, teamId, user?.username, companyId);
       } else {
-        leads = await storage.getAllLeadsWithRefreshedScores();
+        leads = await storage.getAllLeadsWithRefreshedScores(companyId);
       }
       res.json(leads);
     } catch (error) {
@@ -353,11 +411,12 @@ export async function registerRoutes(
     try {
       const data = insertLeadSchema.parse(req.body);
       const user = req.user;
-      const lead = await storage.createLead(data, user?.teamId ?? null);
+      const companyId = getCompanyId(req);
+      const lead = await storage.createLead(data, user?.teamId ?? null, companyId);
 
       // Send notifications to admins/managers and assigned agent
       try {
-        const allUsers = await storage.getAllUsers();
+        const allUsers = await storage.getAllUsers(companyId);
         const adminRoles = ["super_admin", "company_owner", "sales_admin", "admin", "team_leader", "sales_manager"];
         const leadName = lead.name || lead.phone || "ليد جديد";
         const message = `ليد جديد: ${leadName}`;
@@ -485,6 +544,10 @@ export async function registerRoutes(
     try {
       const id = req.params.id as string;
       const leadBeforeDelete = await storage.getLead(id);
+      const companyId = getCompanyId(req);
+      if (leadBeforeDelete && companyId && leadBeforeDelete.companyId !== companyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const deleted = await storage.deleteLead(id);
       if (!deleted) {
         return res.status(404).json({ error: "Lead not found" });
@@ -511,6 +574,20 @@ export async function registerRoutes(
         : "System";
 
       const currentLead = await storage.getLead(id);
+      if (!currentLead) {
+        return res.status(404).json({ error: "Lead not found" });
+      }
+      const companyId = getCompanyId(req);
+      if (companyId && currentLead.companyId !== companyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      // Verify the target user belongs to the same company
+      if (companyId) {
+        const targetUser = await storage.getUser(toUserId);
+        if (!targetUser || targetUser.companyId !== companyId) {
+          return res.status(403).json({ error: "Target user not in same company" });
+        }
+      }
       const fromUserId = currentLead?.assignedTo || null;
       let fromUserName: string | undefined;
       if (fromUserId) {
@@ -539,7 +616,8 @@ export async function registerRoutes(
 
   app.get("/api/tasks", isAuthenticated, async (req, res) => {
     try {
-      const allTasks = await storage.getAllTasks();
+      const companyId = getCompanyId(req);
+      const allTasks = await storage.getAllTasks(companyId);
       const user = req.user;
       const isManager = user && ["super_admin", "company_owner", "admin", "sales_admin", "sales_manager", "team_leader"].includes(user.role);
       const filtered = isManager
@@ -600,7 +678,8 @@ export async function registerRoutes(
   // All History (for actions log page)
   app.get("/api/history", isAuthenticated, async (req, res) => {
     try {
-      const history = await storage.getAllHistory();
+      const companyId = getCompanyId(req);
+      const history = await storage.getAllHistory(companyId);
       res.json(history);
     } catch (error) {
       console.error("Error fetching all history:", error);
@@ -611,7 +690,7 @@ export async function registerRoutes(
   // Reassignment Report
   app.get("/api/reports/reassignments", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager", "sales_admin"), async (req, res) => {
     try {
-      const report = await storage.getReassignmentReport();
+      const report = await storage.getReassignmentReport(getCompanyId(req));
       res.json(report);
     } catch (error) {
       console.error("Error fetching reassignment report:", error);
@@ -626,7 +705,8 @@ export async function registerRoutes(
       if (data.leadId && !(await canAccessLead(req.user, data.leadId))) {
         return res.status(403).json({ error: "Access denied" });
       }
-      const task = await storage.createTask(data);
+      const companyId = getCompanyId(req);
+      const task = await storage.createTask(data, companyId);
       res.status(201).json(task);
     } catch (error) {
       console.error("Error creating task:", error);
@@ -672,9 +752,10 @@ export async function registerRoutes(
   });
 
   // Clients
-  app.get("/api/clients", async (req, res) => {
+  app.get("/api/clients", isAuthenticated, async (req, res) => {
     try {
-      const clients = await storage.getAllClients();
+      const companyId = getCompanyId(req);
+      const clients = await storage.getAllClients(companyId);
       res.json(clients);
     } catch (error) {
       console.error("Error fetching clients:", error);
@@ -682,12 +763,16 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/clients/:id", async (req, res) => {
+  app.get("/api/clients/:id", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
       const client = await storage.getClient(id);
       if (!client) {
         return res.status(404).json({ error: "Client not found" });
+      }
+      const companyId = getCompanyId(req);
+      if (companyId && client.companyId !== companyId) {
+        return res.status(403).json({ error: "Access denied" });
       }
       res.json(client);
     } catch (error) {
@@ -699,7 +784,8 @@ export async function registerRoutes(
   app.post("/api/clients", isAuthenticated, async (req, res) => {
     try {
       const data = insertClientSchema.parse(req.body);
-      const client = await storage.createClient(data);
+      const companyId = getCompanyId(req);
+      const client = await storage.createClient(data, companyId);
 
       // Auto-create commission record when a deal is closed
       try {
@@ -734,6 +820,7 @@ export async function registerRoutes(
 
         const commissionAmount = Math.round((unitPrice * DEFAULT_COMMISSION_PERCENT) / 100);
 
+        const clientCompanyId = getCompanyId(req);
         await storage.createCommission({
           clientId: client.id,
           leadId: data.leadId ?? null,
@@ -745,7 +832,7 @@ export async function registerRoutes(
           month,
           project: data.project ?? null,
           notes: null,
-        });
+        }, clientCompanyId);
       } catch (commErr) {
         console.error("Failed to auto-create commission for client", client.id, ":", commErr);
         // Note: commission creation failure does not roll back client creation,
@@ -759,9 +846,15 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/clients/:id", async (req, res) => {
+  app.patch("/api/clients/:id", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
+      const existing = await storage.getClient(id);
+      if (!existing) return res.status(404).json({ error: "Client not found" });
+      const companyId = getCompanyId(req);
+      if (companyId && existing.companyId !== companyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const client = await storage.updateClient(id, req.body);
       if (!client) {
         return res.status(404).json({ error: "Client not found" });
@@ -773,9 +866,15 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/clients/:id", async (req, res) => {
+  app.delete("/api/clients/:id", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
+      const existing = await storage.getClient(id);
+      if (!existing) return res.status(404).json({ error: "Client not found" });
+      const companyId = getCompanyId(req);
+      if (companyId && existing.companyId !== companyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const deleted = await storage.deleteClient(id);
       if (!deleted) {
         return res.status(404).json({ error: "Client not found" });
@@ -792,7 +891,8 @@ export async function registerRoutes(
   // Developers
   app.get("/api/developers", isAuthenticated, async (req, res) => {
     try {
-      const developers = await storage.getAllDevelopers();
+      const companyId = getCompanyId(req);
+      const developers = await storage.getAllDevelopers(companyId);
       res.json(developers);
     } catch (error) {
       console.error("Error fetching developers:", error);
@@ -807,6 +907,10 @@ export async function registerRoutes(
       if (!developer) {
         return res.status(404).json({ error: "Developer not found" });
       }
+      const companyId = getCompanyId(req);
+      if (companyId && developer.companyId !== companyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       res.json(developer);
     } catch (error) {
       console.error("Error fetching developer:", error);
@@ -817,7 +921,8 @@ export async function registerRoutes(
   app.post("/api/developers", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
     try {
       const data = insertDeveloperSchema.parse(req.body);
-      const developer = await storage.createDeveloper(data);
+      const companyId = getCompanyId(req);
+      const developer = await storage.createDeveloper(data, companyId);
       res.status(201).json(developer);
     } catch (error) {
       console.error("Error creating developer:", error);
@@ -828,6 +933,12 @@ export async function registerRoutes(
   app.patch("/api/developers/:id", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
     try {
       const id = req.params.id as string;
+      const existing = await storage.getDeveloper(id);
+      if (!existing) return res.status(404).json({ error: "Developer not found" });
+      const companyId = getCompanyId(req);
+      if (companyId && existing.companyId !== companyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const data = updateDeveloperSchema.parse(req.body);
       const developer = await storage.updateDeveloper(id, data);
       if (!developer) {
@@ -843,6 +954,12 @@ export async function registerRoutes(
   app.delete("/api/developers/:id", isAuthenticated, requireRole("super_admin"), async (req, res) => {
     try {
       const id = req.params.id as string;
+      const existing = await storage.getDeveloper(id);
+      if (!existing) return res.status(404).json({ error: "Developer not found" });
+      const companyId = getCompanyId(req);
+      if (companyId && existing.companyId !== companyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const deleted = await storage.deleteDeveloper(id);
       if (!deleted) {
         return res.status(404).json({ error: "Developer not found" });
@@ -857,7 +974,8 @@ export async function registerRoutes(
   // Projects
   app.get("/api/projects", isAuthenticated, async (req, res) => {
     try {
-      const projects = await storage.getAllProjects();
+      const companyId = getCompanyId(req);
+      const projects = await storage.getAllProjects(companyId);
       res.json(projects);
     } catch (error) {
       console.error("Error fetching projects:", error);
@@ -883,6 +1001,10 @@ export async function registerRoutes(
       if (!project) {
         return res.status(404).json({ error: "Project not found" });
       }
+      const companyId = getCompanyId(req);
+      if (companyId && project.companyId !== companyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       res.json(project);
     } catch (error) {
       console.error("Error fetching project:", error);
@@ -893,7 +1015,8 @@ export async function registerRoutes(
   app.post("/api/projects", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
     try {
       const data = insertProjectSchema.parse(req.body);
-      const project = await storage.createProject(data);
+      const companyId = getCompanyId(req);
+      const project = await storage.createProject(data, companyId);
       res.status(201).json(project);
     } catch (error) {
       console.error("Error creating project:", error);
@@ -904,6 +1027,12 @@ export async function registerRoutes(
   app.patch("/api/projects/:id", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
     try {
       const id = req.params.id as string;
+      const existing = await storage.getProject(id);
+      if (!existing) return res.status(404).json({ error: "Project not found" });
+      const companyId = getCompanyId(req);
+      if (companyId && existing.companyId !== companyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const data = updateProjectSchema.parse(req.body);
       const project = await storage.updateProject(id, data);
       if (!project) {
@@ -919,6 +1048,12 @@ export async function registerRoutes(
   app.delete("/api/projects/:id", isAuthenticated, requireRole("super_admin"), async (req, res) => {
     try {
       const id = req.params.id as string;
+      const existing = await storage.getProject(id);
+      if (!existing) return res.status(404).json({ error: "Project not found" });
+      const companyId = getCompanyId(req);
+      if (companyId && existing.companyId !== companyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const deleted = await storage.deleteProject(id);
       if (!deleted) {
         return res.status(404).json({ error: "Project not found" });
@@ -939,7 +1074,7 @@ export async function registerRoutes(
         imageUrl?: string;
       }
 
-      const allProjects = await storage.getAllProjects();
+      const allProjects = await storage.getAllProjects(getCompanyId(req));
       const nawyUrlRegex = /🔗 المصدر: (https?:\/\/[^\n]+)/;
 
       let updated = 0;
@@ -1070,7 +1205,8 @@ export async function registerRoutes(
   // Units
   app.get("/api/units", isAuthenticated, async (req, res) => {
     try {
-      const units = await storage.getAllUnits();
+      const companyId = getCompanyId(req);
+      const units = await storage.getAllUnits(companyId);
       res.json(units);
     } catch (error) {
       console.error("Error fetching units:", error);
@@ -1096,6 +1232,10 @@ export async function registerRoutes(
       if (!unit) {
         return res.status(404).json({ error: "Unit not found" });
       }
+      const companyId = getCompanyId(req);
+      if (companyId && unit.companyId !== companyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       res.json(unit);
     } catch (error) {
       console.error("Error fetching unit:", error);
@@ -1106,7 +1246,8 @@ export async function registerRoutes(
   app.post("/api/units", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
     try {
       const data = insertUnitSchema.parse(req.body);
-      const unit = await storage.createUnit(data);
+      const companyId = getCompanyId(req);
+      const unit = await storage.createUnit(data, companyId);
       res.status(201).json(unit);
     } catch (error) {
       console.error("Error creating unit:", error);
@@ -1117,6 +1258,12 @@ export async function registerRoutes(
   app.patch("/api/units/:id", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
     try {
       const id = req.params.id as string;
+      const existing = await storage.getUnit(id);
+      if (!existing) return res.status(404).json({ error: "Unit not found" });
+      const companyId = getCompanyId(req);
+      if (companyId && existing.companyId !== companyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const data = updateUnitSchema.parse(req.body);
       const unit = await storage.updateUnit(id, data);
       if (!unit) {
@@ -1132,6 +1279,12 @@ export async function registerRoutes(
   app.delete("/api/units/:id", isAuthenticated, requireRole("super_admin"), async (req, res) => {
     try {
       const id = req.params.id as string;
+      const existing = await storage.getUnit(id);
+      if (!existing) return res.status(404).json({ error: "Unit not found" });
+      const companyId = getCompanyId(req);
+      if (companyId && existing.companyId !== companyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const deleted = await storage.deleteUnit(id);
       if (!deleted) {
         return res.status(404).json({ error: "Unit not found" });
@@ -1161,6 +1314,14 @@ export async function registerRoutes(
   app.get("/api/units/:unitId/interests", isAuthenticated, async (req, res) => {
     try {
       const unitId = req.params.unitId as string;
+      const unit = await storage.getUnit(unitId);
+      if (!unit) {
+        return res.status(404).json({ error: "Unit not found" });
+      }
+      const companyId = getCompanyId(req);
+      if (companyId && unit.companyId !== companyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const interests = await storage.getUnitInterests(unitId);
       res.json(interests);
     } catch (error) {
@@ -1231,7 +1392,8 @@ export async function registerRoutes(
     try {
       const user = req.user;
       const teamId = (user?.role === "team_leader" || user?.role === "sales_manager") ? user?.teamId ?? null : null;
-      const teamLoad = await storage.getTeamLoad(teamId);
+      const companyId = getCompanyId(req);
+      const teamLoad = await storage.getTeamLoad(teamId, companyId);
       res.json(teamLoad);
     } catch (error) {
       console.error("Error fetching team load:", error);
@@ -1279,10 +1441,11 @@ export async function registerRoutes(
   app.get("/api/reports/marketing", isAuthenticated, requireRole("super_admin", "admin", "sales_manager"), async (req, res) => {
     try {
       const { from, to } = req.query as { from?: string; to?: string };
+      const companyId = getCompanyId(req);
       const [allLeads, allCommissions, allStates] = await Promise.all([
-        storage.getAllLeads(),
-        storage.getAllCommissions(),
-        storage.getAllStates(),
+        storage.getAllLeads(companyId),
+        storage.getAllCommissions(companyId),
+        storage.getAllStates(companyId),
       ]);
 
       const startDate = from ? new Date(from) : null;
@@ -1391,7 +1554,8 @@ export async function registerRoutes(
 
   app.get("/api/reports/response-time", isAuthenticated, requireRole("super_admin", "company_owner", "sales_admin", "team_leader", "admin", "sales_manager"), async (req, res) => {
     try {
-      const report = await storage.getResponseTimeReport();
+      const companyId = getCompanyId(req);
+      const report = await storage.getResponseTimeReport(companyId);
       res.json(report);
     } catch (error) {
       console.error("Error fetching response time report:", error);
@@ -1406,7 +1570,8 @@ export async function registerRoutes(
       const { from, to } = req.query as { from?: string; to?: string };
       const fromDate = from ? new Date(from) : undefined;
       const toDate = to ? new Date(to) : undefined;
-      const report = await storage.getSalesActivityReport(fromDate, toDate);
+      const companyId = getCompanyId(req);
+      const report = await storage.getSalesActivityReport(fromDate, toDate, companyId);
       res.json(report);
     } catch (error) {
       console.error("Error fetching sales activity report:", error);
@@ -1419,7 +1584,8 @@ export async function registerRoutes(
       const { from, to } = req.query as { from?: string; to?: string };
       const fromDate = from ? new Date(from) : undefined;
       const toDate = to ? new Date(to) : undefined;
-      const report = await storage.getFollowUpReport(fromDate, toDate);
+      const companyId = getCompanyId(req);
+      const report = await storage.getFollowUpReport(fromDate, toDate, companyId);
       res.json(report);
     } catch (error) {
       console.error("Error fetching follow-up report:", error);
@@ -1429,7 +1595,8 @@ export async function registerRoutes(
 
   app.get("/api/reports/funnel", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (req, res) => {
     try {
-      const report = await storage.getSalesFunnelReport();
+      const companyId = getCompanyId(req);
+      const report = await storage.getSalesFunnelReport(companyId);
       res.json(report);
     } catch (error) {
       console.error("Error fetching funnel report:", error);
@@ -1439,7 +1606,8 @@ export async function registerRoutes(
 
   app.get("/api/reports/daily-activity", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (req, res) => {
     try {
-      const report = await storage.getDailyActivityReport();
+      const companyId = getCompanyId(req);
+      const report = await storage.getDailyActivityReport(companyId);
       res.json(report);
     } catch (error) {
       console.error("Error fetching daily activity report:", error);
@@ -1449,7 +1617,8 @@ export async function registerRoutes(
 
   app.get("/api/reports/cold-leads", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (req, res) => {
     try {
-      const report = await storage.getColdLeadsReport();
+      const companyId = getCompanyId(req);
+      const report = await storage.getColdLeadsReport(companyId);
       res.json(report);
     } catch (error) {
       console.error("Error fetching cold leads report:", error);
@@ -1459,7 +1628,8 @@ export async function registerRoutes(
 
   app.get("/api/reports/project-performance", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (req, res) => {
     try {
-      const report = await storage.getProjectPerformanceReport();
+      const companyId = getCompanyId(req);
+      const report = await storage.getProjectPerformanceReport(companyId);
       res.json(report);
     } catch (error) {
       console.error("Error fetching project performance report:", error);
@@ -1469,7 +1639,8 @@ export async function registerRoutes(
 
   app.get("/api/reports/comparison", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (req, res) => {
     try {
-      const report = await storage.getWeeklyMonthlyComparison();
+      const companyId = getCompanyId(req);
+      const report = await storage.getWeeklyMonthlyComparison(companyId);
       res.json(report);
     } catch (error) {
       console.error("Error fetching comparison report:", error);
@@ -1484,6 +1655,19 @@ export async function registerRoutes(
       if (!assignedTo) {
         return res.status(400).json({ error: "assignedTo is required" });
       }
+      const companyId = getCompanyId(req);
+      const existingLead = await storage.getLead(id);
+      if (!existingLead) return res.status(404).json({ error: "Lead not found" });
+      if (companyId && existingLead.companyId !== companyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      // Verify target user belongs to the same company
+      if (companyId) {
+        const targetUser = await storage.getUser(assignedTo);
+        if (!targetUser || targetUser.companyId !== companyId) {
+          return res.status(403).json({ error: "Target user not in same company" });
+        }
+      }
       const lead = await storage.updateLead(id, { assignedTo });
       if (!lead) {
         return res.status(404).json({ error: "Lead not found" });
@@ -1497,7 +1681,8 @@ export async function registerRoutes(
 
   app.get("/api/dashboard/team-activity", isAuthenticated, requireRole("super_admin", "company_owner", "sales_admin", "team_leader", "admin", "sales_manager"), async (req, res) => {
     try {
-      const activity = await storage.getTeamActivityToday();
+      const companyId = getCompanyId(req);
+      const activity = await storage.getTeamActivityToday(companyId);
       res.json(activity);
     } catch (error) {
       console.error("Error fetching team activity:", error);
@@ -1534,7 +1719,8 @@ export async function registerRoutes(
         userId: user?.id,
         userName: user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.username : "System",
       });
-      const comm = await storage.createCommunication(data);
+      const companyId = getCompanyId(req);
+      const comm = await storage.createCommunication(data, companyId);
       res.status(201).json(comm);
     } catch (error) {
       console.error("Error creating communication:", error);
@@ -1546,7 +1732,8 @@ export async function registerRoutes(
 
   app.get("/api/reminders", isAuthenticated, async (req, res) => {
     try {
-      const reminders = await storage.getAllReminders();
+      const companyId = getCompanyId(req);
+      const reminders = await storage.getAllReminders(companyId);
       res.json(reminders);
     } catch (error) {
       console.error("Error fetching reminders:", error);
@@ -1587,7 +1774,8 @@ export async function registerRoutes(
       if (data.leadId && !(await canAccessLead(req.user, data.leadId))) {
         return res.status(403).json({ error: "Access denied" });
       }
-      const reminder = await storage.createReminder(data);
+      const companyId = getCompanyId(req);
+      const reminder = await storage.createReminder(data, companyId);
       res.status(201).json(reminder);
     } catch (error) {
       console.error("Error creating reminder:", error);
@@ -1629,7 +1817,8 @@ export async function registerRoutes(
   app.get("/api/my-day", isAuthenticated, async (req, res) => {
     try {
       const user = req.user!;
-      const data = await storage.getMyDayData(user.id, user.role ?? "sales_agent", user.teamId ?? null, user.username);
+      const companyId = getCompanyId(req);
+      const data = await storage.getMyDayData(user.id, user.role ?? "sales_agent", user.teamId ?? null, user.username, companyId);
       res.json(data);
     } catch (error) {
       console.error("Error fetching My Day data:", error);
@@ -1787,12 +1976,16 @@ export async function registerRoutes(
   // sales_agent can only access leads assigned to them.
   async function canAccessLead(user: Express.User | undefined, leadId: string): Promise<boolean> {
     if (!user) return false;
-    const globalRoles = ["super_admin", "company_owner", "sales_admin", "admin", "sales_manager"];
-    if (globalRoles.includes(user.role ?? "")) return true;
+    // Platform admins bypass all filters
+    if (isPlatformAdmin(user.role)) return true;
     const lead = await storage.getLead(leadId);
     if (!lead) return false;
+    // Company isolation: users can only access leads from their own company
+    if (user.companyId && lead.companyId && user.companyId !== lead.companyId) return false;
+    const globalRoles = ["super_admin", "company_owner", "sales_admin", "admin", "sales_manager"];
+    if (globalRoles.includes(user.role ?? "")) return true;
     if (user.role === "team_leader" && user.teamId) {
-      const teamUsers = await storage.getAllUsers().then(users =>
+      const teamUsers = await storage.getAllUsers(user.companyId ?? null).then(users =>
         users.filter(u => u.teamId === user.teamId).map(u => u.id)
       );
       return lead.assignedTo !== null && teamUsers.includes(lead.assignedTo);
@@ -1803,17 +1996,30 @@ export async function registerRoutes(
 
   // Authorization helper: clients are accessible by super_admin, admin, sales_manager and the agent
   // who owns the originating lead. Sales agents can access all clients for now (clients don't have assignedTo).
-  async function canAccessClient(user: Express.User | undefined, _clientId: string): Promise<boolean> {
+  async function canAccessClient(user: Express.User | undefined, clientId: string, companyId?: string | null): Promise<boolean> {
     if (!user) return false;
+    if (isPlatformAdmin(user.role)) return true;
+    // Check company ownership when companyId is scoped
+    if (companyId) {
+      const client = await storage.getClient(clientId);
+      if (!client) return false;
+      if (client.companyId !== companyId) return false; // strict: null companyId clients not accessible by scoped tenants
+    }
     return true;
   }
 
   // Authorization helper: checks if user can access a document by looking up its parent lead/client.
-  async function canAccessDocument(user: Express.User | undefined, doc: { leadId: string | null; clientId: string | null }): Promise<boolean> {
+  async function canAccessDocument(user: Express.User | undefined, doc: { leadId: string | null; clientId: string | null }, companyId?: string | null): Promise<boolean> {
     if (!user) return false;
-    if (user.role === "super_admin" || user.role === "admin" || user.role === "sales_manager") return true;
+    if (isPlatformAdmin(user.role)) return true;
+    if (user.role === "super_admin" || user.role === "admin" || user.role === "sales_manager") {
+      // Still enforce company isolation for non-platform admins
+      if (doc.leadId) return canAccessLead(user, doc.leadId);
+      if (doc.clientId) return canAccessClient(user, doc.clientId, companyId);
+      return false;
+    }
     if (doc.leadId) return canAccessLead(user, doc.leadId);
-    if (doc.clientId) return canAccessClient(user, doc.clientId);
+    if (doc.clientId) return canAccessClient(user, doc.clientId, companyId);
     return false;
   }
 
@@ -1869,7 +2075,8 @@ export async function registerRoutes(
     try {
       const clientId = req.params.clientId as string;
       const user = req.user;
-      if (!(await canAccessClient(user, clientId))) {
+      const companyId = getCompanyId(req);
+      if (!(await canAccessClient(user, clientId, companyId))) {
         return res.status(403).json({ error: "Access denied" });
       }
       const docs = await storage.getDocumentsByClient(clientId);
@@ -1884,7 +2091,8 @@ export async function registerRoutes(
     try {
       const clientId = req.params.clientId as string;
       const user = req.user;
-      if (!(await canAccessClient(user, clientId))) {
+      const companyId = getCompanyId(req);
+      if (!(await canAccessClient(user, clientId, companyId))) {
         return res.status(403).json({ error: "Access denied" });
       }
       const file = req.file;
@@ -1921,7 +2129,8 @@ export async function registerRoutes(
       if (!doc) {
         return res.status(404).json({ error: "Document not found" });
       }
-      if (!(await canAccessDocument(user, doc))) {
+      const companyId = getCompanyId(req);
+      if (!(await canAccessDocument(user, doc, companyId))) {
         return res.status(403).json({ error: "Access denied" });
       }
       const filePath = path.join(UPLOADS_DIR, doc.fileName);
@@ -1945,7 +2154,8 @@ export async function registerRoutes(
       if (!doc) {
         return res.status(404).json({ error: "Document not found" });
       }
-      if (!(await canAccessDocument(user, doc))) {
+      const docCompanyId = getCompanyId(req);
+      if (!(await canAccessDocument(user, doc, docCompanyId))) {
         return res.status(403).json({ error: "Access denied" });
       }
       const filePath = path.join(UPLOADS_DIR, doc.fileName);
@@ -1969,17 +2179,18 @@ export async function registerRoutes(
     try {
       const user = req.user;
       const role = user?.role;
+      const companyId = getCompanyId(req);
       let agentId: string | undefined;
       let teamMemberIds: string[] | undefined;
       if (role === "sales_agent") {
         agentId = user?.id;
       } else if (role === "sales_manager") {
-        const allUsers = await storage.getAllUsers();
+        const allUsers = await storage.getAllUsers(companyId);
         teamMemberIds = allUsers
           .filter(u => u.teamId === user?.teamId)
           .map(u => u.id);
       }
-      const summary = await storage.getCommissionSummary(agentId, teamMemberIds);
+      const summary = await storage.getCommissionSummary(agentId, teamMemberIds, companyId);
       res.json(summary);
     } catch (error) {
       console.error("Error fetching commission summary:", error);
@@ -1991,11 +2202,12 @@ export async function registerRoutes(
     try {
       const user = req.user;
       const role = user?.role;
-      let allCommissions = await storage.getAllCommissions();
+      const companyId = getCompanyId(req);
+      let allCommissions = await storage.getAllCommissions(companyId);
       if (role === "sales_agent") {
         allCommissions = allCommissions.filter(c => c.agentId === user?.id);
       } else if (role === "sales_manager") {
-        const teamUsers = await storage.getAllUsers();
+        const teamUsers = await storage.getAllUsers(companyId);
         const teamMemberIds = teamUsers
           .filter(u => u.teamId === user?.teamId)
           .map(u => u.id);
@@ -2013,9 +2225,14 @@ export async function registerRoutes(
       const id = req.params.id as string;
       const user = req.user;
       const role = user?.role;
+      const companyId = getCompanyId(req);
       const commission = await storage.getCommission(id);
       if (!commission) {
         return res.status(404).json({ error: "Commission not found" });
+      }
+      // Company isolation: non-platform-admins can only access their own company's commissions
+      if (companyId && commission.companyId !== companyId) {
+        return res.status(403).json({ error: "Access denied" });
       }
       // Access control: agents can only see their own commissions
       if (role === "sales_agent" && commission.agentId !== user?.id) {
@@ -2023,7 +2240,7 @@ export async function registerRoutes(
       }
       // Managers can only see their team's commissions
       if (role === "sales_manager") {
-        const allUsers = await storage.getAllUsers();
+        const allUsers = await storage.getAllUsers(companyId);
         const teamMemberIds = allUsers
           .filter(u => u.teamId === user?.teamId)
           .map(u => u.id);
@@ -2041,7 +2258,8 @@ export async function registerRoutes(
   app.post("/api/commissions", isAuthenticated, requireRole("super_admin", "admin"), async (req, res) => {
     try {
       const data = insertCommissionSchema.parse(req.body);
-      const commission = await storage.createCommission(data);
+      const companyId = getCompanyId(req);
+      const commission = await storage.createCommission(data, companyId);
       res.status(201).json(commission);
     } catch (error) {
       console.error("Error creating commission:", error);
@@ -2054,13 +2272,18 @@ export async function registerRoutes(
       const id = req.params.id as string;
       const user = req.user;
       const role = user?.role;
+      const companyId = getCompanyId(req);
       const existing = await storage.getCommission(id);
       if (!existing) {
         return res.status(404).json({ error: "Commission not found" });
       }
+      // Company isolation
+      if (companyId && existing.companyId !== companyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       // Managers can only edit commissions belonging to their team
       if (role === "sales_manager") {
-        const allUsers = await storage.getAllUsers();
+        const allUsers = await storage.getAllUsers(companyId);
         const teamMemberIds = allUsers
           .filter(u => u.teamId === user?.teamId)
           .map(u => u.id);
@@ -2091,6 +2314,12 @@ export async function registerRoutes(
   app.delete("/api/commissions/:id", isAuthenticated, requireRole("super_admin", "sales_admin"), async (req, res) => {
     try {
       const id = req.params.id as string;
+      const existing = await storage.getCommission(id);
+      if (!existing) return res.status(404).json({ error: "Commission not found" });
+      const companyId = getCompanyId(req);
+      if (companyId && existing.companyId !== companyId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const deleted = await storage.deleteCommission(id);
       if (!deleted) {
         return res.status(404).json({ error: "Commission not found" });
@@ -2624,7 +2853,8 @@ export async function registerRoutes(
   app.get("/api/whatsapp/templates", isAuthenticated, async (req, res) => {
     try {
       const isAdmin = req.user?.canManageUsers === true;
-      const templates = await storage.getAllWhatsappTemplates(!isAdmin);
+      const companyId = getCompanyId(req);
+      const templates = await storage.getAllWhatsappTemplates(!isAdmin, companyId);
       res.json(templates);
     } catch (error) {
       console.error("Error fetching WhatsApp templates:", error);
@@ -2637,7 +2867,8 @@ export async function registerRoutes(
     try {
       const userId = req.user!.id;
       const data = insertWhatsappTemplateSchema.parse({ ...req.body, createdBy: userId });
-      const template = await storage.createWhatsappTemplate(data);
+      const companyId = getCompanyId(req);
+      const template = await storage.createWhatsappTemplate(data, companyId);
       res.status(201).json(template);
     } catch (error) {
       console.error("Error creating WhatsApp template:", error);
@@ -2693,7 +2924,8 @@ export async function registerRoutes(
       const userId = req.user!.id;
       const userRole = (req.user as any)?.role ?? "sales_agent";
       const teamId = (req.user as any)?.teamId ?? null;
-      const conversations = await storage.getWhatsappInbox(userId, userRole, teamId);
+      const companyId = getCompanyId(req);
+      const conversations = await storage.getWhatsappInbox(userId, userRole, teamId, companyId);
       res.json(conversations);
     } catch (error) {
       console.error("WhatsApp inbox error:", error);
@@ -2856,10 +3088,10 @@ export async function registerRoutes(
   }
 
   // Helper: build report data from DB for a given period
-  async function buildReportDataFromDb(since?: Date) {
-    const allLeads = await storage.getAllLeads();
-    const allStates = await storage.getAllStates();
-    const allUsers = await storage.getAllUsers();
+  async function buildReportDataFromDb(since?: Date, companyId?: string | null) {
+    const allLeads = await storage.getAllLeads(companyId);
+    const allStates = await storage.getAllStates(companyId);
+    const allUsers = await storage.getAllUsers(companyId);
 
     const periodLeads = since
       ? allLeads.filter((l) => l.createdAt && new Date(l.createdAt) >= since)
@@ -3056,7 +3288,7 @@ export async function registerRoutes(
           }
 
           const { totalLeads, closedDeals, conversionRate, sources, agents } =
-            await buildReportDataFromDb(periodStart);
+            await buildReportDataFromDb(periodStart, setting.companyId || null);
           const isArabic = setting.language !== "en";
           const reportTitle = isArabic ? "تقرير الأداء" : "Performance Report";
           const periodLabel = isArabic
@@ -3110,7 +3342,8 @@ export async function registerRoutes(
     try {
       const { month } = req.query;
       const targetMonth = (month as string) || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
-      const targets = await storage.getMonthlyTargetsByMonth(targetMonth);
+      const companyId = getCompanyId(req);
+      const targets = await storage.getMonthlyTargetsByMonth(targetMonth, companyId);
       res.json(targets);
     } catch (error) {
       console.error("Error fetching monthly targets:", error);
@@ -3181,7 +3414,8 @@ export async function registerRoutes(
         scopedTeamId = requestingUser.teamId;
       }
 
-      const data = await storage.getLeaderboard(resolvedPeriod, scopedTeamId);
+      const companyId = getCompanyId(req);
+      const data = await storage.getLeaderboard(resolvedPeriod, scopedTeamId, companyId);
 
       // Remove commissionTotal from leaderboard — it's sensitive compensation data
       // Only deals/leads ranking metrics are returned
@@ -3212,9 +3446,10 @@ export async function registerRoutes(
       // For team leaders, scope to their team only
       const teamIdFilter = isTeamLeader ? requestingUser.teamId : undefined;
 
+      const companyId = getCompanyId(req);
       const [targets, leaderboard] = await Promise.all([
-        storage.getMonthlyTargetsByMonth(targetMonth),
-        storage.getLeaderboard(targetMonth, teamIdFilter),
+        storage.getMonthlyTargetsByMonth(targetMonth, companyId),
+        storage.getLeaderboard(targetMonth, teamIdFilter, companyId),
       ]);
       const combined = leaderboard.map(entry => {
         const target = targets.find(t => t.userId === entry.userId);
@@ -3294,7 +3529,8 @@ export async function registerRoutes(
 
   app.get("/api/knowledge-base", isAuthenticated, async (req, res) => {
     try {
-      const items = await storage.getAllKnowledgeBaseItems();
+      const companyId = getCompanyId(req);
+      const items = await storage.getAllKnowledgeBaseItems(companyId);
       res.json(items);
     } catch (error) {
       console.error("Error fetching knowledge base:", error);
@@ -3304,8 +3540,9 @@ export async function registerRoutes(
 
   app.post("/api/knowledge-base", isAuthenticated, requireRole("super_admin", "admin", "sales_admin", "company_owner"), async (req, res) => {
     try {
+      const companyId = getCompanyId(req);
       const data = insertKnowledgeBaseSchema.parse(req.body);
-      const item = await storage.createKnowledgeBaseItem(data);
+      const item = await storage.createKnowledgeBaseItem(data, companyId);
       res.status(201).json(item);
     } catch (error) {
       console.error("Error creating knowledge base item:", error);
@@ -3316,8 +3553,9 @@ export async function registerRoutes(
   app.patch("/api/knowledge-base/:id", isAuthenticated, requireRole("super_admin", "admin", "sales_admin", "company_owner"), async (req, res) => {
     try {
       const id = req.params.id as string;
+      const companyId = getCompanyId(req);
       const data = updateKnowledgeBaseSchema.parse(req.body);
-      const item = await storage.updateKnowledgeBaseItem(id, data);
+      const item = await storage.updateKnowledgeBaseItem(id, data, companyId);
       if (!item) return res.status(404).json({ error: "Item not found" });
       res.json(item);
     } catch (error) {
@@ -3329,7 +3567,8 @@ export async function registerRoutes(
   app.delete("/api/knowledge-base/:id", isAuthenticated, requireRole("super_admin", "admin", "sales_admin", "company_owner"), async (req, res) => {
     try {
       const id = req.params.id as string;
-      const deleted = await storage.deleteKnowledgeBaseItem(id);
+      const companyId = getCompanyId(req);
+      const deleted = await storage.deleteKnowledgeBaseItem(id, companyId);
       if (!deleted) return res.status(404).json({ error: "Item not found" });
       res.status(204).send();
     } catch (error) {
@@ -3445,6 +3684,10 @@ export async function registerRoutes(
   function registerWAIncomingHandler(userId: string): void {
     setIncomingMessageHandler(userId, async (msg: IncomingWAMessage) => {
       try {
+        // Resolve the handler user's company for all downstream scoping
+        const handlerUser = await storage.getUser(userId);
+        const handlerCompanyId = handlerUser?.companyId ?? null;
+
         // Deduplicate by WhatsApp message ID
         if (msg.messageId) {
           const existing = await storage.findMessageByWhatsAppId(msg.messageId);
@@ -3459,8 +3702,8 @@ export async function registerRoutes(
           phone = "20" + phone;
         }
 
-        // Find or create the lead
-        let lead = await storage.findLeadByPhone(phone);
+        // Find or create the lead (scoped to handler's company)
+        let lead = await storage.findLeadByPhone(phone, handlerCompanyId);
         let isNewLead = false;
 
         // If not found by real phone, check if there's an existing lead stored with the LID number
@@ -3468,7 +3711,7 @@ export async function registerRoutes(
         if (!lead && msg.jid && msg.jid.endsWith("@lid")) {
           const lidPhone = msg.jid.split("@")[0];
           if (lidPhone && lidPhone !== phone) {
-            const lidLead = await storage.findLeadByPhone(lidPhone);
+            const lidLead = await storage.findLeadByPhone(lidPhone, handlerCompanyId);
             if (lidLead) {
               // Migrate: update the lead's phone from LID to real phone number
               await storage.updateLead(lidLead.id, { phone });
@@ -3480,8 +3723,8 @@ export async function registerRoutes(
 
         if (!lead) {
           isNewLead = true;
-          // Resolve the "ليد جديد" state id
-          const allStates = await storage.getAllStates();
+          // Resolve the "ليد جديد" state id (scoped to handler's company)
+          const allStates = await storage.getAllStates(handlerCompanyId);
           const newLeadState = allStates.find(s => s.name === "ليد جديد" || s.order === 0);
           const leadName = msg.senderName || `واتساب - ${phone}`;
           const newLeadData: InsertLead = {
@@ -3492,6 +3735,7 @@ export async function registerRoutes(
             stateId: newLeadState?.id ?? null,
             botActive: true,
             botStage: "greeting",
+            companyId: handlerCompanyId,
           };
           lead = await storage.createLead(newLeadData);
           console.log(`[WhatsApp] Auto-created lead ${lead.id} for phone ${phone} (name: ${leadName})`);
@@ -3567,10 +3811,10 @@ export async function registerRoutes(
               const rawStage = lead.botStage ?? "greeting";
               const currentStage: BotStage = (stageMap[rawStage] ?? rawStage) as BotStage;
 
-              const allProjects = await storage.getAllProjects();
+              const allProjects = await storage.getAllProjects(handlerCompanyId);
               const activeProjects = allProjects.filter(p => p.isActive !== false);
-              const allUnits = await storage.getAllUnits();
-              const kbItems = await storage.getAllKnowledgeBaseItems();
+              const allUnits = await storage.getAllUnits(handlerCompanyId);
+              const kbItems = await storage.getAllKnowledgeBaseItems(handlerCompanyId);
 
               const botResult = await generateBotReply(
                 msg.messageText,
@@ -3640,7 +3884,7 @@ export async function registerRoutes(
                 // ── Execute Bot Actions (CRM automation) ──────────────────────
                 const botActionsSummaryParts: string[] = [];
                 if (botResult.botActions && botResult.botActions.length > 0) {
-                  const allStates = await storage.getAllStates();
+                  const allStates = await storage.getAllStates(handlerCompanyId);
                   const notifTargetForActions = lead.assignedTo || userId;
                   const leadDisplayNameForActions = leadUpdates.name || lead.name || phone;
 
@@ -3862,9 +4106,10 @@ export async function registerRoutes(
 
   // ── WhatsApp Campaigns ────────────────────────────────────────────────────
   // GET /api/campaigns — list all campaigns
-  app.get("/api/campaigns", isAuthenticated, requireRole(["super_admin", "admin", "sales_admin", "sales_manager", "company_owner"]), async (_req, res) => {
+  app.get("/api/campaigns", isAuthenticated, requireRole(["super_admin", "admin", "sales_admin", "sales_manager", "company_owner"]), async (req, res) => {
     try {
-      const campaigns = await storage.getAllCampaigns();
+      const companyId = getCompanyId(req);
+      const campaigns = await storage.getAllCampaigns(companyId);
       res.json(campaigns);
     } catch (err) {
       console.error("Get campaigns error:", err);
@@ -3876,7 +4121,8 @@ export async function registerRoutes(
   app.post("/api/campaigns/preview", isAuthenticated, requireRole(["super_admin", "admin", "sales_admin", "sales_manager", "company_owner"]), async (req, res) => {
     try {
       const { filterStateId, filterChannel, filterDaysNoReply } = req.body as { filterStateId?: string; filterChannel?: string; filterDaysNoReply?: number };
-      const matchedLeads = await storage.getLeadsForCampaignFilter(filterStateId, filterChannel, filterDaysNoReply);
+      const companyId = getCompanyId(req);
+      const matchedLeads = await storage.getLeadsForCampaignFilter(filterStateId, filterChannel, filterDaysNoReply, companyId);
       res.json({ count: matchedLeads.length, leads: matchedLeads.slice(0, 5).map(l => ({ id: l.id, name: l.name, phone: l.phone })) });
     } catch (err) {
       console.error("Preview campaign error:", err);
@@ -3890,12 +4136,14 @@ export async function registerRoutes(
       const parsed = insertWhatsappCampaignSchema.safeParse({ ...req.body, createdBy: req.user!.id });
       if (!parsed.success) return res.status(400).json({ error: "بيانات غير صحيحة", details: parsed.error.flatten() });
 
-      const campaign = await storage.createCampaign(parsed.data);
+      const companyId = getCompanyId(req);
+      const campaign = await storage.createCampaign(parsed.data, companyId);
 
       const matchedLeads = await storage.getLeadsForCampaignFilter(
         parsed.data.filterStateId ?? null,
         parsed.data.filterChannel ?? null,
-        parsed.data.filterDaysNoReply ?? null
+        parsed.data.filterDaysNoReply ?? null,
+        companyId
       );
 
       const recipients = matchedLeads
@@ -4085,11 +4333,14 @@ export async function registerRoutes(
     }
   }, 60_000);
 
-  // When a WhatsApp LID is resolved to a real phone, update any existing lead in DB
+  // When a WhatsApp LID is resolved to a real phone, update any existing lead in DB.
+  // LID identifiers are globally unique per WhatsApp account so a cross-tenant match
+  // is practically impossible. We search globally (companyId=null) intentionally so
+  // no LID-based lead is missed; the phone update is harmless regardless of company.
   onLidResolved(async (lidJid: string, realPhone: string) => {
     try {
       const lidPhone = lidJid.split("@")[0]; // e.g. "143013904912429"
-      const existingLead = await storage.findLeadByPhone(lidPhone);
+      const existingLead = await storage.findLeadByPhone(lidPhone, null); // global — LIDs are unique per WA account
       if (existingLead) {
         await storage.updateLead(existingLead.id, { phone: realPhone });
         console.log(`[WhatsApp] Updated lead ${existingLead.id} phone: ${lidPhone} → ${realPhone}`);
@@ -4167,6 +4418,10 @@ export async function registerRoutes(
       const pageConn = await storage.getMetaPageConnection();
       if (!pageConn) return;
 
+      // Resolve the company from the page connection owner for tenant scoping
+      const pageConnUser = pageConn.connectedBy ? await storage.getUser(pageConn.connectedBy) : null;
+      const metaCompanyId = pageConnUser?.companyId ?? null;
+
       for (const msg of messages) {
         try {
           // Skip if it's the page itself messaging (echo)
@@ -4182,13 +4437,13 @@ export async function registerRoutes(
           const platform = msg.platform;
           const channelLabel = platform === "instagram" ? "إنستجرام" : "ماسنجر";
 
-          // Find or create lead by sender ID
-          let lead = await storage.findLeadBySenderId(msg.senderId, platform);
+          // Find or create lead by sender ID (scoped to page connection's company)
+          let lead = await storage.findLeadBySenderId(msg.senderId, platform, metaCompanyId);
           let isNewLead = false;
 
           if (!lead) {
             isNewLead = true;
-            const allStates = await storage.getAllStates();
+            const allStates = await storage.getAllStates(metaCompanyId);
             const newLeadState = allStates.find((s) => s.name === "ليد جديد" || s.order === 0);
             const senderName = msg.senderName || `${channelLabel} - ${msg.senderId}`;
             lead = await storage.createLead({
@@ -4196,6 +4451,7 @@ export async function registerRoutes(
               phone: msg.senderId,
               channel: channelLabel,
               stateId: newLeadState?.id ?? null,
+              companyId: metaCompanyId,
             });
             console.log(`[Meta] Auto-created lead ${lead.id} for ${platform} sender ${msg.senderId}`);
           }
@@ -4263,9 +4519,9 @@ export async function registerRoutes(
                 const rawStage = lead.botStage ?? "greeting";
                 const currentStage: BotStage = (stageMap[rawStage] ?? rawStage) as BotStage;
 
-                const allProjects = await storage.getAllProjects();
+                const allProjects = await storage.getAllProjects(metaCompanyId);
                 const activeProjects = allProjects.filter((p) => p.isActive !== false);
-                const allUnits = await storage.getAllUnits();
+                const allUnits = await storage.getAllUnits(metaCompanyId);
 
                 // Map social messages to WhatsappMessagesLog shape for AI
                 const priorForBot = priorMessages.map((m) => ({
@@ -4278,7 +4534,7 @@ export async function registerRoutes(
                   botActionsSummary: m.botActionsSummary,
                 })) as unknown as import("@shared/schema").WhatsappMessagesLog[];
 
-                const integSettings = await storage.getIntegrationSettings().catch(() => null);
+                const integSettings = await storage.getIntegrationSettings(metaCompanyId).catch(() => null);
                 const botResult = await generateBotReply(
                   msg.messageText,
                   currentStage,
@@ -4319,7 +4575,7 @@ export async function registerRoutes(
                 // Bot CRM actions
                 const botActionsSummaryParts: string[] = [];
                 if (botResult.botActions && botResult.botActions.length > 0) {
-                  const allStates = await storage.getAllStates();
+                  const allStates = await storage.getAllStates(metaCompanyId);
                   const notifTarget = lead.assignedTo || assignedUserId;
                   const leadDisplayName = leadUpdates.name || lead.name || msg.senderId;
                   for (const action of botResult.botActions) {
@@ -4643,7 +4899,8 @@ export async function registerRoutes(
       const userId = req.user!.id;
       const userRole = (req.user as any)?.role ?? "sales_agent";
       const teamId = (req.user as any)?.teamId ?? null;
-      const conversations = await storage.getSocialInbox(userId, userRole, teamId);
+      const companyId = getCompanyId(req);
+      const conversations = await storage.getSocialInbox(userId, userRole, teamId, companyId);
       res.json(conversations);
     } catch (error) {
       console.error("Social inbox error:", error);
@@ -4664,9 +4921,9 @@ export async function registerRoutes(
 
   // ==================== FUNNEL HEALTH ANALYTICS ====================
 
-  app.get("/api/analytics/funnel-overview", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (_req, res) => {
+  app.get("/api/analytics/funnel-overview", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (req, res) => {
     try {
-      const data = await storage.getFunnelOverview();
+      const data = await storage.getFunnelOverview(getCompanyId(req));
       res.json(data);
     } catch (error) {
       console.error("Error fetching funnel overview:", error);
@@ -4674,9 +4931,9 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/analytics/time-in-stage", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (_req, res) => {
+  app.get("/api/analytics/time-in-stage", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (req, res) => {
     try {
-      const data = await storage.getTimeInStage();
+      const data = await storage.getTimeInStage(getCompanyId(req));
       res.json(data);
     } catch (error) {
       console.error("Error fetching time-in-stage:", error);
@@ -4684,12 +4941,13 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/analytics/stale-leads", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (_req, res) => {
+  app.get("/api/analytics/stale-leads", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (req, res) => {
     try {
-      const settings = await storage.getAllStaleLeadSettings();
+      const companyId = getCompanyId(req);
+      const settings = await storage.getAllStaleLeadSettings(companyId);
       const thresholds: Record<string, number> = {};
       for (const s of settings) thresholds[s.stateId] = s.staleDays;
-      const data = await storage.getStaleLeads(thresholds);
+      const data = await storage.getStaleLeads(thresholds, companyId);
       res.json(data);
     } catch (error) {
       console.error("Error fetching stale leads:", error);
@@ -4697,9 +4955,9 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/analytics/agent-funnel", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (_req, res) => {
+  app.get("/api/analytics/agent-funnel", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (req, res) => {
     try {
-      const data = await storage.getAgentFunnelPerformance();
+      const data = await storage.getAgentFunnelPerformance(getCompanyId(req));
       res.json(data);
     } catch (error) {
       console.error("Error fetching agent funnel performance:", error);
@@ -4707,9 +4965,9 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/analytics/lead-flow", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (_req, res) => {
+  app.get("/api/analytics/lead-flow", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (req, res) => {
     try {
-      const data = await storage.getLeadFlow();
+      const data = await storage.getLeadFlow(getCompanyId(req));
       res.json(data);
     } catch (error) {
       console.error("Error fetching lead flow:", error);
@@ -4718,9 +4976,9 @@ export async function registerRoutes(
   });
 
   // Stale Lead Settings
-  app.get("/api/analytics/stale-settings", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (_req, res) => {
+  app.get("/api/analytics/stale-settings", isAuthenticated, requireRole("super_admin", "company_owner", "admin", "sales_manager"), async (req, res) => {
     try {
-      const data = await storage.getAllStaleLeadSettings();
+      const data = await storage.getAllStaleLeadSettings(getCompanyId(req));
       res.json(data);
     } catch (error) {
       console.error("Error fetching stale lead settings:", error);
@@ -4735,7 +4993,7 @@ export async function registerRoutes(
       if (typeof staleDays !== "number" || staleDays < 1) {
         return res.status(400).json({ error: "staleDays must be a positive number" });
       }
-      await storage.upsertStaleLeadSetting(stateId, staleDays);
+      await storage.upsertStaleLeadSetting(stateId, staleDays, getCompanyId(req));
       res.json({ success: true });
     } catch (error) {
       console.error("Error updating stale lead setting:", error);
@@ -4745,9 +5003,10 @@ export async function registerRoutes(
 
   // ==================== INTEGRATION SETTINGS ====================
 
-  app.get("/api/integration-settings", isAuthenticated, requireRole("super_admin", "admin", "company_owner"), async (_req, res) => {
+  app.get("/api/integration-settings", isAuthenticated, requireRole("super_admin", "admin", "company_owner"), async (req, res) => {
     try {
-      const settings = await storage.getIntegrationSettings();
+      const companyId = getCompanyId(req);
+      const settings = await storage.getIntegrationSettings(companyId);
       if (!settings) return res.json({});
       const masked = {
         ...settings,
@@ -4764,6 +5023,7 @@ export async function registerRoutes(
 
   app.put("/api/integration-settings", isAuthenticated, requireRole("super_admin", "admin", "company_owner"), async (req, res) => {
     try {
+      const companyId = getCompanyId(req);
       const body = req.body as {
         whatsappCloudToken?: string;
         whatsappPhoneNumberId?: string;
@@ -4775,7 +5035,7 @@ export async function registerRoutes(
         openAiModel?: string;
       };
 
-      const existing = await storage.getIntegrationSettings();
+      const existing = await storage.getIntegrationSettings(companyId);
       const update: Record<string, unknown> = {};
 
       if (body.whatsappPhoneNumberId !== undefined) update.whatsappPhoneNumberId = body.whatsappPhoneNumberId || null;
@@ -4803,7 +5063,7 @@ export async function registerRoutes(
         update.openAiApiKey = existing.openAiApiKey;
       }
 
-      const saved = await storage.upsertIntegrationSettings(update);
+      const saved = await storage.upsertIntegrationSettings(update, companyId);
       const { invalidateAISettingsCache } = await import("./ai");
       invalidateAISettingsCache();
       const masked = {
@@ -4914,15 +5174,24 @@ export async function registerRoutes(
     res.status(200).send("EVENT_RECEIVED");
 
     try {
-      const settings = await storage.getIntegrationSettings();
+      const { parseWhatsAppCloudPayload, sendWhatsAppCloudMessage, markWhatsAppCloudMessageRead } = await import("./whatsapp-cloud");
+      const messages = parseWhatsAppCloudPayload(req.body as Record<string, unknown>);
+      if (messages.length === 0) return;
+
+      // Resolve settings deterministically by the phone_number_id in the payload
+      // so multi-tenant setups route each message to the correct company's config.
+      const incomingPhoneNumberId = messages[0]?.phoneNumberId;
+      const settings = incomingPhoneNumberId
+        ? await storage.getIntegrationSettingsByPhoneNumberId(incomingPhoneNumberId).catch(() => null)
+        : await storage.getIntegrationSettings().catch(() => null);
+
       if (!settings?.whatsappCloudToken || !settings?.whatsappPhoneNumberId) {
         console.warn("[WhatsAppCloud] Webhook received but WhatsApp Cloud API not configured");
         return;
       }
 
-      const { parseWhatsAppCloudPayload, sendWhatsAppCloudMessage, markWhatsAppCloudMessageRead } = await import("./whatsapp-cloud");
-      const messages = parseWhatsAppCloudPayload(req.body as Record<string, unknown>);
-      if (messages.length === 0) return;
+      // Scope to the company that owns these integration settings
+      const cloudCompanyId = settings.companyId ?? null;
 
       for (const msg of messages) {
         try {
@@ -4930,19 +5199,20 @@ export async function registerRoutes(
           const existing = await storage.findMessageByWhatsAppId(msg.messageId);
           if (existing) continue;
 
-          // Find or create lead by phone
-          let lead = await storage.findLeadByPhone(msg.phone);
+          // Find or create lead by phone (scoped to the settings company)
+          let lead = await storage.findLeadByPhone(msg.phone, cloudCompanyId);
           let isNewLead = false;
 
           if (!lead) {
             isNewLead = true;
-            const allStates = await storage.getAllStates();
+            const allStates = await storage.getAllStates(cloudCompanyId);
             const newLeadState = allStates.find((s) => s.name === "ليد جديد" || s.order === 0);
             lead = await storage.createLead({
               name: msg.senderName || msg.phone,
               phone: msg.phone,
               channel: "واتساب",
               stateId: newLeadState?.id ?? null,
+              companyId: cloudCompanyId,
             });
             console.log(`[WhatsAppCloud] Auto-created lead ${lead.id} for phone ${msg.phone}`);
           }
@@ -4970,7 +5240,7 @@ export async function registerRoutes(
 
           // Notification for admins
           try {
-            const allUsers = await storage.getAllUsers();
+            const allUsers = await storage.getAllUsers(cloudCompanyId);
             const adminRoles = ["super_admin", "company_owner", "admin"];
             const notifMsg = isNewLead
               ? `رسالة واتساب جديدة — عميل جديد: ${msg.messageText.substring(0, 80)}`
@@ -4995,7 +5265,7 @@ export async function registerRoutes(
           if (!botActive || lead.botStage === "handed_off") continue;
 
           // Find an admin/owner to look up chatbot settings
-          const allUsers = await storage.getAllUsers();
+          const allUsers = await storage.getAllUsers(cloudCompanyId);
           const adminUser = allUsers.find(u => ["super_admin", "company_owner", "admin"].includes(u.role ?? ""));
           const settingsUserId = lead.assignedTo
             ? (allUsers.find(u => u.username === lead.assignedTo || u.id === lead.assignedTo)?.id ?? adminUser?.id)
@@ -5024,9 +5294,9 @@ export async function registerRoutes(
           const rawStage = lead.botStage ?? "greeting";
           const currentStage: BotStage = (stageMap[rawStage] ?? rawStage) as BotStage;
 
-          const allProjects = await storage.getAllProjects();
+          const allProjects = await storage.getAllProjects(cloudCompanyId);
           const activeProjects = allProjects.filter((p) => p.isActive !== false);
-          const allUnits = await storage.getAllUnits();
+          const allUnits = await storage.getAllUnits(cloudCompanyId);
           const priorMessages = await storage.getWhatsappConversation(lead.id);
           const isFirstBotInteraction = priorMessages.filter(m => m.direction === "outbound" && m.agentName === "البوت").length === 0;
 
@@ -5068,7 +5338,7 @@ export async function registerRoutes(
           // Bot CRM actions
           const botActionsSummaryParts: string[] = [];
           if (botResult.botActions && botResult.botActions.length > 0) {
-            const allStatesList = await storage.getAllStates();
+            const allStatesList = await storage.getAllStates(cloudCompanyId);
             const notifTarget = lead.assignedTo || settingsUserId;
             const leadDisplayName = leadUpdates.name || lead.name || msg.phone;
             for (const action of botResult.botActions) {

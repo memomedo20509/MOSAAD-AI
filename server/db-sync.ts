@@ -5,6 +5,33 @@ export async function syncDatabaseSchema(): Promise<void> {
   try {
     await client.query("BEGIN");
 
+    // Companies table (multi-tenant)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS companies (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        name TEXT NOT NULL,
+        slug TEXT NOT NULL UNIQUE,
+        industry TEXT,
+        plan_id TEXT,
+        status TEXT NOT NULL DEFAULT 'active',
+        onboarding_step INTEGER DEFAULT 0,
+        logo_url TEXT,
+        primary_color TEXT DEFAULT '#6366f1',
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    // Backfill companies table with columns that may have been added after initial creation
+    await client.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'`);
+    await client.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS plan_id TEXT`);
+    await client.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS industry TEXT`);
+    await client.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS onboarding_step INTEGER DEFAULT 0`);
+    await client.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS logo_url TEXT`);
+    await client.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS primary_color TEXT DEFAULT '#6366f1'`);
+
+    // Add company_id to users table (users table exists before db-sync runs)
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+
     await client.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone2 TEXT`);
     await client.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS state_id VARCHAR`);
     await client.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS channel TEXT`);
@@ -380,6 +407,44 @@ export async function syncDatabaseSchema(): Promise<void> {
         permissions JSONB NOT NULL,
         created_at TIMESTAMP DEFAULT NOW()
       )
+    `);
+
+    // Add company_id to all tenant-scoped tables (after all CREATE TABLE statements to avoid ordering issues on fresh DB)
+    await client.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE lead_states ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE lead_history ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE developers ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE units ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE communications ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE reminders ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE documents ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE commissions ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE whatsapp_templates ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE whatsapp_messages_log ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE whatsapp_campaigns ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE whatsapp_followup_rules ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE chatbot_settings ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE monthly_targets ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE email_report_settings ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE social_messages_log ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE knowledge_base_items ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE teams ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE stale_lead_settings ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE integration_settings ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE scoring_config ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+
+    // Replace the old global unique(state_id) constraint on stale_lead_settings with a
+    // per-company composite unique index so different companies can have their own
+    // stale thresholds per state.
+    await client.query(`ALTER TABLE stale_lead_settings DROP CONSTRAINT IF EXISTS stale_lead_settings_state_id_key`);
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS sls_company_state_unique
+      ON stale_lead_settings (COALESCE(company_id, ''), state_id)
     `);
 
     await client.query("COMMIT");

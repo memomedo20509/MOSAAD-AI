@@ -4,6 +4,26 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { users } from "./models/auth";
 
+// Companies (multi-tenant support)
+export const companies = pgTable("companies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  industry: text("industry"),
+  planId: text("plan_id"),
+  status: text("status").notNull().default("active"), // active | trial | suspended | cancelled
+  onboardingStep: integer("onboarding_step").default(0),
+  logoUrl: text("logo_url"),
+  primaryColor: text("primary_color").default("#6366f1"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertCompanySchema = createInsertSchema(companies).omit({ id: true, createdAt: true });
+export const updateCompanySchema = insertCompanySchema.partial();
+export type InsertCompany = z.infer<typeof insertCompanySchema>;
+export type UpdateCompany = z.infer<typeof updateCompanySchema>;
+export type Company = typeof companies.$inferSelect;
+
 // Lead State Categories
 export const LEAD_STATE_CATEGORIES = ["untouched", "active", "won", "lost"] as const;
 export type LeadStateCategory = typeof LEAD_STATE_CATEGORIES[number];
@@ -18,6 +38,7 @@ export const leadStates = pgTable("lead_states", {
   canGoBack: boolean("can_go_back").notNull().default(true),
   isSystemState: boolean("is_system_state").notNull().default(false),
   zone: integer("zone").notNull().default(0),
+  companyId: varchar("company_id"),
 });
 
 export const insertLeadStateSchema = createInsertSchema(leadStates).omit({ id: true }).extend({
@@ -31,6 +52,7 @@ export type LeadState = typeof leadStates.$inferSelect;
 // Leads
 export const leads = pgTable("leads", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   name: text("name"),
   phone: text("phone"),
   phone2: text("phone2"),
@@ -82,6 +104,7 @@ export type Lead = typeof leads.$inferSelect;
 // Clients (converted leads)
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   name: text("name"),
   phone: text("phone"),
   email: text("email"),
@@ -99,6 +122,7 @@ export type Client = typeof clients.$inferSelect;
 // Tasks
 export const tasks = pgTable("tasks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   leadId: varchar("lead_id").references(() => leads.id),
   title: text("title").notNull(),
   type: text("type"),
@@ -122,6 +146,7 @@ export type LeadHistoryType = typeof LEAD_HISTORY_TYPES[number];
 
 export const leadHistory = pgTable("lead_history", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   leadId: varchar("lead_id").references(() => leads.id),
   action: text("action").notNull(),
   description: text("description"),
@@ -139,6 +164,7 @@ export type LeadHistory = typeof leadHistory.$inferSelect;
 // Developers (Real estate development companies)
 export const developers = pgTable("developers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   name: text("name").notNull(),
   nameEn: text("name_en"),
   logo: text("logo"),
@@ -162,6 +188,7 @@ export type Developer = typeof developers.$inferSelect;
 // Projects (Real estate projects/compounds)
 export const projects = pgTable("projects", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   developerId: varchar("developer_id").references(() => developers.id),
   name: text("name").notNull(),
   nameEn: text("name_en"),
@@ -193,6 +220,7 @@ export type Project = typeof projects.$inferSelect;
 // Units (Individual units within projects)
 export const units = pgTable("units", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   projectId: varchar("project_id").references(() => projects.id).notNull(),
   unitNumber: text("unit_number").notNull(),
   floor: integer("floor"),
@@ -235,6 +263,7 @@ export type LeadUnitInterest = typeof leadUnitInterests.$inferSelect;
 // Communications log (calls, WhatsApp, meetings, notes)
 export const communications = pgTable("communications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   leadId: varchar("lead_id").references(() => leads.id).notNull(),
   userId: varchar("user_id"),
   userName: text("user_name"),
@@ -255,6 +284,7 @@ export type Communication = typeof communications.$inferSelect;
 // Reminders
 export const reminders = pgTable("reminders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   leadId: varchar("lead_id").references(() => leads.id),
   userId: varchar("user_id"),
   title: text("title").notNull(),
@@ -275,6 +305,7 @@ export type Reminder = typeof reminders.$inferSelect;
 // Scoring Configuration (single-row settings table)
 export const scoringConfig = pgTable("scoring_config", {
   id: integer("id").primaryKey().default(1),
+  companyId: varchar("company_id"),
   hotMaxDays: integer("hot_max_days").notNull().default(3),
   coldMinDays: integer("cold_min_days").notNull().default(14),
   weightRecency: integer("weight_recency").notNull().default(40),
@@ -289,6 +320,7 @@ export type ScoringConfigRecord = typeof scoringConfig.$inferSelect;
 // Documents
 export const documents = pgTable("documents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   leadId: varchar("lead_id").references(() => leads.id),
   clientId: varchar("client_id").references(() => clients.id),
   uploadedBy: varchar("uploaded_by").references(() => users.id),
@@ -308,6 +340,7 @@ export type Document = typeof documents.$inferSelect;
 // Commissions (linked to clients/deals)
 export const commissions = pgTable("commissions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   clientId: varchar("client_id").references(() => clients.id),
   leadId: varchar("lead_id").references(() => leads.id),
   agentId: varchar("agent_id"),
@@ -330,6 +363,7 @@ export type Commission = typeof commissions.$inferSelect;
 // Notifications (in-app, for reminders and alerts)
 export const notifications = pgTable("notifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   userId: varchar("user_id").notNull(),
   type: text("type").notNull().default("reminder"),
   message: text("message").notNull(),
@@ -348,6 +382,7 @@ export type Notification = typeof notifications.$inferSelect;
 // Call Logs (outcome of calls logged from My Day)
 export const callLogs = pgTable("call_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   leadId: varchar("lead_id").references(() => leads.id).notNull(),
   userId: varchar("user_id").notNull(),
   reminderId: varchar("reminder_id"),
@@ -370,6 +405,7 @@ export type CallLog = typeof callLogs.$inferSelect;
 // WhatsApp Templates
 export const whatsappTemplates = pgTable("whatsapp_templates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   name: text("name").notNull(),
   body: text("body").notNull(),
   isActive: boolean("is_active").default(true),
@@ -387,6 +423,7 @@ export type WhatsappTemplate = typeof whatsappTemplates.$inferSelect;
 // WhatsApp Messages Log
 export const whatsappMessagesLog = pgTable("whatsapp_messages_log", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   leadId: varchar("lead_id").references(() => leads.id),
   agentId: varchar("agent_id"),
   agentName: text("agent_name"),
@@ -428,6 +465,7 @@ export type LeadManagerComment = typeof leadManagerComments.$inferSelect;
 // Email Report Settings
 export const emailReportSettings = pgTable("email_report_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   userId: varchar("user_id").references(() => users.id).notNull().unique(),
   toEmail: text("to_email").notNull(),
   frequency: text("frequency").notNull().default("monthly"),
@@ -447,6 +485,7 @@ export type EmailReportSettings = typeof emailReportSettings.$inferSelect;
 // Monthly Targets
 export const monthlyTargets = pgTable("monthly_targets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   userId: varchar("user_id").references(() => users.id).notNull(),
   targetMonth: text("target_month").notNull(), // YYYY-MM
   dealsTarget: integer("deals_target").notNull().default(0),
@@ -467,6 +506,7 @@ export type MonthlyTarget = typeof monthlyTargets.$inferSelect;
 // Chatbot Settings (per user/manager)
 export const chatbotSettings = pgTable("chatbot_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   userId: varchar("user_id").notNull().unique(),
   isActive: boolean("is_active").default(false),
   workingHoursStart: integer("working_hours_start").default(9),
@@ -492,6 +532,7 @@ export type ChatbotSettings = typeof chatbotSettings.$inferSelect;
 // WhatsApp Campaigns
 export const whatsappCampaigns = pgTable("whatsapp_campaigns", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   name: text("name").notNull(),
   templateId: varchar("template_id"), // optional: use saved template
   message: text("message").notNull(),
@@ -528,6 +569,7 @@ export type WhatsappCampaignRecipient = typeof whatsappCampaignRecipients.$infer
 // WhatsApp Follow-up Rules (per-lead when leadId is set, global template otherwise)
 export const whatsappFollowupRules = pgTable("whatsapp_followup_rules", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   leadId: varchar("lead_id").references(() => leads.id), // null = global template; set = per-lead rule
   name: text("name").notNull(),
   message: text("message").notNull(),
@@ -562,6 +604,7 @@ export type MetaPageConnection = typeof metaPageConnections.$inferSelect;
 // Social Messages Log (Messenger / Instagram DM)
 export const socialMessagesLog = pgTable("social_messages_log", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   leadId: varchar("lead_id").references(() => leads.id),
   platform: text("platform").notNull(), // "messenger" | "instagram"
   senderId: text("sender_id").notNull(), // PSID / Instagram-scoped user ID
@@ -583,6 +626,7 @@ export type SocialMessagesLog = typeof socialMessagesLog.$inferSelect;
 // Integration Settings — single-row table for external API credentials
 export const integrationSettings = pgTable("integration_settings", {
   id: integer("id").primaryKey().default(1),
+  companyId: varchar("company_id"),
   // WhatsApp Business Cloud API
   whatsappCloudToken: text("whatsapp_cloud_token"),
   whatsappPhoneNumberId: text("whatsapp_phone_number_id"),
@@ -607,7 +651,8 @@ export type IntegrationSettings = typeof integrationSettings.$inferSelect;
 // Stale Lead Settings — per-state threshold (days before considered stale)
 export const staleLeadSettings = pgTable("stale_lead_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  stateId: varchar("state_id").notNull().unique().references(() => leadStates.id, { onDelete: "cascade" }),
+  companyId: varchar("company_id"),
+  stateId: varchar("state_id").notNull().references(() => leadStates.id, { onDelete: "cascade" }),
   staleDays: integer("stale_days").notNull().default(7),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -619,6 +664,7 @@ export type StaleLeadSettings = typeof staleLeadSettings.$inferSelect;
 // Knowledge Base Items — products, services, FAQs the chatbot can reference
 export const knowledgeBase = pgTable("knowledge_base_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
   name: text("name").notNull(),
   description: text("description"),
   category: text("category"),
