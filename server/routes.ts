@@ -53,7 +53,10 @@ import {
   insertMonthlyTargetSchema,
   insertWhatsappCampaignSchema,
   insertWhatsappFollowupRuleSchema,
+  insertKnowledgeBaseSchema,
+  updateKnowledgeBaseSchema,
   type Lead,
+  type InsertLead,
 } from "@shared/schema";
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
@@ -3272,6 +3275,54 @@ export async function registerRoutes(
     }
   });
 
+  // ── Knowledge Base CRUD ──────────────────────────────────────────────────
+
+  app.get("/api/knowledge-base", isAuthenticated, async (req, res) => {
+    try {
+      const items = await storage.getAllKnowledgeBaseItems();
+      res.json(items);
+    } catch (error) {
+      console.error("Error fetching knowledge base:", error);
+      res.status(500).json({ error: "Failed to fetch knowledge base items" });
+    }
+  });
+
+  app.post("/api/knowledge-base", isAuthenticated, requireRole("super_admin", "admin", "sales_admin", "company_owner"), async (req, res) => {
+    try {
+      const data = insertKnowledgeBaseSchema.parse(req.body);
+      const item = await storage.createKnowledgeBaseItem(data);
+      res.status(201).json(item);
+    } catch (error) {
+      console.error("Error creating knowledge base item:", error);
+      res.status(400).json({ error: "Failed to create knowledge base item" });
+    }
+  });
+
+  app.patch("/api/knowledge-base/:id", isAuthenticated, requireRole("super_admin", "admin", "sales_admin", "company_owner"), async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const data = updateKnowledgeBaseSchema.parse(req.body);
+      const item = await storage.updateKnowledgeBaseItem(id, data);
+      if (!item) return res.status(404).json({ error: "Item not found" });
+      res.json(item);
+    } catch (error) {
+      console.error("Error updating knowledge base item:", error);
+      res.status(400).json({ error: "Failed to update knowledge base item" });
+    }
+  });
+
+  app.delete("/api/knowledge-base/:id", isAuthenticated, requireRole("super_admin", "admin", "sales_admin", "company_owner"), async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const deleted = await storage.deleteKnowledgeBaseItem(id);
+      if (!deleted) return res.status(404).json({ error: "Item not found" });
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting knowledge base item:", error);
+      res.status(500).json({ error: "Failed to delete knowledge base item" });
+    }
+  });
+
   // GET /api/chatbot/settings — get chatbot settings for current user
   app.get("/api/chatbot/settings", isAuthenticated, async (req, res) => {
     try {
@@ -3418,7 +3469,7 @@ export async function registerRoutes(
           const allStates = await storage.getAllStates();
           const newLeadState = allStates.find(s => s.name === "ليد جديد" || s.order === 0);
           const leadName = msg.senderName || `واتساب - ${phone}`;
-          lead = await storage.createLead({
+          const newLeadData: InsertLead = {
             name: leadName,
             phone,
             channel: "واتساب",
@@ -3426,7 +3477,8 @@ export async function registerRoutes(
             stateId: newLeadState?.id ?? null,
             botActive: true,
             botStage: "greeting",
-          } as any);
+          };
+          lead = await storage.createLead(newLeadData);
           console.log(`[WhatsApp] Auto-created lead ${lead.id} for phone ${phone} (name: ${leadName})`);
         } else if (msg.senderName && lead.name && lead.name.startsWith("واتساب -")) {
           await storage.updateLead(lead.id, { name: msg.senderName });
@@ -3503,6 +3555,7 @@ export async function registerRoutes(
               const allProjects = await storage.getAllProjects();
               const activeProjects = allProjects.filter(p => p.isActive !== false);
               const allUnits = await storage.getAllUnits();
+              const kbItems = await storage.getAllKnowledgeBaseItems();
 
               const botResult = await generateBotReply(
                 msg.messageText,
@@ -3522,6 +3575,7 @@ export async function registerRoutes(
                   enabledProjectIds: (botSettings as Record<string, unknown>)?.enabledProjectIds as string[] | null | undefined,
                 },
                 isFirstBotInteraction,
+                kbItems,
               );
 
               const leadUpdates: Partial<Lead> = {
@@ -3662,6 +3716,18 @@ export async function registerRoutes(
                           isRead: false,
                         });
                         console.log(`[BotAction] update_score: ${action.score} for lead ${lead.id}`);
+                      } else if (action.type === "update_lead" && action.field && action.value !== undefined) {
+                        const fieldMap: Record<string, string> = {
+                          name: "name", budget: "budget", unitType: "unitType", bedrooms: "bedrooms",
+                          bathrooms: "bathrooms", location: "location", area: "area",
+                          paymentType: "paymentType", downPayment: "downPayment", email: "email", notes: "notes",
+                        };
+                        const dbField = fieldMap[action.field];
+                        if (dbField) {
+                          (leadUpdates as Record<string, unknown>)[dbField] = action.value;
+                          botActionsSummaryParts.push(`تحديث ${action.field}: ${action.value}`);
+                          console.log(`[BotAction] update_lead: ${action.field}=${action.value} for lead ${lead.id}`);
+                        }
                       }
                     } catch (actionErr) {
                       console.error(`[BotAction] Error executing action ${action.type}:`, actionErr);
@@ -4208,12 +4274,12 @@ export async function registerRoutes(
                   {
                     botName: botSettings?.botName ?? undefined,
                     companyName: botSettings?.companyName ?? undefined,
-                    botRole: (botSettings as Record<string, unknown>)?.botRole as string | undefined,
+                    botRole: botSettings?.botRole ?? undefined,
                     botPersonality: botSettings?.botPersonality ?? undefined,
-                    botMission: (botSettings as Record<string, unknown>)?.botMission as string | undefined,
-                    companyKnowledge: (botSettings as Record<string, unknown>)?.companyKnowledge as string | undefined,
+                    botMission: botSettings?.botMission ?? undefined,
+                    companyKnowledge: botSettings?.companyKnowledge ?? undefined,
                     welcomeMessage: botSettings?.welcomeMessage ?? undefined,
-                    enabledProjectIds: (botSettings as Record<string, unknown>)?.enabledProjectIds as string[] | null | undefined,
+                    enabledProjectIds: botSettings?.enabledProjectIds ?? undefined,
                     openAiApiKey: integSettings?.openAiApiKey ?? undefined,
                     openAiModel: integSettings?.openAiModel ?? undefined,
                   },
@@ -4267,6 +4333,18 @@ export async function registerRoutes(
                       } else if (action.type === "update_score" && action.score) {
                         leadUpdates.score = action.score;
                         botActionsSummaryParts.push(`تقييم: ${action.score}`);
+                      } else if (action.type === "update_lead" && action.field && action.value !== undefined) {
+                        const fieldMap: Record<string, string> = {
+                          name: "name", budget: "budget", unitType: "unitType", bedrooms: "bedrooms",
+                          bathrooms: "bathrooms", location: "location", area: "area",
+                          paymentType: "paymentType", downPayment: "downPayment", email: "email", notes: "notes",
+                        };
+                        const dbField = fieldMap[action.field];
+                        if (dbField) {
+                          (leadUpdates as Record<string, unknown>)[dbField] = action.value;
+                          botActionsSummaryParts.push(`تحديث ${action.field}: ${action.value}`);
+                          console.log(`[MetaBot] update_lead: ${action.field}=${action.value} for lead ${lead.id}`);
+                        }
                       }
                     } catch (actionErr) {
                       console.error(`[MetaBot] Action ${action.type} error:`, actionErr);
@@ -4846,12 +4924,12 @@ export async function registerRoutes(
             {
               botName: botSettings?.botName ?? undefined,
               companyName: botSettings?.companyName ?? undefined,
-              botRole: (botSettings as Record<string, unknown>)?.botRole as string | undefined,
+              botRole: botSettings?.botRole ?? undefined,
               botPersonality: botSettings?.botPersonality ?? undefined,
-              botMission: (botSettings as Record<string, unknown>)?.botMission as string | undefined,
-              companyKnowledge: (botSettings as Record<string, unknown>)?.companyKnowledge as string | undefined,
+              botMission: botSettings?.botMission ?? undefined,
+              companyKnowledge: botSettings?.companyKnowledge ?? undefined,
               welcomeMessage: botSettings?.welcomeMessage ?? undefined,
-              enabledProjectIds: (botSettings as Record<string, unknown>)?.enabledProjectIds as string[] | null | undefined,
+              enabledProjectIds: botSettings?.enabledProjectIds ?? undefined,
               openAiApiKey: settings.openAiApiKey ?? undefined,
               openAiModel: settings.openAiModel ?? undefined,
             },
@@ -4902,6 +4980,18 @@ export async function registerRoutes(
                 } else if (action.type === "update_score" && action.score) {
                   leadUpdates.score = action.score;
                   botActionsSummaryParts.push(`تقييم: ${action.score}`);
+                } else if (action.type === "update_lead" && action.field && action.value !== undefined) {
+                  const fieldMap: Record<string, string> = {
+                    name: "name", budget: "budget", unitType: "unitType", bedrooms: "bedrooms",
+                    bathrooms: "bathrooms", location: "location", area: "area",
+                    paymentType: "paymentType", downPayment: "downPayment", email: "email", notes: "notes",
+                  };
+                  const dbField = fieldMap[action.field];
+                  if (dbField) {
+                    (leadUpdates as Record<string, unknown>)[dbField] = action.value;
+                    botActionsSummaryParts.push(`تحديث ${action.field}: ${action.value}`);
+                    console.log(`[WhatsAppCloudBot] update_lead: ${action.field}=${action.value} for lead ${lead.id}`);
+                  }
                 }
               } catch (actionErr) {
                 console.error(`[WhatsAppCloudBot] Action ${action.type} error:`, actionErr);

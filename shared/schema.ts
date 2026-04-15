@@ -611,5 +611,49 @@ export const insertStaleLeadSettingsSchema = createInsertSchema(staleLeadSetting
 export type InsertStaleLeadSettings = z.infer<typeof insertStaleLeadSettingsSchema>;
 export type StaleLeadSettings = typeof staleLeadSettings.$inferSelect;
 
+// Knowledge Base Items — products, services, FAQs the chatbot can reference
+export const knowledgeBase = pgTable("knowledge_base_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category"),
+  price: numeric("price", { mode: "number" }),
+  status: varchar("status", { length: 20 }).default("active"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertKnowledgeBaseSchema = createInsertSchema(knowledgeBase).omit({ id: true, createdAt: true, updatedAt: true });
+export const updateKnowledgeBaseSchema = insertKnowledgeBaseSchema.partial();
+export type InsertKnowledgeBase = z.infer<typeof insertKnowledgeBaseSchema>;
+export type UpdateKnowledgeBase = z.infer<typeof updateKnowledgeBaseSchema>;
+export type KnowledgeBaseItem = typeof knowledgeBase.$inferSelect;
+
+// TypeScript interfaces for WhatsApp conversation inbox (mapped from whatsapp_messages_log)
+export interface Conversation {
+  leadId: string;
+  leadName: string | null;
+  phone: string;
+  phone2: string | null;
+  lastMessage: string | null;
+  lastMessageAt: Date | null;
+  unreadCount: number;
+  totalCount: number;
+  botActive?: boolean;
+  botStage?: string | null;
+}
+
+export interface Message {
+  id: string;
+  leadId: string | null;
+  direction: string | null;
+  messageText: string | null;
+  agentName: string | null;
+  botActionsSummary: string | null;
+  createdAt: Date | null;
+  isRead: boolean | null;
+}
+
 // Export auth models (users, teams, sessions, role_permissions)
 export * from "./models/auth";

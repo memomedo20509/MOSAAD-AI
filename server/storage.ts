@@ -102,6 +102,10 @@ import {
   type StaleLeadSettings,
   type IntegrationSettings,
   type UpdateIntegrationSettings,
+  knowledgeBase,
+  type KnowledgeBaseItem,
+  type InsertKnowledgeBase,
+  type UpdateKnowledgeBase,
 } from "@shared/schema";
 import {
   customRoles,
@@ -538,6 +542,13 @@ export interface IStorage {
   // Integration Settings (WhatsApp Cloud API, OpenAI, etc.)
   getIntegrationSettings(): Promise<IntegrationSettings | undefined>;
   upsertIntegrationSettings(data: UpdateIntegrationSettings): Promise<IntegrationSettings>;
+
+  // Knowledge Base
+  getAllKnowledgeBaseItems(): Promise<KnowledgeBaseItem[]>;
+  getKnowledgeBaseItem(id: string): Promise<KnowledgeBaseItem | undefined>;
+  createKnowledgeBaseItem(data: InsertKnowledgeBase): Promise<KnowledgeBaseItem>;
+  updateKnowledgeBaseItem(id: string, data: UpdateKnowledgeBase): Promise<KnowledgeBaseItem | undefined>;
+  deleteKnowledgeBaseItem(id: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2908,6 +2919,30 @@ export class DatabaseStorage implements IStorage {
       .onConflictDoUpdate({ target: integrationSettings.id, set: { ...data, updatedAt: new Date() } })
       .returning();
     return row;
+  }
+
+  async getAllKnowledgeBaseItems(): Promise<KnowledgeBaseItem[]> {
+    return db.select().from(knowledgeBase);
+  }
+
+  async getKnowledgeBaseItem(id: string): Promise<KnowledgeBaseItem | undefined> {
+    const [row] = await db.select().from(knowledgeBase).where(eq(knowledgeBase.id, id));
+    return row;
+  }
+
+  async createKnowledgeBaseItem(data: InsertKnowledgeBase): Promise<KnowledgeBaseItem> {
+    const [row] = await db.insert(knowledgeBase).values(data).returning();
+    return row;
+  }
+
+  async updateKnowledgeBaseItem(id: string, data: UpdateKnowledgeBase): Promise<KnowledgeBaseItem | undefined> {
+    const [row] = await db.update(knowledgeBase).set({ ...data, updatedAt: new Date() }).where(eq(knowledgeBase.id, id)).returning();
+    return row;
+  }
+
+  async deleteKnowledgeBaseItem(id: string): Promise<boolean> {
+    const [row] = await db.delete(knowledgeBase).where(eq(knowledgeBase.id, id)).returning();
+    return !!row;
   }
 }
 

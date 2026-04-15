@@ -1,4 +1,4 @@
-import type { Lead, WhatsappMessagesLog, Project, Unit } from "@shared/schema";
+import type { Lead, WhatsappMessagesLog, Project, Unit, KnowledgeBaseItem } from "@shared/schema";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
@@ -261,7 +261,10 @@ export type BotStage =
   | "qualified"
   | "handed_off";
 
-export type BotActionType = "change_state" | "create_reminder" | "update_score";
+export type BotActionType = "change_state" | "create_reminder" | "update_score" | "update_lead";
+
+const ALLOWED_LEAD_FIELDS = ["name", "budget", "unitType", "bedrooms", "bathrooms", "location", "area", "paymentType", "downPayment", "email", "notes"] as const;
+type AllowedLeadField = typeof ALLOWED_LEAD_FIELDS[number];
 
 export interface BotAction {
   type: BotActionType;
@@ -269,6 +272,8 @@ export interface BotAction {
   isoDate?: string;
   note?: string;
   score?: "hot" | "warm" | "cold";
+  field?: AllowedLeadField;
+  value?: string | number | null;
 }
 
 export interface BotReplyResult {
@@ -320,6 +325,20 @@ export interface BotConfig {
   enabledProjectIds?: string[] | null;
   openAiApiKey?: string | null;
   openAiModel?: string | null;
+}
+
+function buildKnowledgeBaseContext(items: KnowledgeBaseItem[]): string {
+  const activeItems = items.filter(i => i.isActive !== false && i.status !== "inactive");
+  if (activeItems.length === 0) return "";
+  const lines: string[] = [];
+  for (const item of activeItems) {
+    let line = `• ${item.name}`;
+    if (item.category) line += ` [${item.category}]`;
+    if (item.description) line += ` — ${item.description}`;
+    if (item.price) line += ` | السعر: ${item.price.toLocaleString()} جنيه`;
+    lines.push(line);
+  }
+  return `📦 منتجات وخدمات الشركة:\n${lines.join("\n")}`;
 }
 
 function buildInventoryContext(projects: Project[], units: Unit[]): string {
@@ -374,6 +393,7 @@ export async function generateBotReply(
   units: Unit[],
   config: BotConfig,
   isFirstInteraction?: boolean,
+  knowledgeBaseItems?: KnowledgeBaseItem[],
 ): Promise<BotReplyResult> {
   // Filter projects by enabledProjectIds if set (non-empty array = whitelist)
   const filteredProjects = (config.enabledProjectIds && config.enabledProjectIds.length > 0)
@@ -381,6 +401,7 @@ export async function generateBotReply(
     : projects;
 
   const inventoryContext = buildInventoryContext(filteredProjects, units);
+  const kbContext = knowledgeBaseItems ? buildKnowledgeBaseContext(knowledgeBaseItems) : "";
 
   const conversationHistory = recentMessages
     .slice(-8)
@@ -408,6 +429,7 @@ ${resolvedPersonality}
 ${resolvedMission}
 
 ${resolvedKnowledge ? `📋 معلومات إضافية عن الشركة:\n${resolvedKnowledge}\n` : ""}
+${kbContext ? `${kbContext}\n` : ""}
 🏗️ المشاريع والوحدات المتاحة:
 ${inventoryContext}
 
@@ -452,6 +474,14 @@ ${leadInfo}
 3. update_score — حدّث تقييم الاهتمام لو:
    - اهتمام عالي: طلب زيارة، سأل عن التعاقد، جاهز للشراء → score: "hot"
    - اهتمام متوسط: استفسار جدي، أسئلة تفصيلية → score: "warm"
+
+4. update_lead — حدّث بيانات الليد مباشرة لو العميل ذكر بيانات واضحة:
+   - الحقول المسموحة: name, budget, unitType, bedrooms, bathrooms, location, area, paymentType, downPayment, email, notes
+   - أمثلة:
+     * العميل قال "أنا أحمد" → { "type": "update_lead", "field": "name", "value": "أحمد" }
+     * العميل قال "ميزانيتي 2 مليون" → { "type": "update_lead", "field": "budget", "value": "2,000,000" }
+     * العميل قال "عايز شقة 3 غرف" → [{ "type": "update_lead", "field": "unitType", "value": "شقة" }, { "type": "update_lead", "field": "bedrooms", "value": 3 }]
+   - ملحوظة: لا تكرر بيانات مستخرجة بالفعل في حقول extracted... — استخدم update_lead فقط لتحديث قاعدة البيانات
 
 لو مافيش إجراءات مطلوبة، ارجع مصفوفة فارغة: "botActions": []
 
@@ -538,6 +568,12 @@ function parseBotActions(raw: unknown): BotAction[] {
       const score = obj["score"];
       if (score === "hot" || score === "warm" || score === "cold") {
         result.push({ type: "update_score", score });
+      }
+    } else if (type === "update_lead") {
+      const field = obj["field"];
+      const value = obj["value"];
+      if (typeof field === "string" && (ALLOWED_LEAD_FIELDS as readonly string[]).includes(field)) {
+        result.push({ type: "update_lead", field: field as AllowedLeadField, value: value as string | number | null });
       }
     }
   }

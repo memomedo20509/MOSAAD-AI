@@ -120,10 +120,15 @@ app.use((req, res, next) => {
       description TEXT,
       category TEXT,
       price NUMERIC,
+      status VARCHAR(20) DEFAULT 'active',
       is_active BOOLEAN DEFAULT true,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )
+  `).catch(() => {});
+
+  await pool.query(`
+    ALTER TABLE knowledge_base_items ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active'
   `).catch(() => {});
 
   await pool.query(`

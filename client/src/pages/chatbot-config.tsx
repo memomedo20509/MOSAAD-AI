@@ -5,97 +5,97 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, GripVertical, Bot, MessageSquare } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Bot, MessageSquare, Save, Clock } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { ChatbotConfig } from "@shared/schema";
+import type { ChatbotSettings, Project } from "@shared/schema";
 import { cn } from "@/lib/utils";
-
-const DEFAULT_QUESTIONS = [
-  "What's your name?",
-  "What's your phone number?",
-  "What are you interested in?",
-];
 
 export default function ChatbotConfigPage() {
   const { toast } = useToast();
-  const { data: config, isLoading } = useQuery<ChatbotConfig>({ queryKey: ["/api/chatbot-config"] });
+  const { data: settings, isLoading } = useQuery<ChatbotSettings>({ queryKey: ["/api/chatbot/settings"] });
+  const { data: projects = [] } = useQuery<Project[]>({ queryKey: ["/api/projects"] });
 
   const [form, setForm] = useState({
-    personaName: "SalesBot",
-    greeting: "Hello! How can I help you today?",
-    language: "en",
-    isActive: true,
-    leadQuestions: DEFAULT_QUESTIONS,
+    isActive: false,
+    botName: "المساعد الذكي",
+    companyName: "شركتنا العقارية",
+    botRole: "مستشار عقاري",
+    botPersonality: "",
+    botMission: "",
+    companyKnowledge: "",
+    welcomeMessage: "",
+    workingHoursStart: 9,
+    workingHoursEnd: 18,
+    respondAlways: false,
+    enabledProjectIds: null as string[] | null,
   });
-  const [newQuestion, setNewQuestion] = useState("");
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
 
   useEffect(() => {
-    if (config) {
+    if (settings) {
       setForm({
-        personaName: config.personaName ?? "SalesBot",
-        greeting: config.greeting ?? "Hello! How can I help you today?",
-        language: config.language ?? "en",
-        isActive: config.isActive ?? true,
-        leadQuestions: (config.leadQuestions as string[] | null) ?? DEFAULT_QUESTIONS,
+        isActive: settings.isActive ?? false,
+        botName: settings.botName ?? "المساعد الذكي",
+        companyName: settings.companyName ?? "شركتنا العقارية",
+        botRole: settings.botRole ?? "مستشار عقاري",
+        botPersonality: settings.botPersonality ?? "",
+        botMission: settings.botMission ?? "",
+        companyKnowledge: settings.companyKnowledge ?? "",
+        welcomeMessage: settings.welcomeMessage ?? "",
+        workingHoursStart: settings.workingHoursStart ?? 9,
+        workingHoursEnd: settings.workingHoursEnd ?? 18,
+        respondAlways: settings.respondAlways ?? false,
+        enabledProjectIds: settings.enabledProjectIds ?? null,
       });
     }
-  }, [config]);
+  }, [settings]);
 
-  const updateMutation = useMutation({
-    mutationFn: (data: typeof form) => apiRequest("PUT", "/api/chatbot-config", data),
+  const saveMutation = useMutation({
+    mutationFn: (data: typeof form) => apiRequest("PUT", "/api/chatbot/settings", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/chatbot-config"] });
-      toast({ title: "Chatbot configuration saved" });
+      queryClient.invalidateQueries({ queryKey: ["/api/chatbot/settings"] });
+      toast({ title: "تم حفظ إعدادات البوت" });
     },
-    onError: () => toast({ title: "Failed to save configuration", variant: "destructive" }),
+    onError: () => toast({ title: "فشل حفظ الإعدادات", variant: "destructive" }),
   });
 
-  const addQuestion = () => {
-    const q = newQuestion.trim();
-    if (!q) return;
-    setForm(f => ({ ...f, leadQuestions: [...f.leadQuestions, q] }));
-    setNewQuestion("");
-  };
-
-  const removeQuestion = (idx: number) => {
-    setForm(f => ({ ...f, leadQuestions: f.leadQuestions.filter((_, i) => i !== idx) }));
-  };
-
-  const moveQuestion = (from: number, to: number) => {
+  const toggleProject = (projectId: string) => {
     setForm(f => {
-      const arr = [...f.leadQuestions];
-      const [item] = arr.splice(from, 1);
-      arr.splice(to, 0, item);
-      return { ...f, leadQuestions: arr };
+      const current = f.enabledProjectIds ?? [];
+      const isEnabled = current.includes(projectId);
+      const next = isEnabled
+        ? current.filter(id => id !== projectId)
+        : [...current, projectId];
+      return { ...f, enabledProjectIds: next.length > 0 ? next : null };
     });
   };
 
   const previewMessages = [
-    { role: "bot", content: form.greeting || "Hello! How can I help you today?" },
-    { role: "user", content: "Hi, I'm interested in your products." },
-    ...(form.leadQuestions.slice(0, 2).map(q => ({ role: "bot", content: q }))),
-    ...(form.leadQuestions.length > 0 ? [{ role: "user", content: "Sure, happy to share!" }] : []),
+    { role: "bot", content: form.welcomeMessage || "أهلاً! 👋 كيف أقدر أساعدك؟" },
+    { role: "user", content: "أنا مهتم بالوحدات السكنية" },
+    { role: "bot", content: "تمام! ممكن تعرفني باسمك الكريم؟" },
+    { role: "user", content: "أنا أحمد" },
+    { role: "bot", content: "أهلاً أحمد! عندنا مشاريع متميزة. إيه الميزانية اللي مريحاك؟" },
   ];
 
   return (
-    <div className="space-y-6" data-testid="page-chatbot-config">
+    <div className="space-y-6" data-testid="page-chatbot-config" dir="rtl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Chatbot Configuration</h1>
-          <p className="text-muted-foreground">Customize your AI sales assistant persona and behavior</p>
+          <h1 className="text-2xl font-semibold tracking-tight">إعدادات البوت الذكي</h1>
+          <p className="text-muted-foreground">تخصيص شخصية ومهمة مساعد المبيعات الذكي</p>
         </div>
         <Button
-          onClick={() => updateMutation.mutate(form)}
-          disabled={updateMutation.isPending}
+          onClick={() => saveMutation.mutate(form)}
+          disabled={saveMutation.isPending}
           data-testid="button-save-config"
         >
-          {updateMutation.isPending ? "Saving..." : "Save Changes"}
+          <Save className="h-4 w-4 ml-2" />
+          {saveMutation.isPending ? "جاري الحفظ..." : "حفظ التغييرات"}
         </Button>
       </div>
 
@@ -103,62 +103,88 @@ export default function ChatbotConfigPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Bot Persona</CardTitle>
-              <CardDescription>Define how your chatbot presents itself</CardDescription>
+              <CardTitle>الهوية والشخصية</CardTitle>
+              <CardDescription>حدد اسم البوت وشخصيته</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {isLoading ? (
                 <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
               ) : (
                 <>
-                  <div>
-                    <Label htmlFor="bot-name">Bot Name</Label>
-                    <Input
-                      id="bot-name"
-                      data-testid="input-bot-name"
-                      value={form.personaName}
-                      onChange={e => setForm(f => ({ ...f, personaName: e.target.value }))}
-                      placeholder="SalesBot"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="bot-greeting">Greeting Message</Label>
-                    <Textarea
-                      id="bot-greeting"
-                      data-testid="input-bot-greeting"
-                      value={form.greeting}
-                      onChange={e => setForm(f => ({ ...f, greeting: e.target.value }))}
-                      placeholder="Hello! How can I help you today?"
-                      rows={3}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="bot-language">Language</Label>
-                    <Select value={form.language} onValueChange={v => setForm(f => ({ ...f, language: v }))}>
-                      <SelectTrigger id="bot-language" data-testid="select-bot-language">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ar">Arabic (العربية)</SelectItem>
-                        <SelectItem value="en">English</SelectItem>
-                        <SelectItem value="both">Both (Arabic & English)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 mb-4">
                     <Switch
                       id="bot-active"
                       checked={form.isActive}
                       onCheckedChange={v => setForm(f => ({ ...f, isActive: v }))}
                       data-testid="switch-bot-active"
                     />
-                    <Label htmlFor="bot-active">Bot Active</Label>
+                    <Label htmlFor="bot-active">تفعيل البوت</Label>
                     <Badge className={form.isActive
                       ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                       : "bg-gray-100 text-gray-500 dark:bg-gray-800"
                     }>
-                      {form.isActive ? "Online" : "Offline"}
+                      {form.isActive ? "مفعّل" : "معطّل"}
                     </Badge>
+                  </div>
+                  <div>
+                    <Label htmlFor="bot-name">اسم البوت</Label>
+                    <Input
+                      id="bot-name"
+                      data-testid="input-bot-name"
+                      value={form.botName}
+                      onChange={e => setForm(f => ({ ...f, botName: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="company-name">اسم الشركة</Label>
+                    <Input
+                      id="company-name"
+                      data-testid="input-company-name"
+                      value={form.companyName}
+                      onChange={e => setForm(f => ({ ...f, companyName: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="bot-role">دور البوت</Label>
+                    <Input
+                      id="bot-role"
+                      data-testid="input-bot-role"
+                      value={form.botRole}
+                      onChange={e => setForm(f => ({ ...f, botRole: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="bot-personality">شخصية البوت</Label>
+                    <Textarea
+                      id="bot-personality"
+                      data-testid="input-bot-personality"
+                      value={form.botPersonality}
+                      onChange={e => setForm(f => ({ ...f, botPersonality: e.target.value }))}
+                      placeholder="أنت مستشار عقاري مصري محترف وودود..."
+                      rows={3}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="bot-mission">مهمة البوت</Label>
+                    <Textarea
+                      id="bot-mission"
+                      data-testid="input-bot-mission"
+                      value={form.botMission}
+                      onChange={e => setForm(f => ({ ...f, botMission: e.target.value }))}
+                      placeholder="جمع بيانات العميل الكاملة وترشيح وحدات مناسبة..."
+                      rows={3}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="welcome-message">رسالة الترحيب</Label>
+                    <Textarea
+                      id="welcome-message"
+                      data-testid="input-welcome-message"
+                      value={form.welcomeMessage}
+                      onChange={e => setForm(f => ({ ...f, welcomeMessage: e.target.value }))}
+                      placeholder="أهلاً! 👋 أنا المساعد الذكي..."
+                      rows={2}
+                    />
                   </div>
                 </>
               )}
@@ -167,62 +193,103 @@ export default function ChatbotConfigPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Lead Capture Questions</CardTitle>
-              <CardDescription>Questions the bot asks to capture lead information</CardDescription>
+              <CardTitle>معلومات الشركة</CardTitle>
+              <CardDescription>معلومات إضافية يستخدمها البوت في المحادثات</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="space-y-2">
-                {form.leadQuestions.map((q, idx) => (
-                  <div
-                    key={idx}
-                    draggable
-                    onDragStart={() => setDragIdx(idx)}
-                    onDragOver={e => { e.preventDefault(); }}
-                    onDrop={() => { if (dragIdx !== null && dragIdx !== idx) moveQuestion(dragIdx, idx); setDragIdx(null); }}
-                    className={cn(
-                      "flex items-center gap-2 rounded-md border bg-card px-3 py-2 cursor-move",
-                      dragIdx === idx && "opacity-50"
-                    )}
-                    data-testid={`question-item-${idx}`}
-                  >
-                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="flex-1 text-sm">{q}</span>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 shrink-0"
-                      onClick={() => removeQuestion(idx)}
-                      data-testid={`button-remove-question-${idx}`}
-                    >
-                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  value={newQuestion}
-                  onChange={e => setNewQuestion(e.target.value)}
-                  placeholder="Add a custom question..."
-                  data-testid="input-new-question"
-                  onKeyDown={e => { if (e.key === "Enter") addQuestion(); }}
-                />
-                <Button variant="outline" onClick={addQuestion} data-testid="button-add-question">
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
+            <CardContent>
+              <Textarea
+                id="company-knowledge"
+                data-testid="input-company-knowledge"
+                value={form.companyKnowledge}
+                onChange={e => setForm(f => ({ ...f, companyKnowledge: e.target.value }))}
+                placeholder="معلومات عن الشركة، سياسات الدفع، العروض الحالية..."
+                rows={5}
+              />
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-muted-foreground" />
+                <CardTitle>ساعات العمل والاستجابة</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="hours-start">بداية الدوام</Label>
+                  <Input
+                    id="hours-start"
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={form.workingHoursStart}
+                    onChange={e => setForm(f => ({ ...f, workingHoursStart: parseInt(e.target.value) || 9 }))}
+                    data-testid="input-hours-start"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="hours-end">نهاية الدوام</Label>
+                  <Input
+                    id="hours-end"
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={form.workingHoursEnd}
+                    onChange={e => setForm(f => ({ ...f, workingHoursEnd: parseInt(e.target.value) || 18 }))}
+                    data-testid="input-hours-end"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Switch
+                  id="respond-always"
+                  checked={form.respondAlways}
+                  onCheckedChange={v => setForm(f => ({ ...f, respondAlways: v }))}
+                  data-testid="switch-respond-always"
+                />
+                <Label htmlFor="respond-always">الرد دائماً (حتى أثناء ساعات العمل)</Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                عند التعطيل، يرد البوت فقط خارج ساعات العمل المحددة
+              </p>
+            </CardContent>
+          </Card>
+
+          {projects.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>المشاريع المفعّلة</CardTitle>
+                <CardDescription>اختر المشاريع التي يمكن للبوت ترشيح وحداتها (اتركها فارغة لتفعيل الكل)</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {projects.map((project: Project) => (
+                  <div key={project.id} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`project-${project.id}`}
+                      checked={form.enabledProjectIds?.includes(project.id) ?? false}
+                      onCheckedChange={() => toggleProject(project.id)}
+                      data-testid={`checkbox-project-${project.id}`}
+                    />
+                    <Label htmlFor={`project-${project.id}`} className="text-sm">
+                      {project.name}
+                    </Label>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
         </div>
 
-        <div className="lg:sticky lg:top-4">
+        <div className="lg:sticky lg:top-4 self-start">
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
                 <Bot className="h-5 w-5 text-primary" />
-                <CardTitle>Conversation Preview</CardTitle>
+                <CardTitle>معاينة المحادثة</CardTitle>
               </div>
-              <CardDescription>How your bot interacts with contacts</CardDescription>
+              <CardDescription>شكل المحادثة مع العملاء</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="rounded-xl border bg-muted/30 p-4 space-y-3 max-h-[500px] overflow-y-auto">
@@ -231,24 +298,24 @@ export default function ChatbotConfigPage() {
                     <Bot className="h-4 w-4 text-primary-foreground" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold">{form.personaName || "SalesBot"}</p>
-                    <p className="text-xs text-muted-foreground">AI Assistant</p>
+                    <p className="text-sm font-semibold">{form.botName || "المساعد الذكي"}</p>
+                    <p className="text-xs text-muted-foreground">{form.botRole || "مستشار عقاري"}</p>
                   </div>
                 </div>
                 {previewMessages.map((msg, i) => (
-                  <div key={i} className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}>
+                  <div key={i} className={cn("flex", msg.role === "user" ? "justify-start" : "justify-end")}>
                     {msg.role === "bot" && (
                       <div className="flex items-end gap-1.5">
                         <div className="h-6 w-6 rounded-full bg-primary flex items-center justify-center shrink-0 mb-0.5">
                           <MessageSquare className="h-3 w-3 text-primary-foreground" />
                         </div>
-                        <div className="bg-card rounded-xl rounded-tl-sm px-3 py-2 text-sm max-w-[85%] shadow-sm border">
+                        <div className="bg-card rounded-xl rounded-tr-sm px-3 py-2 text-sm max-w-[85%] shadow-sm border">
                           {msg.content}
                         </div>
                       </div>
                     )}
                     {msg.role === "user" && (
-                      <div className="bg-primary text-primary-foreground rounded-xl rounded-tr-sm px-3 py-2 text-sm max-w-[85%]">
+                      <div className="bg-primary text-primary-foreground rounded-xl rounded-tl-sm px-3 py-2 text-sm max-w-[85%]">
                         {msg.content}
                       </div>
                     )}

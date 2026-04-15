@@ -10,13 +10,14 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { CompanyProfile, ChatbotConfig } from "@shared/schema";
+interface CompanyProfileData { name?: string; industry?: string; website?: string; }
+interface ChatbotConfigData { personaName?: string; greeting?: string; language?: string; isActive?: boolean; }
 
 export default function SettingsPage() {
   const { toast } = useToast();
 
-  const { data: profile, isLoading: profileLoading } = useQuery<CompanyProfile>({ queryKey: ["/api/company-profile"] });
-  const { data: config, isLoading: configLoading } = useQuery<ChatbotConfig>({ queryKey: ["/api/chatbot-config"] });
+  const { data: profile, isLoading: profileLoading } = useQuery<CompanyProfileData>({ queryKey: ["/api/company-profile"] });
+  const { data: config, isLoading: configLoading } = useQuery<ChatbotConfigData>({ queryKey: ["/api/chatbot-config"] });
 
   const [profileForm, setProfileForm] = useState({ name: "", industry: "", website: "" });
   const [configForm, setConfigForm] = useState({ personaName: "", greeting: "", language: "en", isActive: true });

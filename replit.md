@@ -1,10 +1,10 @@
-# SalesBot AI
+# SalesBot AI — Real Estate CRM with WhatsApp AI Bot
 
 ## Overview
 
-SalesBot AI is a generic AI-powered sales chatbot platform. The application enables teams to configure an AI chatbot, manage knowledge base content, track conversations, capture leads, and monitor performance through analytics. It is built as an industry-agnostic platform with no real-estate specific features.
+SalesBot AI is a real estate CRM platform with an integrated AI-powered WhatsApp chatbot. The system manages leads, tracks WhatsApp conversations, auto-creates leads from incoming messages, and uses AI to qualify prospects through configurable conversation stages (greeting → name → needs → recommend → qualified → handoff).
 
-The system is built as a full-stack TypeScript application with a React frontend and Express backend, using PostgreSQL for data persistence.
+Built as a full-stack TypeScript application with React frontend and Express backend, using PostgreSQL for data persistence and Baileys (WhatsApp Web) for messaging.
 
 ## User Preferences
 
@@ -24,7 +24,6 @@ Preferred communication style: Simple, everyday language.
   - Language file: `client/src/lib/i18n.tsx`
   - Default language: Arabic (ar)
   - RTL layout for Arabic, LTR for English
-  - Language stored in localStorage as "crm-language"
 
 ### Backend Architecture
 - **Runtime**: Node.js with Express
@@ -32,53 +31,70 @@ Preferred communication style: Simple, everyday language.
 - **Database ORM**: Drizzle ORM with PostgreSQL
 - **Authentication**: Passport.js with local strategy and session-based auth
 - **Session Storage**: PostgreSQL-backed sessions via connect-pg-simple
+- **WhatsApp**: Baileys library (QR-based connection, not Cloud API)
+- **AI Engine**: OpenRouter (Gemini) or OpenAI for chatbot responses
 
 ### Data Model (shared/schema.ts)
-- **company_profile** – Singleton company settings (name, industry, description, contact info)
-- **knowledge_base_items** – Q&A pairs and documents the AI uses to answer questions
-- **chatbot_config** – Chatbot personality, greeting, escalation settings, active channels
-- **conversations** – Chat sessions (platform, session_id, status, contact info, assigned agent)
-- **messages** – Individual messages within a conversation (role, content, timestamps)
-- **leads** – Captured leads (name, phone, email, interest, source, status, notes)
+- **leads** — CRM leads with bot tracking fields (botActive, botStage)
+- **whatsapp_messages_log** — All WhatsApp messages (inbound/outbound)
+- **chatbot_settings** — Per-user bot config (personality, mission, working hours, enabled projects)
+- **knowledge_base_items** — Products, services, FAQs for AI chatbot context
+- **projects** / **units** — Real estate inventory the bot recommends
+- **lead_states** — Pipeline stages for leads
+- **reminders** / **notifications** — CRM action items
+- **whatsapp_templates** — Reusable message templates
+- **whatsapp_campaigns** — Bulk messaging campaigns
+- **Conversation** / **Message** — TypeScript interfaces mapping WhatsApp inbox data
 
 ### Auth Data Model (shared/models/auth.ts)
-- **users** – Platform users with roles: admin, manager, sales_agent, viewer
+- **users** – Platform users with roles: super_admin, admin, sales_admin, team_leader, sales_agent
 - **teams** – User team groupings
 - **sessions** – Express session storage
 
 ### Pages
 - `/` → Dashboard (overview stats)
-- `/conversations` → All chatbot conversations
+- `/conversations` → WhatsApp inbox with real-time messaging, bot toggle per lead
 - `/leads` → Lead management table
-- `/knowledge-base` → Manage AI knowledge base items
+- `/knowledge-base` → Manage AI knowledge base items (products/services/FAQs)
 - `/analytics` → Performance analytics
-- `/settings` → Company profile and chatbot configuration
-- `/users` → User and team management (admin only)
-- `/auth` → Login / registration
+- `/chatbot-config` → Bot personality, mission, working hours, enabled projects
+- `/settings` → Company profile settings
+- `/integrations` → WhatsApp connection, API keys
+- `/settings/users` → User management (admin only)
+- `/settings/teams` → Team management (admin only)
 
-### API Endpoints
-- `GET/PATCH /api/company-profile` – Company settings
-- `GET/POST/PATCH/DELETE /api/knowledge-base` – Knowledge base items
-- `GET/PATCH /api/chatbot-config` – Chatbot configuration
-- `GET /api/conversations`, `GET/PATCH /api/conversations/:id` – Conversation management
-- `GET /api/conversations/:id/messages` – Messages in a conversation
-- `GET/POST/PATCH/DELETE /api/leads` – Lead management
-- `GET /api/analytics/overview` – Aggregated analytics
-- `GET/POST/PATCH/DELETE /api/users` – User management
-- `GET/POST/PATCH/DELETE /api/teams` – Team management
-- `POST /api/login`, `POST /api/logout`, `GET /api/user` – Authentication
+### Key API Endpoints
+- `GET/POST/PATCH/DELETE /api/knowledge-base` — Knowledge base CRUD
+- `GET/PUT /api/chatbot/settings` — Chatbot configuration (bot personality, hours, projects)
+- `GET /api/whatsapp/inbox` — WhatsApp conversations grouped by lead
+- `POST /api/whatsapp/send` — Send WhatsApp message to lead
+- `GET /api/leads/:leadId/whatsapp-log` — Message history for a lead
+- `POST /api/leads/:leadId/bot/takeover` — Agent takes over from bot
+- `POST /api/leads/:leadId/bot/reactivate` — Reactivate bot for lead
+- `POST /api/whatsapp/inbox/:leadId/mark-read` — Mark messages as read
+- `GET/POST/PATCH/DELETE /api/leads` — Lead management
+- `POST /api/whatsapp/connect` / `POST /api/whatsapp/disconnect` — WhatsApp session
+- `GET /api/whatsapp/status` — Connection status + QR code
+
+### AI Bot Flow (server/ai.ts + server/routes.ts)
+1. Incoming WhatsApp message → auto-create lead if new
+2. AI generates reply based on: current stage, lead data, conversation history, inventory, knowledge base
+3. Bot extracts lead info (name, budget, unit type, location, etc.)
+4. Bot executes CRM actions: change_state, create_reminder, update_score
+5. When qualified (name + budget/interest + unit type) → handoff to human agent
 
 ### Key Files
-- `shared/schema.ts` – SalesBot AI database schema and types
+- `shared/schema.ts` – Database schema and types (Drizzle)
 - `shared/models/auth.ts` – Authentication schema (users, teams, sessions)
+- `server/ai.ts` – AI engine (generateBotReply, suggestReplies, analyzeLead)
+- `server/whatsapp.ts` – Baileys WhatsApp connection management
 - `server/storage.ts` – Storage interface and PostgreSQL implementation
 - `server/routes.ts` – All API route handlers
 - `server/auth.ts` – Passport authentication setup
 - `server/index.ts` – Express app entry point (creates tables on startup)
-- `server/seed.ts` – Default admin seeding (admin / Admin@123)
-- `client/src/App.tsx` – Main app with routing and providers
-- `client/src/components/app-sidebar.tsx` – Navigation sidebar
-- `client/src/pages/` – All page components
+- `client/src/pages/conversations.tsx` – WhatsApp inbox UI
+- `client/src/pages/chatbot-config.tsx` – Bot settings UI
+- `client/src/pages/knowledge-base.tsx` – Knowledge base management UI
 
 ## Default Credentials
 - Username: `admin`
