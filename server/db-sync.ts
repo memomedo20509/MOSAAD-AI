@@ -409,6 +409,77 @@ export async function syncDatabaseSchema(): Promise<void> {
       )
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS subscription_plans (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        name TEXT NOT NULL,
+        name_ar TEXT NOT NULL,
+        description TEXT,
+        price_monthly NUMERIC NOT NULL DEFAULT 0,
+        price_annual NUMERIC NOT NULL DEFAULT 0,
+        currency TEXT NOT NULL DEFAULT 'USD',
+        max_users INTEGER NOT NULL DEFAULT 5,
+        max_leads_per_month INTEGER NOT NULL DEFAULT 100,
+        max_whatsapp_messages_per_month INTEGER NOT NULL DEFAULT 500,
+        max_channels INTEGER NOT NULL DEFAULT 1,
+        has_ai_chatbot BOOLEAN NOT NULL DEFAULT false,
+        has_campaigns BOOLEAN NOT NULL DEFAULT false,
+        has_analytics BOOLEAN NOT NULL DEFAULT false,
+        has_api_access BOOLEAN NOT NULL DEFAULT false,
+        has_knowledge_base BOOLEAN NOT NULL DEFAULT false,
+        has_priority_support BOOLEAN NOT NULL DEFAULT false,
+        trial_days INTEGER NOT NULL DEFAULT 14,
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS subscriptions (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id TEXT NOT NULL,
+        plan_id VARCHAR NOT NULL REFERENCES subscription_plans(id),
+        status TEXT NOT NULL DEFAULT 'trial',
+        current_period_start TIMESTAMP DEFAULT NOW(),
+        current_period_end TIMESTAMP,
+        trial_ends_at TIMESTAMP,
+        cancelled_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS usage_records (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id TEXT NOT NULL,
+        month TEXT NOT NULL,
+        leads_count INTEGER NOT NULL DEFAULT 0,
+        messages_count INTEGER NOT NULL DEFAULT 0,
+        users_count INTEGER NOT NULL DEFAULT 0,
+        ai_calls_count INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS usage_records_company_month_unique ON usage_records (company_id, month)
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS invoices (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id TEXT NOT NULL,
+        subscription_id VARCHAR REFERENCES subscriptions(id),
+        invoice_number TEXT NOT NULL,
+        amount NUMERIC NOT NULL DEFAULT 0,
+        currency TEXT NOT NULL DEFAULT 'USD',
+        status TEXT NOT NULL DEFAULT 'draft',
+        due_date TIMESTAMP,
+        paid_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
     // Add company_id to all tenant-scoped tables (after all CREATE TABLE statements to avoid ordering issues on fresh DB)
     await client.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
     await client.query(`ALTER TABLE lead_states ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);

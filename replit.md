@@ -44,6 +44,10 @@ Preferred communication style: Simple, everyday language.
 - **reminders** / **notifications** — CRM action items
 - **whatsapp_templates** — Reusable message templates
 - **whatsapp_campaigns** — Bulk messaging campaigns
+- **subscription_plans** — Plan catalog (Free/Professional/Enterprise) with feature flags and limits
+- **subscriptions** — Per-company active subscription (status: trial/active/past_due/suspended/cancelled)
+- **usage_records** — Monthly counters: leads_count, messages_count, users_count, ai_calls_count
+- **invoices** — Billing records per company subscription
 - **Conversation** / **Message** — TypeScript interfaces mapping WhatsApp inbox data
 
 ### Auth Data Model (shared/models/auth.ts)
@@ -71,6 +75,11 @@ Preferred communication style: Simple, everyday language.
 - `/settings/teams` → Team management (admin only)
 
 ### Key API Endpoints
+- `GET /api/subscription` — Current company subscription (with plan details)
+- `GET /api/usage` — Current month usage counters + plan limits
+- `GET /api/invoices` — Company invoice history
+- `GET/POST/PATCH/DELETE /api/platform/plans` — Subscription plan CRUD (super_admin only)
+- `PATCH /api/platform/subscriptions/:id` — Update subscription status (super_admin only)
 - `GET/POST/PATCH/DELETE /api/knowledge-base` — Knowledge base CRUD
 - `GET/PUT /api/chatbot/settings` — Chatbot configuration (bot personality, hours, projects)
 - `GET /api/whatsapp/inbox` — WhatsApp conversations grouped by lead
@@ -99,9 +108,11 @@ Preferred communication style: Simple, everyday language.
 - `server/routes.ts` – All API route handlers
 - `server/auth.ts` – Passport authentication setup
 - `server/index.ts` – Express app entry point (creates tables on startup)
+- `server/subscription-middleware.ts` – requireFeature() and checkUsageLimit() middleware
 - `client/src/pages/conversations.tsx` – WhatsApp inbox UI
 - `client/src/pages/chatbot-config.tsx` – Bot settings UI
 - `client/src/pages/knowledge-base.tsx` – Knowledge base management UI
+- `client/src/pages/dashboard.tsx` – Dashboard with usage widget
 
 ## Default Credentials
 - Username: `admin`

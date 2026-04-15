@@ -681,6 +681,96 @@ export type InsertKnowledgeBase = z.infer<typeof insertKnowledgeBaseSchema>;
 export type UpdateKnowledgeBase = z.infer<typeof updateKnowledgeBaseSchema>;
 export type KnowledgeBaseItem = typeof knowledgeBase.$inferSelect;
 
+// ─── Subscription Plans ────────────────────────────────────────────────────────
+export const subscriptionPlans = pgTable("subscription_plans", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  nameAr: text("name_ar").notNull(),
+  description: text("description"),
+  priceMonthly: numeric("price_monthly", { mode: "number" }).notNull().default(0),
+  priceAnnual: numeric("price_annual", { mode: "number" }).notNull().default(0),
+  currency: text("currency").notNull().default("USD"),
+  maxUsers: integer("max_users").notNull().default(5),
+  maxLeadsPerMonth: integer("max_leads_per_month").notNull().default(100),
+  maxWhatsappMessagesPerMonth: integer("max_whatsapp_messages_per_month").notNull().default(500),
+  maxChannels: integer("max_channels").notNull().default(1),
+  hasAiChatbot: boolean("has_ai_chatbot").notNull().default(false),
+  hasCampaigns: boolean("has_campaigns").notNull().default(false),
+  hasAnalytics: boolean("has_analytics").notNull().default(false),
+  hasApiAccess: boolean("has_api_access").notNull().default(false),
+  hasKnowledgeBase: boolean("has_knowledge_base").notNull().default(false),
+  hasPrioritySupport: boolean("has_priority_support").notNull().default(false),
+  trialDays: integer("trial_days").notNull().default(14),
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertSubscriptionPlanSchema = createInsertSchema(subscriptionPlans).omit({ id: true, createdAt: true });
+export const updateSubscriptionPlanSchema = insertSubscriptionPlanSchema.partial();
+export type InsertSubscriptionPlan = z.infer<typeof insertSubscriptionPlanSchema>;
+export type UpdateSubscriptionPlan = z.infer<typeof updateSubscriptionPlanSchema>;
+export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
+
+// ─── Subscriptions ────────────────────────────────────────────────────────────
+export const SUBSCRIPTION_STATUSES = ["trial", "active", "past_due", "suspended", "cancelled"] as const;
+export type SubscriptionStatus = typeof SUBSCRIPTION_STATUSES[number];
+
+export const subscriptions = pgTable("subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: text("company_id").notNull(),
+  planId: varchar("plan_id").references(() => subscriptionPlans.id).notNull(),
+  status: text("status").notNull().default("trial"),
+  currentPeriodStart: timestamp("current_period_start").defaultNow(),
+  currentPeriodEnd: timestamp("current_period_end"),
+  trialEndsAt: timestamp("trial_ends_at"),
+  cancelledAt: timestamp("cancelled_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({ id: true, createdAt: true, updatedAt: true });
+export const updateSubscriptionSchema = insertSubscriptionSchema.partial();
+export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
+export type UpdateSubscription = z.infer<typeof updateSubscriptionSchema>;
+export type Subscription = typeof subscriptions.$inferSelect;
+
+// ─── Usage Records ────────────────────────────────────────────────────────────
+export const usageRecords = pgTable("usage_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: text("company_id").notNull(),
+  month: text("month").notNull(), // YYYY-MM
+  leadsCount: integer("leads_count").notNull().default(0),
+  messagesCount: integer("messages_count").notNull().default(0),
+  usersCount: integer("users_count").notNull().default(0),
+  aiCallsCount: integer("ai_calls_count").notNull().default(0),
+}, (table) => [
+  uniqueIndex("usage_records_company_month_unique").on(table.companyId, table.month),
+]);
+
+export type UsageRecord = typeof usageRecords.$inferSelect;
+
+// ─── Invoices ────────────────────────────────────────────────────────────────
+export const INVOICE_STATUSES = ["draft", "sent", "paid", "overdue", "cancelled"] as const;
+export type InvoiceStatus = typeof INVOICE_STATUSES[number];
+
+export const invoices = pgTable("invoices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: text("company_id").notNull(),
+  subscriptionId: varchar("subscription_id").references(() => subscriptions.id),
+  invoiceNumber: text("invoice_number").notNull(),
+  amount: numeric("amount", { mode: "number" }).notNull().default(0),
+  currency: text("currency").notNull().default("USD"),
+  status: text("status").notNull().default("draft"),
+  dueDate: timestamp("due_date"),
+  paidAt: timestamp("paid_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertInvoiceSchema = createInsertSchema(invoices).omit({ id: true, createdAt: true });
+export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+export type Invoice = typeof invoices.$inferSelect;
+
 // TypeScript interfaces for WhatsApp conversation inbox (mapped from whatsapp_messages_log)
 export interface Conversation {
   leadId: string;

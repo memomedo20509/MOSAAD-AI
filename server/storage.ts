@@ -106,6 +106,19 @@ import {
   type KnowledgeBaseItem,
   type InsertKnowledgeBase,
   type UpdateKnowledgeBase,
+  subscriptionPlans,
+  subscriptions,
+  usageRecords,
+  invoices,
+  type SubscriptionPlan,
+  type InsertSubscriptionPlan,
+  type UpdateSubscriptionPlan,
+  type Subscription,
+  type InsertSubscription,
+  type UpdateSubscription,
+  type UsageRecord,
+  type Invoice,
+  type InsertInvoice,
 } from "@shared/schema";
 import {
   customRoles,
@@ -560,6 +573,27 @@ export interface IStorage {
   createKnowledgeBaseItem(data: InsertKnowledgeBase, companyId?: string | null): Promise<KnowledgeBaseItem>;
   updateKnowledgeBaseItem(id: string, data: UpdateKnowledgeBase, companyId?: string | null): Promise<KnowledgeBaseItem | undefined>;
   deleteKnowledgeBaseItem(id: string, companyId?: string | null): Promise<boolean>;
+
+  // Subscription Plans
+  getAllSubscriptionPlans(): Promise<SubscriptionPlan[]>;
+  getSubscriptionPlan(id: string): Promise<SubscriptionPlan | undefined>;
+  createSubscriptionPlan(data: InsertSubscriptionPlan): Promise<SubscriptionPlan>;
+  updateSubscriptionPlan(id: string, data: UpdateSubscriptionPlan): Promise<SubscriptionPlan | undefined>;
+  deleteSubscriptionPlan(id: string): Promise<boolean>;
+
+  // Subscriptions
+  getSubscription(companyId: string): Promise<(Subscription & { plan: SubscriptionPlan }) | undefined>;
+  createSubscription(data: InsertSubscription): Promise<Subscription>;
+  updateSubscription(id: string, data: UpdateSubscription): Promise<Subscription | undefined>;
+
+  // Usage Records
+  getCurrentUsage(companyId: string): Promise<UsageRecord | undefined>;
+  incrementUsage(companyId: string, field: "leadsCount" | "messagesCount" | "usersCount" | "aiCallsCount"): Promise<void>;
+  refreshUsersCount(companyId: string): Promise<void>;
+
+  // Invoices
+  getInvoices(companyId: string): Promise<Invoice[]>;
+  createInvoice(data: InsertInvoice): Promise<Invoice>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3244,6 +3278,104 @@ export class DatabaseStorage implements IStorage {
     if (companyId && existing.companyId !== companyId) return false;
     const [row] = await db.delete(knowledgeBase).where(eq(knowledgeBase.id, id)).returning();
     return !!row;
+  }
+
+  // ─── Subscription Plans ──────────────────────────────────────────────────────
+  async getAllSubscriptionPlans(): Promise<SubscriptionPlan[]> {
+    return db.select().from(subscriptionPlans).orderBy(subscriptionPlans.sortOrder);
+  }
+
+  async getSubscriptionPlan(id: string): Promise<SubscriptionPlan | undefined> {
+    const [row] = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.id, id));
+    return row;
+  }
+
+  async createSubscriptionPlan(data: InsertSubscriptionPlan): Promise<SubscriptionPlan> {
+    const [row] = await db.insert(subscriptionPlans).values(data).returning();
+    return row;
+  }
+
+  async updateSubscriptionPlan(id: string, data: UpdateSubscriptionPlan): Promise<SubscriptionPlan | undefined> {
+    const [row] = await db.update(subscriptionPlans).set(data).where(eq(subscriptionPlans.id, id)).returning();
+    return row;
+  }
+
+  async deleteSubscriptionPlan(id: string): Promise<boolean> {
+    const [row] = await db.delete(subscriptionPlans).where(eq(subscriptionPlans.id, id)).returning();
+    return !!row;
+  }
+
+  // ─── Subscriptions ────────────────────────────────────────────────────────────
+  async getSubscription(companyId: string): Promise<(Subscription & { plan: SubscriptionPlan }) | undefined> {
+    const rows = await db
+      .select()
+      .from(subscriptions)
+      .innerJoin(subscriptionPlans, eq(subscriptions.planId, subscriptionPlans.id))
+      .where(eq(subscriptions.companyId, companyId))
+      .orderBy(subscriptions.createdAt)
+      .limit(1);
+    if (!rows.length) return undefined;
+    return { ...rows[0].subscriptions, plan: rows[0].subscription_plans };
+  }
+
+  async createSubscription(data: InsertSubscription): Promise<Subscription> {
+    const [row] = await db.insert(subscriptions).values(data).returning();
+    return row;
+  }
+
+  async updateSubscription(id: string, data: UpdateSubscription): Promise<Subscription | undefined> {
+    const [row] = await db.update(subscriptions).set({ ...data, updatedAt: new Date() }).where(eq(subscriptions.id, id)).returning();
+    return row;
+  }
+
+  // ─── Usage Records ────────────────────────────────────────────────────────────
+  async getCurrentUsage(companyId: string): Promise<UsageRecord | undefined> {
+    const month = new Date().toISOString().slice(0, 7); // YYYY-MM
+    const [row] = await db.select().from(usageRecords).where(
+      and(eq(usageRecords.companyId, companyId), eq(usageRecords.month, month))
+    );
+    return row;
+  }
+
+  async incrementUsage(companyId: string, field: "leadsCount" | "messagesCount" | "usersCount" | "aiCallsCount"): Promise<void> {
+    const month = new Date().toISOString().slice(0, 7);
+    const colMap = {
+      leadsCount: usageRecords.leadsCount,
+      messagesCount: usageRecords.messagesCount,
+      usersCount: usageRecords.usersCount,
+      aiCallsCount: usageRecords.aiCallsCount,
+    };
+    const col = colMap[field];
+    await db
+      .insert(usageRecords)
+      .values({ companyId, month, [field]: 1 })
+      .onConflictDoUpdate({
+        target: [usageRecords.companyId, usageRecords.month],
+        set: { [field]: sql`${col} + 1` },
+      });
+  }
+
+  async refreshUsersCount(companyId: string): Promise<void> {
+    const month = new Date().toISOString().slice(0, 7);
+    const allUsers = await db.select().from(users).where(eq(users.isActive, true));
+    const count = allUsers.length;
+    await db
+      .insert(usageRecords)
+      .values({ companyId, month, usersCount: count })
+      .onConflictDoUpdate({
+        target: [usageRecords.companyId, usageRecords.month],
+        set: { usersCount: count },
+      });
+  }
+
+  // ─── Invoices ────────────────────────────────────────────────────────────────
+  async getInvoices(companyId: string): Promise<Invoice[]> {
+    return db.select().from(invoices).where(eq(invoices.companyId, companyId)).orderBy(invoices.createdAt);
+  }
+
+  async createInvoice(data: InsertInvoice): Promise<Invoice> {
+    const [row] = await db.insert(invoices).values(data).returning();
+    return row;
   }
 }
 

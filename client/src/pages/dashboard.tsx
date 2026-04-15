@@ -2,9 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MessageSquare, Users, TrendingUp, Bot, Circle } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { MessageSquare, Users, TrendingUp, Bot, Circle, Zap } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import type { Lead } from "@shared/schema";
+import type { Lead, SubscriptionPlan, UsageRecord } from "@shared/schema";
 import { format } from "date-fns";
 
 const CHANNEL_COLORS: Record<string, string> = {
@@ -44,6 +45,93 @@ function KPICard({ title, value, icon: Icon, isLoading, sub }: {
             <div className="text-2xl font-bold" data-testid="text-kpi-value">{value}</div>
             {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
           </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function UsageBar({ label, used, max, colorClass = "bg-primary" }: {
+  label: string;
+  used: number;
+  max: number;
+  colorClass?: string;
+}) {
+  const unlimited = max >= 999999;
+  const pct = unlimited ? 0 : Math.min(100, Math.round((used / max) * 100));
+  const danger = !unlimited && pct >= 90;
+  return (
+    <div className="space-y-1" data-testid={`usage-bar-${label.toLowerCase().replace(/\s/g, "-")}`}>
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">{label}</span>
+        <span className={`font-medium ${danger ? "text-red-500" : ""}`}>
+          {unlimited ? `${used} / ∞` : `${used} / ${max}`}
+        </span>
+      </div>
+      {!unlimited && (
+        <Progress
+          value={pct}
+          className={`h-2 ${danger ? "[&>div]:bg-red-500" : ""}`}
+        />
+      )}
+    </div>
+  );
+}
+
+function UsageWidget() {
+  const { data, isLoading } = useQuery<{
+    usage: { leadsCount: number; messagesCount: number; usersCount: number; aiCallsCount: number; month: string };
+    limits: SubscriptionPlan | null;
+  }>({ queryKey: ["/api/usage"] });
+
+  const { data: sub } = useQuery<{ status: string; plan: SubscriptionPlan; trialEndsAt: string | null } | null>({
+    queryKey: ["/api/subscription"],
+  });
+
+  const usage = data?.usage;
+  const limits = data?.limits;
+
+  const trialEndsAt = sub?.trialEndsAt ? new Date(sub.trialEndsAt) : null;
+  const daysLeft = trialEndsAt ? Math.max(0, Math.ceil((trialEndsAt.getTime() - Date.now()) / 86400000)) : null;
+
+  return (
+    <Card data-testid="card-usage-widget">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
+          <Zap className="h-4 w-4 text-primary" />
+          Plan Usage — {limits?.nameAr ?? limits?.name ?? "—"}
+        </CardTitle>
+        {sub && (
+          <Badge
+            variant="outline"
+            className={
+              sub.status === "trial"
+                ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                : sub.status === "active"
+                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+            }
+            data-testid="badge-subscription-status"
+          >
+            {sub.status === "trial" && daysLeft !== null
+              ? `Trial · ${daysLeft}d left`
+              : sub.status}
+          </Badge>
+        )}
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-6 w-full" />)}
+          </div>
+        ) : usage && limits ? (
+          <div className="space-y-3">
+            <UsageBar label="Leads" used={usage.leadsCount} max={limits.maxLeadsPerMonth} />
+            <UsageBar label="Messages" used={usage.messagesCount} max={limits.maxWhatsappMessagesPerMonth} />
+            <UsageBar label="Users" used={usage.usersCount} max={limits.maxUsers} />
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No usage data yet</p>
         )}
       </CardContent>
     </Card>
@@ -135,6 +223,8 @@ export default function Dashboard() {
           sub={chatbotConfig?.personaName ?? "SalesBot"}
         />
       </div>
+
+      <UsageWidget />
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>

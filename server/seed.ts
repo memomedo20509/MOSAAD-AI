@@ -79,6 +79,123 @@ export async function seedDefaultAdmin() {
     console.error("[seed] Error seeding lead states:", error);
   }
 
+  // Seed default subscription plans
+  try {
+    const plans = [
+      {
+        name: "Free",
+        name_ar: "مجاني",
+        description: "For small teams just getting started",
+        price_monthly: 0,
+        price_annual: 0,
+        currency: "USD",
+        max_users: 3,
+        max_leads_per_month: 50,
+        max_whatsapp_messages_per_month: 200,
+        max_channels: 1,
+        has_ai_chatbot: false,
+        has_campaigns: false,
+        has_analytics: false,
+        has_api_access: false,
+        has_knowledge_base: false,
+        has_priority_support: false,
+        trial_days: 14,
+        is_active: true,
+        sort_order: 0,
+      },
+      {
+        name: "Professional",
+        name_ar: "احترافي",
+        description: "For growing sales teams",
+        price_monthly: 49,
+        price_annual: 490,
+        currency: "USD",
+        max_users: 15,
+        max_leads_per_month: 500,
+        max_whatsapp_messages_per_month: 2000,
+        max_channels: 3,
+        has_ai_chatbot: true,
+        has_campaigns: true,
+        has_analytics: true,
+        has_api_access: false,
+        has_knowledge_base: true,
+        has_priority_support: false,
+        trial_days: 14,
+        is_active: true,
+        sort_order: 1,
+      },
+      {
+        name: "Enterprise",
+        name_ar: "مؤسسي",
+        description: "Unlimited power for large organizations",
+        price_monthly: 199,
+        price_annual: 1990,
+        currency: "USD",
+        max_users: 999,
+        max_leads_per_month: 999999,
+        max_whatsapp_messages_per_month: 999999,
+        max_channels: 10,
+        has_ai_chatbot: true,
+        has_campaigns: true,
+        has_analytics: true,
+        has_api_access: true,
+        has_knowledge_base: true,
+        has_priority_support: true,
+        trial_days: 14,
+        is_active: true,
+        sort_order: 2,
+      },
+    ];
+
+    let plansInserted = 0;
+    for (const plan of plans) {
+      const { rowCount } = await pool.query(
+        `INSERT INTO subscription_plans (
+          name, name_ar, description, price_monthly, price_annual, currency,
+          max_users, max_leads_per_month, max_whatsapp_messages_per_month, max_channels,
+          has_ai_chatbot, has_campaigns, has_analytics, has_api_access, has_knowledge_base, has_priority_support,
+          trial_days, is_active, sort_order
+        )
+        SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19
+        WHERE NOT EXISTS (SELECT 1 FROM subscription_plans WHERE name = $1)`,
+        [
+          plan.name, plan.name_ar, plan.description,
+          plan.price_monthly, plan.price_annual, plan.currency,
+          plan.max_users, plan.max_leads_per_month, plan.max_whatsapp_messages_per_month, plan.max_channels,
+          plan.has_ai_chatbot, plan.has_campaigns, plan.has_analytics, plan.has_api_access,
+          plan.has_knowledge_base, plan.has_priority_support,
+          plan.trial_days, plan.is_active, plan.sort_order,
+        ]
+      );
+      if (rowCount && rowCount > 0) plansInserted++;
+    }
+    if (plansInserted > 0) {
+      console.log(`[seed] Inserted ${plansInserted} default subscription plans`);
+    }
+
+    // Create default subscription for the platform (company_id = 'default')
+    const { rows: existingSubs } = await pool.query(
+      `SELECT id FROM subscriptions WHERE company_id = 'default' LIMIT 1`
+    );
+    if (existingSubs.length === 0) {
+      const { rows: freePlanRows } = await pool.query(
+        `SELECT id FROM subscription_plans WHERE name = 'Professional' LIMIT 1`
+      );
+      if (freePlanRows.length > 0) {
+        const trialEndsAt = new Date();
+        trialEndsAt.setDate(trialEndsAt.getDate() + 14);
+        await pool.query(
+          `INSERT INTO subscriptions (company_id, plan_id, status, trial_ends_at)
+           VALUES ('default', $1, 'trial', $2)`,
+          [freePlanRows[0].id, trialEndsAt]
+        );
+        console.log("[seed] Created default trial subscription");
+      }
+    }
+  } catch (error) {
+    console.error("[seed] Error seeding subscription plans:", error);
+  }
+
   // Step 4: Migrate all existing data to Demo Company
   if (demoCompanyId) {
     try {

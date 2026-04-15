@@ -8,6 +8,7 @@ import multer from "multer";
 import nodemailer from "nodemailer";
 import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated, requireRole, requirePermission } from "./auth";
+import { requireFeature, checkUsageLimit } from "./subscription-middleware";
 import { hashPassword } from "./auth";
 import { isPlatformAdmin } from "@shared/models/auth";
 
@@ -66,6 +67,8 @@ import {
   insertWhatsappFollowupRuleSchema,
   insertKnowledgeBaseSchema,
   updateKnowledgeBaseSchema,
+  insertSubscriptionPlanSchema,
+  updateSubscriptionPlanSchema,
   type Lead,
   type InsertLead,
 } from "@shared/schema";
@@ -232,7 +235,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/users", isAuthenticated, requirePermission("canManageUsers"), async (req, res) => {
+  app.post("/api/users", isAuthenticated, requirePermission("canManageUsers"), checkUsageLimit("users"), async (req, res) => {
     try {
       const { username, password, email, firstName, lastName, phone, role, teamId, isActive } = req.body;
       if (!username || !password) {
@@ -407,12 +410,13 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/leads", isAuthenticated, async (req, res) => {
+  app.post("/api/leads", isAuthenticated, checkUsageLimit("leads"), async (req, res) => {
     try {
       const data = insertLeadSchema.parse(req.body);
       const user = req.user;
       const companyId = getCompanyId(req);
       const lead = await storage.createLead(data, user?.teamId ?? null, companyId);
+      storage.incrementUsage(companyId, "leadsCount").catch(() => {});
 
       // Send notifications to admins/managers and assigned agent
       try {
@@ -2842,6 +2846,7 @@ export async function registerRoutes(
         performedBy: agentName,
       });
 
+      storage.incrementUsage("default", "messagesCount").catch(() => {});
       res.json({ success: true, log: logEntry });
     } catch (error) {
       console.error("WhatsApp send error:", error);
@@ -4131,7 +4136,7 @@ export async function registerRoutes(
   });
 
   // POST /api/campaigns — create campaign and prepare recipients
-  app.post("/api/campaigns", isAuthenticated, requireRole(["super_admin", "admin", "sales_admin", "sales_manager", "company_owner"]), async (req, res) => {
+  app.post("/api/campaigns", isAuthenticated, requireRole(["super_admin", "admin", "sales_admin", "sales_manager", "company_owner"]), requireFeature("hasCampaigns"), async (req, res) => {
     try {
       const parsed = insertWhatsappCampaignSchema.safeParse({ ...req.body, createdBy: req.user!.id });
       if (!parsed.success) return res.status(400).json({ error: "بيانات غير صحيحة", details: parsed.error.flatten() });
@@ -5418,6 +5423,99 @@ export async function registerRoutes(
       }
     } catch (err) {
       console.error("[WhatsAppCloud] Webhook POST error:", err);
+    }
+  });
+
+  // ─── Subscription Plans (platform admin only) ────────────────────────────────
+  app.get("/api/platform/plans", isAuthenticated, requireRole("super_admin"), async (_req, res) => {
+    try {
+      const plans = await storage.getAllSubscriptionPlans();
+      res.json(plans);
+    } catch (err) {
+      console.error("Error fetching plans:", err);
+      res.status(500).json({ error: "Failed to fetch plans" });
+    }
+  });
+
+  app.post("/api/platform/plans", isAuthenticated, requireRole("super_admin"), async (req, res) => {
+    try {
+      const data = insertSubscriptionPlanSchema.parse(req.body);
+      const plan = await storage.createSubscriptionPlan(data);
+      res.status(201).json(plan);
+    } catch (err) {
+      console.error("Error creating plan:", err);
+      res.status(400).json({ error: "Failed to create plan" });
+    }
+  });
+
+  app.patch("/api/platform/plans/:id", isAuthenticated, requireRole("super_admin"), async (req, res) => {
+    try {
+      const data = updateSubscriptionPlanSchema.parse(req.body);
+      const plan = await storage.updateSubscriptionPlan(req.params.id, data);
+      if (!plan) return res.status(404).json({ error: "Plan not found" });
+      res.json(plan);
+    } catch (err) {
+      console.error("Error updating plan:", err);
+      res.status(400).json({ error: "Failed to update plan" });
+    }
+  });
+
+  app.delete("/api/platform/plans/:id", isAuthenticated, requireRole("super_admin"), async (req, res) => {
+    try {
+      const deleted = await storage.deleteSubscriptionPlan(req.params.id);
+      if (!deleted) return res.status(404).json({ error: "Plan not found" });
+      res.status(204).send();
+    } catch (err) {
+      console.error("Error deleting plan:", err);
+      res.status(500).json({ error: "Failed to delete plan" });
+    }
+  });
+
+  app.patch("/api/platform/subscriptions/:id", isAuthenticated, requireRole("super_admin"), async (req, res) => {
+    try {
+      const { updateSubscriptionSchema } = await import("@shared/schema");
+      const data = updateSubscriptionSchema.parse(req.body);
+      const sub = await storage.updateSubscription(req.params.id, data);
+      if (!sub) return res.status(404).json({ error: "Subscription not found" });
+      res.json(sub);
+    } catch (err) {
+      console.error("Error updating subscription:", err);
+      res.status(400).json({ error: "Failed to update subscription" });
+    }
+  });
+
+  // ─── Subscription / Usage / Invoices (for current company) ───────────────────
+  app.get("/api/subscription", isAuthenticated, async (_req, res) => {
+    try {
+      const sub = await storage.getSubscription("default");
+      res.json(sub ?? null);
+    } catch (err) {
+      console.error("Error fetching subscription:", err);
+      res.status(500).json({ error: "Failed to fetch subscription" });
+    }
+  });
+
+  app.get("/api/usage", isAuthenticated, async (_req, res) => {
+    try {
+      const usage = await storage.getCurrentUsage("default");
+      const sub = await storage.getSubscription("default");
+      res.json({
+        usage: usage ?? { leadsCount: 0, messagesCount: 0, usersCount: 0, aiCallsCount: 0, month: new Date().toISOString().slice(0, 7) },
+        limits: sub?.plan ?? null,
+      });
+    } catch (err) {
+      console.error("Error fetching usage:", err);
+      res.status(500).json({ error: "Failed to fetch usage" });
+    }
+  });
+
+  app.get("/api/invoices", isAuthenticated, async (_req, res) => {
+    try {
+      const invoiceList = await storage.getInvoices("default");
+      res.json(invoiceList);
+    } catch (err) {
+      console.error("Error fetching invoices:", err);
+      res.status(500).json({ error: "Failed to fetch invoices" });
     }
   });
 
