@@ -1,0 +1,47 @@
+#6 - Restore All Missing CRM Sales Modules
+What & Why
+The old system had a comprehensive set of CRM modules that sales agents used daily. While the backend API routes for most of these features already exist in server/routes.ts, the frontend pages are missing and the sidebar navigation doesn't match the old system's structure. This task restores all missing modules so the CRM is fully functional for any sales team in any industry.
+
+Note: The old real-estate-specific modules (Developers/Projects/Units) are NOT needed. Instead, the Knowledge Base page (already built) serves as the generic products & services catalog that the AI bot uses to respond to customers.
+
+Done looks like
+Sidebar navigation reorganized with proper sections: Dashboard, Leaderboard, Reports, Leads (Pipeline/All/Today's Follow-ups), Lead Management (Add/Upload/Duplicates/Withdrawn/Activity Log), Knowledge Base, Communication (WhatsApp Inbox), Administration
+Lead Pipeline page shows a Kanban board with columns per lead state, each card showing lead name, phone, score badge, and channel
+Leaderboard page shows sales agent rankings with metrics (leads handled, conversions, response time)
+Today's Follow-ups page shows reminders and tasks due today with lead details and completion toggles
+Upload Leads page allows importing from Excel/CSV files using the existing /api/leads/import endpoint
+Duplicate Leads page detects and lists leads with matching phone numbers, with merge/delete actions
+Withdrawn/Archived Leads page shows leads in "lost" category states with restore option
+Activity Log page shows global history of all actions (lead created, status changed, bot responded, etc.)
+Out of scope
+Developers/Projects/Units pages (replaced by generic Knowledge Base)
+New backend API routes (all needed routes already exist)
+Mobile responsive redesign
+Tasks
+Reorganize sidebar navigation — Update app-sidebar.tsx to match the old system's sidebar structure with proper Arabic sections (الليدز, إدارة الليدز, التواصل, الإدارة) and all menu items. Include Knowledge Base prominently.
+
+Build Lead Pipeline (Kanban) page — Create a Kanban board page at /leads/pipeline that fetches lead states from /api/states and leads from /api/leads, displays them as columns with draggable cards, and updates lead state on drop via the existing PATCH API.
+
+Build Leaderboard page — Create a leaderboard page at /leaderboard showing sales agent rankings using data from /api/reports/sales-activity and /api/dashboard/team-activity.
+
+Build Today's Follow-ups page — Create a page at /follow-ups showing today's reminders and tasks using /api/reminders and /api/tasks endpoints, with completion toggles and lead quick-view.
+
+Build Lead Upload/Import page — Create a page at /leads/upload with a file dropzone for Excel/CSV that posts to /api/leads/import, shows upload progress and import results.
+
+Build Duplicate Leads page — Create a page at /leads/duplicates that queries leads with matching phone numbers, shows them grouped, and provides merge/delete options.
+
+Build Withdrawn/Archived Leads page — Create a page at /leads/withdrawn showing leads in lost/archived states with search, filter, and restore functionality.
+
+Build Activity Log page — Create a page at /activity-log using /api/history showing a timeline of all system actions with filters by action type, user, and date range.
+
+Relevant files
+client/src/components/app-sidebar.tsx
+client/src/App.tsx
+client/src/pages/leads.tsx
+client/src/pages/dashboard.tsx
+server/routes.ts:553-583
+server/routes.ts:1386-1480
+server/routes.ts:2290-2350
+server/storage.ts
+shared/schema.ts:12-30
+shared/schema.ts:100-267
