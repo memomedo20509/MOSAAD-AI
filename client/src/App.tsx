@@ -28,6 +28,13 @@ import AnalyticsPage from "@/pages/analytics";
 import SettingsPage from "@/pages/settings";
 import ChatbotConfigPage from "@/pages/chatbot-config";
 import IntegrationsPage from "@/pages/integrations";
+import LeadPipelinePage from "@/pages/lead-pipeline";
+import LeaderboardPage from "@/pages/leaderboard";
+import FollowUpsPage from "@/pages/follow-ups";
+import UploadLeadsPage from "@/pages/upload-leads";
+import DuplicateLeadsPage from "@/pages/duplicate-leads";
+import WithdrawnLeadsPage from "@/pages/withdrawn-leads";
+import ActivityLogPage from "@/pages/activity-log";
 
 function LogoutButton() {
   const { logoutMutation } = useAuth();
@@ -53,6 +60,13 @@ function Router() {
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/leads" component={LeadsPage} />
+      <Route path="/leads/pipeline" component={LeadPipelinePage} />
+      <Route path="/leads/upload" component={UploadLeadsPage} />
+      <Route path="/leads/duplicates" component={DuplicateLeadsPage} />
+      <Route path="/leads/withdrawn" component={WithdrawnLeadsPage} />
+      <Route path="/leaderboard" component={LeaderboardPage} />
+      <Route path="/follow-ups" component={FollowUpsPage} />
+      <Route path="/activity-log" component={ActivityLogPage} />
       <Route path="/conversations" component={ConversationsPage} />
       <Route path="/knowledge-base" component={KnowledgeBasePage} />
       <Route path="/analytics" component={AnalyticsPage} />

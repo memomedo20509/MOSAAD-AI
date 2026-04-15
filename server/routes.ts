@@ -537,6 +537,21 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/tasks", isAuthenticated, async (req, res) => {
+    try {
+      const allTasks = await storage.getAllTasks();
+      const user = req.user;
+      const isManager = user && ["super_admin", "company_owner", "admin", "sales_admin", "sales_manager", "team_leader"].includes(user.role);
+      const filtered = isManager
+        ? allTasks
+        : allTasks.filter((t) => t.assignedTo === user?.id);
+      res.json(filtered);
+    } catch (error) {
+      console.error("Error fetching all tasks:", error);
+      res.status(500).json({ error: "Failed to fetch tasks" });
+    }
+  });
+
   // Lead Tasks
   app.get("/api/leads/:leadId/tasks", isAuthenticated, async (req, res) => {
     try {

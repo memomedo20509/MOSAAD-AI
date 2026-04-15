@@ -12,6 +12,14 @@ import {
   Plug,
   BotMessageSquare,
   Bell,
+  Kanban,
+  Trophy,
+  CalendarCheck,
+  Upload,
+  Copy,
+  UserX,
+  History,
+  UserPlus,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -40,6 +48,10 @@ const isAdmin = (role: string | null | undefined): boolean => {
   return role === "super_admin" || role === "admin" || role === "sales_admin";
 };
 
+const isManager = (role: string | null | undefined): boolean => {
+  return role === "super_admin" || role === "admin" || role === "sales_admin" || role === "sales_manager" || role === "company_owner" || role === "team_leader";
+};
+
 export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
@@ -53,23 +65,7 @@ export function AppSidebar() {
   });
   const unreadCount = unreadData?.count ?? 0;
 
-  const mainNavItems = [
-    { title: "Overview", url: "/", icon: LayoutDashboard },
-    { title: "Analytics", url: "/analytics", icon: BarChart3 },
-  ];
-
-  const botItems = [
-    { title: "Conversations", url: "/conversations", icon: MessageSquare },
-    { title: "Leads", url: "/leads", icon: Users },
-    { title: "Knowledge Base", url: "/knowledge-base", icon: BookOpen },
-    { title: "Chatbot Config", url: "/chatbot-config", icon: BotMessageSquare },
-  ];
-
-  const adminItems = isAdmin(userRole) ? [
-    { title: "Integrations", url: "/integrations", icon: Plug },
-    { title: "Users", url: "/settings/users", icon: UsersRound },
-    { title: "Settings", url: "/settings", icon: Settings },
-  ] : [];
+  const isActive = (url: string) => location === url || location.startsWith(url + "/");
 
   return (
     <Sidebar side={isRTL ? "right" : "left"}>
@@ -86,16 +82,32 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainNavItems.map(item => (
-                <SidebarMenuItem key={item.url}>
-                  <SidebarMenuButton asChild isActive={location === item.url}>
-                    <Link href={item.url} data-testid={`link-nav-${item.url.replace(/\//g, "-").slice(1) || "home"}`}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/"}>
+                  <Link href="/" data-testid="link-nav-home">
+                    <LayoutDashboard className="h-4 w-4" />
+                    <span>لوحة التحكم</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              {isManager(userRole) && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isActive("/leaderboard")}>
+                    <Link href="/leaderboard" data-testid="link-nav-leaderboard">
+                      <Trophy className="h-4 w-4" />
+                      <span>المتصدرين</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-              ))}
+              )}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={isActive("/analytics")}>
+                  <Link href="/analytics" data-testid="link-nav-analytics">
+                    <BarChart3 className="h-4 w-4" />
+                    <span>التقارير</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -104,51 +116,186 @@ export function AppSidebar() {
           <Collapsible defaultOpen className="group/collapsible">
             <SidebarGroupLabel asChild>
               <CollapsibleTrigger className="flex w-full items-center justify-between">
-                Chatbot
+                الليدز
                 <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
               </CollapsibleTrigger>
             </SidebarGroupLabel>
             <CollapsibleContent>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {botItems.map(item => (
-                    <SidebarMenuItem key={item.url}>
-                      <SidebarMenuButton asChild isActive={location === item.url || location.startsWith(item.url + "/")}>
-                        <Link href={item.url} data-testid={`link-nav-${item.url.replace(/\//g, "-").slice(1)}`}>
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.title}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={isActive("/leads/pipeline")}>
+                      <Link href="/leads/pipeline" data-testid="link-nav-pipeline">
+                        <Kanban className="h-4 w-4" />
+                        <span>خط سير الليدز</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={location === "/leads"}>
+                      <Link href="/leads" data-testid="link-nav-leads">
+                        <Users className="h-4 w-4" />
+                        <span>جميع الليدز</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={isActive("/follow-ups")}>
+                      <Link href="/follow-ups" data-testid="link-nav-follow-ups">
+                        <CalendarCheck className="h-4 w-4" />
+                        <span>متابعات اليوم</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
                 </SidebarMenu>
               </SidebarGroupContent>
             </CollapsibleContent>
           </Collapsible>
         </SidebarGroup>
 
-        {adminItems.length > 0 && (
+        <SidebarGroup>
+          <Collapsible className="group/collapsible">
+            <SidebarGroupLabel asChild>
+              <CollapsibleTrigger className="flex w-full items-center justify-between">
+                إدارة الليدز
+                <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
+              </CollapsibleTrigger>
+            </SidebarGroupLabel>
+            <CollapsibleContent>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {isManager(userRole) && (
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild isActive={isActive("/leads/upload")}>
+                        <Link href="/leads/upload" data-testid="link-nav-upload-leads">
+                          <Upload className="h-4 w-4" />
+                          <span>رفع الليدز</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )}
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={isActive("/leads?action=add")}>
+                      <Link href="/leads?action=add" data-testid="link-nav-add-lead">
+                        <UserPlus className="h-4 w-4" />
+                        <span>إضافة ليد</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={isActive("/leads/duplicates")}>
+                      <Link href="/leads/duplicates" data-testid="link-nav-duplicates">
+                        <Copy className="h-4 w-4" />
+                        <span>الليدز المكررة</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={isActive("/leads/withdrawn")}>
+                      <Link href="/leads/withdrawn" data-testid="link-nav-withdrawn">
+                        <UserX className="h-4 w-4" />
+                        <span>الليدز المنسحبة</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={isActive("/activity-log")}>
+                      <Link href="/activity-log" data-testid="link-nav-activity-log">
+                        <History className="h-4 w-4" />
+                        <span>سجل الإجراءات</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </CollapsibleContent>
+          </Collapsible>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={isActive("/knowledge-base")}>
+                  <Link href="/knowledge-base" data-testid="link-nav-knowledge-base">
+                    <BookOpen className="h-4 w-4" />
+                    <span>قاعدة المعرفة</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <Collapsible className="group/collapsible">
+            <SidebarGroupLabel asChild>
+              <CollapsibleTrigger className="flex w-full items-center justify-between">
+                التواصل
+                <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
+              </CollapsibleTrigger>
+            </SidebarGroupLabel>
+            <CollapsibleContent>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={isActive("/conversations")}>
+                      <Link href="/conversations" data-testid="link-nav-conversations">
+                        <MessageSquare className="h-4 w-4" />
+                        <span>واتساب</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={isActive("/chatbot-config")}>
+                      <Link href="/chatbot-config" data-testid="link-nav-chatbot-config">
+                        <BotMessageSquare className="h-4 w-4" />
+                        <span>إعدادات الشات بوت</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </CollapsibleContent>
+          </Collapsible>
+        </SidebarGroup>
+
+        {isAdmin(userRole) && (
           <SidebarGroup>
             <Collapsible className="group/collapsible">
               <SidebarGroupLabel asChild>
                 <CollapsibleTrigger className="flex w-full items-center justify-between">
-                  Administration
+                  الإدارة
                   <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
                 </CollapsibleTrigger>
               </SidebarGroupLabel>
               <CollapsibleContent>
                 <SidebarGroupContent>
                   <SidebarMenu>
-                    {adminItems.map(item => (
-                      <SidebarMenuItem key={item.url}>
-                        <SidebarMenuButton asChild isActive={location === item.url}>
-                          <Link href={item.url} data-testid={`link-nav-${item.url.replace(/\//g, "-").slice(1)}`}>
-                            <item.icon className="h-4 w-4" />
-                            <span>{item.title}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild isActive={isActive("/integrations")}>
+                        <Link href="/integrations" data-testid="link-nav-integrations">
+                          <Plug className="h-4 w-4" />
+                          <span>التكاملات</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild isActive={isActive("/settings/users")}>
+                        <Link href="/settings/users" data-testid="link-nav-settings-users">
+                          <UsersRound className="h-4 w-4" />
+                          <span>المستخدمين</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild isActive={isActive("/settings")}>
+                        <Link href="/settings" data-testid="link-nav-settings">
+                          <Settings className="h-4 w-4" />
+                          <span>الإعدادات</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
                   </SidebarMenu>
                 </SidebarGroupContent>
               </CollapsibleContent>

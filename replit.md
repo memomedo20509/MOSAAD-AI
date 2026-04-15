@@ -53,13 +53,20 @@ Preferred communication style: Simple, everyday language.
 
 ### Pages
 - `/` → Dashboard (overview stats)
-- `/conversations` → WhatsApp inbox with real-time messaging, bot toggle per lead
-- `/leads` → Lead management table
+- `/leaderboard` → Sales agent rankings with deals/leads metrics (manager+)
+- `/analytics` → Performance analytics and reports
+- `/leads/pipeline` → Kanban board with drag-and-drop state management
+- `/leads` → Lead management table (all leads)
+- `/follow-ups` → Today's reminders and tasks with completion toggles
+- `/leads/upload` → Import leads from Excel/CSV files (manager+)
+- `/leads/duplicates` → Detect and manage duplicate leads by phone number
+- `/leads/withdrawn` → View/restore leads in "lost" category states
+- `/activity-log` → Global timeline of all lead actions and history
 - `/knowledge-base` → Manage AI knowledge base items (products/services/FAQs)
-- `/analytics` → Performance analytics
+- `/conversations` → WhatsApp inbox with real-time messaging, bot toggle per lead
 - `/chatbot-config` → Bot personality, mission, working hours, enabled projects
-- `/settings` → Company profile settings
 - `/integrations` → WhatsApp connection, API keys
+- `/settings` → Company profile settings
 - `/settings/users` → User management (admin only)
 - `/settings/teams` → Team management (admin only)
 
