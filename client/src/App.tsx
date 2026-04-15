@@ -45,6 +45,8 @@ import PlatformTicketsPage from "@/pages/platform/tickets";
 import TicketDetailPage from "@/pages/platform/ticket-detail";
 import PlatformNotificationsPage from "@/pages/platform/notifications";
 import PlatformSettingsPage from "@/pages/platform/settings";
+import PlatformLeadsPage from "@/pages/platform-leads";
+import PlatformLeadPipelinePage from "@/pages/platform-lead-pipeline";
 
 function LogoutButton() {
   const { logoutMutation } = useAuth();
@@ -103,6 +105,8 @@ function PlatformRouter() {
         <Route path="/platform/tickets/:id" component={TicketDetailPage} />
         <Route path="/platform/notifications" component={PlatformNotificationsPage} />
         <Route path="/platform/settings" component={PlatformSettingsPage} />
+        <Route path="/platform/leads/pipeline" component={PlatformLeadPipelinePage} />
+        <Route path="/platform/leads" component={PlatformLeadsPage} />
         <Route component={NotFound} />
       </Switch>
     </PlatformLayout>

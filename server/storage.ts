@@ -134,6 +134,13 @@ import {
   type InsertTicketReply,
   type PlatformNotification,
   type InsertPlatformNotification,
+  platformLeads,
+  platformLeadHistory,
+  type PlatformLead,
+  type InsertPlatformLead,
+  type UpdatePlatformLead,
+  type PlatformLeadHistory,
+  type InsertPlatformLeadHistory,
 } from "@shared/schema";
 import {
   customRoles,
@@ -644,6 +651,21 @@ export interface IStorage {
 
   getPlatformCompanies(filters?: { status?: string; planId?: string }): Promise<(typeof companies.$inferSelect & { usersCount: number; leadsCount: number })[]>;
   getPlatformCompanyDetail(id: string): Promise<(typeof companies.$inferSelect & { users: (typeof users.$inferSelect)[] }) | undefined>;
+
+  // Platform Leads (Sales CRM for platform owner)
+  getAllPlatformLeads(): Promise<PlatformLead[]>;
+  getPlatformLead(id: string): Promise<PlatformLead | undefined>;
+  createPlatformLead(data: InsertPlatformLead): Promise<PlatformLead>;
+  updatePlatformLead(id: string, data: UpdatePlatformLead, performedBy?: string): Promise<PlatformLead | undefined>;
+  deletePlatformLead(id: string): Promise<boolean>;
+  getPlatformLeadHistory(platformLeadId: string): Promise<PlatformLeadHistory[]>;
+  createPlatformLeadHistory(data: InsertPlatformLeadHistory): Promise<PlatformLeadHistory>;
+  getPlatformSalesKPIs(): Promise<{
+    leadsThisMonth: number;
+    demosScheduled: number;
+    conversionRate: number;
+    pipelineValue: number;
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3568,6 +3590,84 @@ export class DatabaseStorage implements IStorage {
     const companyUsers = await db.select().from(users).where(eq(users.companyId, id));
     return { ...company, users: companyUsers };
   }
+
+  // ─── Platform Leads ──────────────────────────────────────────────────────────
+  async getAllPlatformLeads(): Promise<PlatformLead[]> {
+    return db.select().from(platformLeads).orderBy(platformLeads.createdAt);
+  }
+
+  async getPlatformLead(id: string): Promise<PlatformLead | undefined> {
+    const [row] = await db.select().from(platformLeads).where(eq(platformLeads.id, id));
+    return row;
+  }
+
+  async createPlatformLead(data: InsertPlatformLead): Promise<PlatformLead> {
+    const [row] = await db.insert(platformLeads).values(data).returning();
+    await db.insert(platformLeadHistory).values({
+      platformLeadId: row.id,
+      action: "created",
+      description: `تم إضافة الليد: ${row.companyName}`,
+    });
+    return row;
+  }
+
+  async updatePlatformLead(id: string, data: UpdatePlatformLead, performedBy?: string): Promise<PlatformLead | undefined> {
+    const existing = await this.getPlatformLead(id);
+    if (!existing) return undefined;
+    const [row] = await db.update(platformLeads)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(platformLeads.id, id))
+      .returning();
+    if (!row) return undefined;
+    if (data.stage && data.stage !== existing.stage) {
+      await db.insert(platformLeadHistory).values({
+        platformLeadId: id,
+        action: "stage_change",
+        description: `تغيير المرحلة`,
+        performedBy,
+        fromStage: existing.stage,
+        toStage: data.stage,
+      });
+    } else {
+      await db.insert(platformLeadHistory).values({
+        platformLeadId: id,
+        action: "updated",
+        description: "تم تحديث بيانات الليد",
+        performedBy,
+      });
+    }
+    return row;
+  }
+
+  async deletePlatformLead(id: string): Promise<boolean> {
+    const result = await db.delete(platformLeads).where(eq(platformLeads.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getPlatformLeadHistory(platformLeadId: string): Promise<PlatformLeadHistory[]> {
+    return db.select().from(platformLeadHistory)
+      .where(eq(platformLeadHistory.platformLeadId, platformLeadId))
+      .orderBy(platformLeadHistory.createdAt);
+  }
+
+  async createPlatformLeadHistory(data: InsertPlatformLeadHistory): Promise<PlatformLeadHistory> {
+    const [row] = await db.insert(platformLeadHistory).values(data).returning();
+    return row;
+  }
+
+  async getPlatformSalesKPIs(): Promise<{ leadsThisMonth: number; demosScheduled: number; conversionRate: number; pipelineValue: number }> {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const allLeads = await db.select().from(platformLeads);
+    const leadsThisMonth = allLeads.filter(l => l.createdAt && new Date(l.createdAt) >= monthStart).length;
+    const demosScheduled = allLeads.filter(l => l.stage === "demo_scheduled" || l.stage === "demo_done").length;
+    const wonLeads = allLeads.filter(l => l.stage === "won").length;
+    const totalClosed = allLeads.filter(l => l.stage === "won" || l.stage === "lost").length;
+    const conversionRate = totalClosed > 0 ? Math.round((wonLeads / totalClosed) * 100) : 0;
+    const pipelineValue = allLeads
+      .filter(l => !["won", "lost"].includes(l.stage))
+      .reduce((sum, l) => sum + (l.dealValue ?? 0), 0);
+    return { leadsThisMonth, demosScheduled, conversionRate, pipelineValue };
   }
 }
 

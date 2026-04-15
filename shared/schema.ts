@@ -815,6 +815,49 @@ export const tickets = pgTable("tickets", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// ─── Platform Leads (Platform Admin Sales CRM) ───────────────────────────────
+export const PLATFORM_LEAD_STAGES = [
+  "new_lead",
+  "contacted",
+  "demo_scheduled",
+  "demo_done",
+  "proposal_sent",
+  "negotiation",
+  "won",
+  "lost",
+] as const;
+export type PlatformLeadStage = typeof PLATFORM_LEAD_STAGES[number];
+
+export const PLATFORM_LEAD_STAGE_LABELS: Record<PlatformLeadStage, string> = {
+  new_lead: "ليد جديد",
+  contacted: "تم التواصل",
+  demo_scheduled: "ديمو مجدول",
+  demo_done: "ديمو منتهي",
+  proposal_sent: "تم إرسال العرض",
+  negotiation: "تفاوض",
+  won: "تم الإغلاق",
+  lost: "خسارة",
+};
+
+export const PLATFORM_LEAD_SOURCES = ["website", "referral", "social", "cold_outreach"] as const;
+export type PlatformLeadSource = typeof PLATFORM_LEAD_SOURCES[number];
+
+export const platformLeads = pgTable("platform_leads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyName: text("company_name").notNull(),
+  contactName: text("contact_name"),
+  email: text("email"),
+  phone: text("phone"),
+  source: text("source").default("website"),
+  assignedRep: text("assigned_rep"),
+  notes: text("notes"),
+  nextActionDate: timestamp("next_action_date"),
+  dealValue: numeric("deal_value", { mode: "number" }),
+  stage: text("stage").notNull().default("new_lead"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const insertTicketSchema = createInsertSchema(tickets).omit({ id: true, createdAt: true, updatedAt: true });
 export const updateTicketSchema = insertTicketSchema.partial();
 export type InsertTicket = z.infer<typeof insertTicketSchema>;
@@ -853,6 +896,31 @@ export const platformNotifications = pgTable("platform_notifications", {
 export const insertPlatformNotificationSchema = createInsertSchema(platformNotifications).omit({ id: true, createdAt: true });
 export type InsertPlatformNotification = z.infer<typeof insertPlatformNotificationSchema>;
 export type PlatformNotification = typeof platformNotifications.$inferSelect;
+
+export const insertPlatformLeadSchema = createInsertSchema(platformLeads).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  stage: z.enum(PLATFORM_LEAD_STAGES).default("new_lead"),
+  source: z.enum(PLATFORM_LEAD_SOURCES).optional(),
+  companyName: z.string().min(1, "Company name is required"),
+});
+export const updatePlatformLeadSchema = insertPlatformLeadSchema.partial();
+export type InsertPlatformLead = z.infer<typeof insertPlatformLeadSchema>;
+export type UpdatePlatformLead = z.infer<typeof updatePlatformLeadSchema>;
+export type PlatformLead = typeof platformLeads.$inferSelect;
+
+export const platformLeadHistory = pgTable("platform_lead_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  platformLeadId: varchar("platform_lead_id").references(() => platformLeads.id, { onDelete: "cascade" }).notNull(),
+  action: text("action").notNull(),
+  description: text("description"),
+  performedBy: text("performed_by"),
+  fromStage: text("from_stage"),
+  toStage: text("to_stage"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertPlatformLeadHistorySchema = createInsertSchema(platformLeadHistory).omit({ id: true, createdAt: true });
+export type InsertPlatformLeadHistory = z.infer<typeof insertPlatformLeadHistorySchema>;
+export type PlatformLeadHistory = typeof platformLeadHistory.$inferSelect;
 
 // TypeScript interfaces for WhatsApp conversation inbox (mapped from whatsapp_messages_log)
 export interface Conversation {

@@ -69,6 +69,9 @@ import {
   updateKnowledgeBaseSchema,
   insertSubscriptionPlanSchema,
   updateSubscriptionPlanSchema,
+  insertPlatformLeadSchema,
+  updatePlatformLeadSchema,
+  insertPlatformLeadHistorySchema,
   type Lead,
   type InsertLead,
 } from "@shared/schema";
@@ -5780,6 +5783,95 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to mark all as read" });
+    }
+  });
+
+  // ─── Platform Leads (Sales CRM for platform_admin) ───────────────────────────
+  app.get("/api/platform/leads", isAuthenticated, requirePlatformAdmin, async (_req, res) => {
+    try {
+      const leads = await storage.getAllPlatformLeads();
+      res.json(leads);
+    } catch (err) {
+      console.error("Error fetching platform leads:", err);
+      res.status(500).json({ error: "Failed to fetch platform leads" });
+    }
+  });
+
+  app.get("/api/platform/leads/kpis", isAuthenticated, requirePlatformAdmin, async (_req, res) => {
+    try {
+      const kpis = await storage.getPlatformSalesKPIs();
+      res.json(kpis);
+    } catch (err) {
+      console.error("Error fetching platform KPIs:", err);
+      res.status(500).json({ error: "Failed to fetch platform KPIs" });
+    }
+  });
+
+  app.get("/api/platform/leads/:id", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const lead = await storage.getPlatformLead(req.params.id);
+      if (!lead) return res.status(404).json({ error: "Platform lead not found" });
+      res.json(lead);
+    } catch (err) {
+      console.error("Error fetching platform lead:", err);
+      res.status(500).json({ error: "Failed to fetch platform lead" });
+    }
+  });
+
+  app.get("/api/platform/leads/:id/history", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const history = await storage.getPlatformLeadHistory(req.params.id);
+      res.json(history);
+    } catch (err) {
+      console.error("Error fetching platform lead history:", err);
+      res.status(500).json({ error: "Failed to fetch platform lead history" });
+    }
+  });
+
+  app.post("/api/platform/leads", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const data = insertPlatformLeadSchema.parse(req.body);
+      const lead = await storage.createPlatformLead(data);
+      res.status(201).json(lead);
+    } catch (err) {
+      console.error("Error creating platform lead:", err);
+      res.status(400).json({ error: "Failed to create platform lead" });
+    }
+  });
+
+  app.patch("/api/platform/leads/:id", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const data = updatePlatformLeadSchema.parse(req.body);
+      const user = req.user as { firstName?: string; lastName?: string; username?: string } | undefined;
+      const performedBy = user ? (`${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.username) : undefined;
+      const lead = await storage.updatePlatformLead(req.params.id, data, performedBy);
+      if (!lead) return res.status(404).json({ error: "Platform lead not found" });
+      res.json(lead);
+    } catch (err) {
+      console.error("Error updating platform lead:", err);
+      res.status(400).json({ error: "Failed to update platform lead" });
+    }
+  });
+
+  app.delete("/api/platform/leads/:id", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const deleted = await storage.deletePlatformLead(req.params.id);
+      if (!deleted) return res.status(404).json({ error: "Platform lead not found" });
+      res.status(204).send();
+    } catch (err) {
+      console.error("Error deleting platform lead:", err);
+      res.status(500).json({ error: "Failed to delete platform lead" });
+    }
+  });
+
+  app.post("/api/platform/leads/:id/history", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const data = insertPlatformLeadHistorySchema.parse({ ...req.body, platformLeadId: req.params.id });
+      const entry = await storage.createPlatformLeadHistory(data);
+      res.status(201).json(entry);
+    } catch (err) {
+      console.error("Error adding platform lead history:", err);
+      res.status(400).json({ error: "Failed to add history entry" });
     }
   });
 

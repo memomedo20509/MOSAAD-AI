@@ -580,6 +580,38 @@ export async function syncDatabaseSchema(): Promise<void> {
       )
     `);
 
+    // Platform Leads (Sales CRM for platform owner)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS platform_leads (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_name TEXT NOT NULL,
+        contact_name TEXT,
+        email TEXT,
+        phone TEXT,
+        source TEXT DEFAULT 'website',
+        assigned_rep TEXT,
+        notes TEXT,
+        next_action_date TIMESTAMP,
+        deal_value NUMERIC,
+        stage TEXT NOT NULL DEFAULT 'new_lead',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS platform_lead_history (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        platform_lead_id VARCHAR NOT NULL REFERENCES platform_leads(id) ON DELETE CASCADE,
+        action TEXT NOT NULL,
+        description TEXT,
+        performed_by TEXT,
+        from_stage TEXT,
+        to_stage TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
     await client.query("COMMIT");
     console.log("[db-sync] All tables verified/created successfully");
   } catch (error) {

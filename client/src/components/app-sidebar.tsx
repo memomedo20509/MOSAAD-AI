@@ -20,6 +20,8 @@ import {
   UserX,
   History,
   UserPlus,
+  TrendingUp,
+  Building2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -41,7 +43,7 @@ import {
 } from "@/components/ui/collapsible";
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/i18n";
-import { ROLE_ARABIC_NAMES, type UserRole, normalizeRole } from "@shared/models/auth";
+import { ROLE_ARABIC_NAMES, type UserRole, normalizeRole, isPlatformAdmin } from "@shared/models/auth";
 import { useQuery } from "@tanstack/react-query";
 
 const isAdmin = (role: string | null | undefined): boolean => {
@@ -293,6 +295,57 @@ export function AppSidebar() {
                         <Link href="/settings" data-testid="link-nav-settings">
                           <Settings className="h-4 w-4" />
                           <span>الإعدادات</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </CollapsibleContent>
+            </Collapsible>
+          </SidebarGroup>
+        )}
+
+        {isPlatformAdmin(userRole) && (
+          <SidebarGroup>
+            <Collapsible defaultOpen className="group/collapsible">
+              <SidebarGroupLabel asChild>
+                <CollapsibleTrigger className="flex w-full items-center justify-between">
+                  Sales CRM المنصة
+                  <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                </CollapsibleTrigger>
+              </SidebarGroupLabel>
+              <CollapsibleContent>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild isActive={location === "/platform"}>
+                        <Link href="/platform" data-testid="link-nav-platform-dashboard">
+                          <LayoutDashboard className="h-4 w-4" />
+                          <span>لوحة تحكم المنصة</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild isActive={isActive("/platform/leads/pipeline")}>
+                        <Link href="/platform/leads/pipeline" data-testid="link-nav-platform-pipeline">
+                          <Kanban className="h-4 w-4" />
+                          <span>Pipeline المبيعات</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild isActive={location === "/platform/leads"}>
+                        <Link href="/platform/leads" data-testid="link-nav-platform-leads">
+                          <Building2 className="h-4 w-4" />
+                          <span>ليدز المنصة</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild isActive={isActive("/analytics")}>
+                        <Link href="/analytics" data-testid="link-nav-platform-analytics">
+                          <TrendingUp className="h-4 w-4" />
+                          <span>التقارير</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
