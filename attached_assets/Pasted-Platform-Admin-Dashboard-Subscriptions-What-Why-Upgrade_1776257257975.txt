@@ -1,0 +1,42 @@
+Platform Admin Dashboard & Subscriptions
+What & Why
+Upgrade the platform owner's admin dashboard into a fully-featured SaaS management control center — covering clinic management, subscription billing, revenue analytics, a sales leads pipeline, and a support ticket system — so the platform owner can run and grow the business entirely from one place.
+
+Done looks like
+Platform admin dashboard homepage showing live KPIs: total active clinics, MRR, ARR, new signups this month, churned clinics, trial-to-paid conversion rate, open support tickets, and upcoming renewals in the next 30 days
+Clinic list with filters (plan, status, specialty, creation date) and status badges (Active, Trial, Suspended, Expired, Cancelled)
+Clinic detail page showing: full profile, usage metrics (users/patients/appointments), WhatsApp bot connection status, subscription history, all invoices, activity log, and support tickets from that clinic
+Clinic actions working correctly: Suspend (with reason), Reactivate, Change plan (with prorated billing note), Reset password, Login-as-clinic (impersonation), and Export clinic data
+Subscription Plans management: add/edit/delete plans with all feature flags toggleable per plan (AI Chatbot, Campaigns, Analytics, Custom subdomain, API access, priority support, specialties, financial module, inventory, custom branding)
+Revenue dashboard: MRR chart (12 months), new vs churned vs expansion MRR breakdown, revenue by plan (pie chart), upcoming renewals list, and overdue invoices list
+Platform invoice management: auto-generated per billing cycle, manual creation, PDF export, status tracking (Draft/Sent/Paid/Overdue/Cancelled), and send-reminder action
+Sales leads pipeline: Kanban board with 7 stages (New Lead → Won), lead detail drawer with all fields (source, assigned rep, notes, next action), list view with filters, and basic activity log per lead
+Support ticket system: tickets list with priority and status filters, ticket detail with internal notes, email notification on update, and SLA tracking (response time shown)
+Platform notification center: chronological feed of system events (new signup, trial expiring, payment overdue, WhatsApp disconnected) with mark-as-read
+Self-service onboarding wizard for new clinics after registration: 5-step flow (Clinic Profile → Add Doctors → Configure Services → WhatsApp Connection → Done!)
+In-app guided tour that triggers on first login for new clinic accounts
+Out of scope
+Online payment processing (Fawry/PayMob)
+White-label / reseller management
+Public API for clinic data
+Mobile app
+Tasks
+Platform dashboard KPIs — Redesign the platform admin homepage with live metric cards (MRR, ARR, active clinics, new signups, churn, conversion rate, open tickets, upcoming renewals). Add MRR trend sparkline chart.
+
+Clinic management — list & detail — Upgrade the clinic list page with full filters, status badges, and quick-action buttons. Build the clinic detail page with tabbed sections (Profile, Usage, Subscription, Invoices, Activity Log, Support Tickets).
+
+Clinic actions — Implement: Suspend clinic (modal with reason field + notification), Reactivate, Change plan (with prorated billing note modal), Reset owner password, Login-as-clinic (session impersonation), Export clinic data (CSV).
+
+Subscription plans management — Rebuild the plans management UI with all feature flags as toggleable switches per plan. Include monthly and annual pricing fields, and per-plan limits (max users, max patients, max WhatsApp numbers).
+
+Revenue & billing dashboard — Build the revenue page with MRR chart (12-month bar/line chart), MRR breakdown (new/churned/expansion), revenue-by-plan pie chart, upcoming renewals table, and overdue invoices list. Build invoice management with PDF export and send-reminder action.
+
+Sales leads pipeline — Build a CRM pipeline for platform leads: Kanban board (drag-and-drop stages), lead detail side drawer, list view with filters (source, stage, assigned rep, date), and activity log per lead.
+
+Support ticket system — Build ticket list (with priority/status filters and SLA indicator), ticket detail page (full thread, internal notes, status/priority controls, email notification trigger).
+
+Platform notifications center — Build the notification feed with event types (new signup, trial expiring, overdue, WhatsApp disconnected) and mark-as-read. Add a notification bell in the platform sidebar header.
+
+Self-service onboarding wizard — Build the 5-step post-registration wizard for new clinics: Step 1 (Clinic profile + working hours), Step 2 (Add first doctor), Step 3 (Services list), Step 4 (WhatsApp QR connection or skip), Step 5 (Done screen with quick-start guide). Persist progress so the user can continue later.
+
+In-app guided tour — Implement a tooltip-based guided tour that auto-triggers on first clinic login, walks through 6–8 key UI elements, shows a progress indicator, and can be replayed from the Help menu.
