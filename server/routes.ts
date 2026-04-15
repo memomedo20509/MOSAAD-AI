@@ -4408,7 +4408,9 @@ export async function registerRoutes(
       }
       const { fetchPageDetails } = await import("./meta");
       const META_GRAPH_BASE = "https://graph.facebook.com/v19.0";
-      const pagesRes = await fetch(`${META_GRAPH_BASE}/me/accounts?access_token=${userAccessToken}`);
+      const pagesRes = await fetch(`${META_GRAPH_BASE}/me/accounts`, {
+        headers: { Authorization: `Bearer ${userAccessToken}` },
+      });
       if (!pagesRes.ok) {
         return res.status(400).json({ error: "Failed to fetch pages from Facebook" });
       }
@@ -4617,6 +4619,20 @@ export async function registerRoutes(
     } catch (err) {
       console.error("[Meta] Mark read error:", err);
       res.status(500).json({ error: "Failed to mark read" });
+    }
+  });
+
+  // GET /api/social-inbox — unified Messenger/Instagram inbox grouped by lead
+  app.get("/api/social-inbox", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const userRole = (req.user as any)?.role ?? "sales_agent";
+      const teamId = (req.user as any)?.teamId ?? null;
+      const conversations = await storage.getSocialInbox(userId, userRole, teamId);
+      res.json(conversations);
+    } catch (error) {
+      console.error("Social inbox error:", error);
+      res.status(500).json({ error: "Failed to fetch social inbox" });
     }
   });
 

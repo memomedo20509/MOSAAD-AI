@@ -395,6 +395,16 @@ export interface IStorage {
   findSocialMessageById(messageId: string): Promise<SocialMessagesLog | undefined>;
   markSocialMessagesRead(leadId: string, platform: string): Promise<void>;
   getUnreadSocialCount(userId: string, userRole: string, teamId?: string | null): Promise<number>;
+  getSocialInbox(userId: string, userRole: string, teamId?: string | null): Promise<{
+    leadId: string;
+    leadName: string | null;
+    senderId: string;
+    platform: string;
+    lastMessage: string | null;
+    lastMessageAt: Date | null;
+    unreadCount: number;
+    totalCount: number;
+  }[]>;
 
   // Sales Performance Reports
   getSalesActivityReport(from?: Date, to?: Date): Promise<{
@@ -2359,6 +2369,51 @@ export class DatabaseStorage implements IStorage {
     } catch {
       return 0;
     }
+  }
+
+  async getSocialInbox(userId: string, userRole: string, teamId?: string | null): Promise<{
+    leadId: string;
+    leadName: string | null;
+    senderId: string;
+    platform: string;
+    lastMessage: string | null;
+    lastMessageAt: Date | null;
+    unreadCount: number;
+    totalCount: number;
+  }[]> {
+    const accessibleLeads = await this.getLeadsByRole(userId, userRole, teamId ?? null);
+    if (accessibleLeads.length === 0) return [];
+
+    const accessibleLeadIds = accessibleLeads.map(l => l.id);
+    const leadMap = new Map(accessibleLeads.map(l => [l.id, l]));
+
+    const placeholders = accessibleLeadIds.map((_, i) => `$${i + 1}`).join(", ");
+    const { rows } = await pool.query(`
+      SELECT
+        lead_id AS "leadId",
+        platform,
+        (ARRAY_AGG(sender_id ORDER BY created_at DESC))[1] AS "senderId",
+        MAX(created_at) AS "lastMessageAt",
+        (ARRAY_AGG(message_text ORDER BY created_at DESC))[1] AS "lastMessage",
+        COUNT(*)::int AS "totalCount",
+        COUNT(*) FILTER (WHERE direction = 'inbound' AND is_read = false)::int AS "unreadCount"
+      FROM social_messages_log
+      WHERE lead_id = ANY(ARRAY[${placeholders}])
+        AND lead_id IS NOT NULL
+      GROUP BY lead_id, platform
+      ORDER BY MAX(created_at) DESC
+    `, accessibleLeadIds);
+
+    return rows.map((row: any) => ({
+      leadId: row.leadId,
+      leadName: leadMap.get(row.leadId)?.name ?? null,
+      senderId: row.senderId ?? "",
+      platform: row.platform ?? "messenger",
+      lastMessage: row.lastMessage ?? null,
+      lastMessageAt: row.lastMessageAt ? new Date(row.lastMessageAt) : null,
+      unreadCount: row.unreadCount ?? 0,
+      totalCount: row.totalCount ?? 0,
+    }));
   }
 
   // Sales Performance Reports

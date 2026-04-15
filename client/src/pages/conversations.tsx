@@ -5,17 +5,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { MessageSquare, Send, Phone, User, Bot, UserCheck } from "lucide-react";
-import { SiWhatsapp } from "react-icons/si";
+import { SiFacebook, SiInstagram, SiWhatsapp } from "react-icons/si";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Conversation, WhatsappMessagesLog } from "@shared/schema";
+import type { WhatsappMessagesLog, SocialMessagesLog } from "@shared/schema";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
-interface InboxEntry {
+type FilterTab = "all" | "whatsapp" | "messenger" | "instagram";
+
+interface WhatsappInboxItem {
   leadId: string;
   leadName: string | null;
   phone: string;
@@ -24,6 +24,29 @@ interface InboxEntry {
   lastMessageAt: string | null;
   unreadCount: number;
   totalCount: number;
+}
+
+interface SocialInboxItem {
+  leadId: string;
+  leadName: string | null;
+  senderId: string;
+  platform: string;
+  lastMessage: string | null;
+  lastMessageAt: string | null;
+  unreadCount: number;
+  totalCount: number;
+}
+
+interface UnifiedConversation {
+  leadId: string;
+  leadName: string | null;
+  identifier: string;
+  platform: "whatsapp" | "messenger" | "instagram";
+  lastMessage: string | null;
+  lastMessageAt: string | null;
+  unreadCount: number;
+  totalCount: number;
+  phone2?: string | null;
 }
 
 interface LeadInfo {
@@ -38,28 +61,117 @@ interface LeadInfo {
   location: string | null;
 }
 
+const PLATFORM_ICON: Record<string, React.ReactNode> = {
+  messenger: <SiFacebook className="h-4 w-4 text-[#1877F2]" />,
+  instagram: <SiInstagram className="h-4 w-4 text-[#E4405F]" />,
+  whatsapp: <SiWhatsapp className="h-4 w-4 text-[#25D366]" />,
+};
+
+const PLATFORM_LABEL: Record<string, string> = {
+  messenger: "ماسنجر",
+  instagram: "إنستجرام",
+  whatsapp: "واتساب",
+};
+
+interface UnifiedMessage {
+  id: string;
+  direction: string;
+  messageText: string | null;
+  agentName: string | null;
+  createdAt: string | null;
+  botActionsSummary?: string | null;
+}
+
 export default function ConversationsPage() {
   const { toast } = useToast();
-  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<FilterTab>("all");
+  const [selectedConv, setSelectedConv] = useState<UnifiedConversation | null>(null);
   const [replyText, setReplyText] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { data: inbox = [], isLoading } = useQuery<InboxEntry[]>({
+  const { data: waInbox = [], isLoading: waLoading } = useQuery<WhatsappInboxItem[]>({
     queryKey: ["/api/whatsapp/inbox"],
     refetchInterval: 10000,
   });
 
-  const { data: messages = [], isLoading: messagesLoading } = useQuery<WhatsappMessagesLog[]>({
-    queryKey: ["/api/leads", selectedLeadId, "whatsapp-log"],
-    enabled: !!selectedLeadId,
+  const { data: socialInbox = [], isLoading: socialLoading } = useQuery<SocialInboxItem[]>({
+    queryKey: ["/api/social-inbox"],
+    refetchInterval: 10000,
+  });
+
+  const unified: UnifiedConversation[] = [
+    ...waInbox.map((w): UnifiedConversation => ({
+      leadId: w.leadId,
+      leadName: w.leadName,
+      identifier: w.phone,
+      platform: "whatsapp",
+      lastMessage: w.lastMessage,
+      lastMessageAt: w.lastMessageAt,
+      unreadCount: w.unreadCount,
+      totalCount: w.totalCount,
+      phone2: w.phone2,
+    })),
+    ...socialInbox.map((s): UnifiedConversation => ({
+      leadId: s.leadId,
+      leadName: s.leadName,
+      identifier: s.senderId,
+      platform: s.platform as "messenger" | "instagram",
+      lastMessage: s.lastMessage,
+      lastMessageAt: s.lastMessageAt,
+      unreadCount: s.unreadCount,
+      totalCount: s.totalCount,
+    })),
+  ].sort((a, b) => {
+    const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+    const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+    return bTime - aTime;
+  });
+
+  const isWhatsApp = selectedConv?.platform === "whatsapp";
+  const isSocial = selectedConv?.platform === "messenger" || selectedConv?.platform === "instagram";
+
+  const { data: waMessages = [], isLoading: waMsgLoading } = useQuery<WhatsappMessagesLog[]>({
+    queryKey: ["/api/leads", selectedConv?.leadId, "whatsapp-log"],
+    enabled: !!selectedConv && isWhatsApp,
+    refetchInterval: 5000,
+  });
+
+  const { data: socialMessages = [], isLoading: socialMsgLoading } = useQuery<SocialMessagesLog[]>({
+    queryKey: ["/api/leads", selectedConv?.leadId, "social-messages", selectedConv?.platform],
+    queryFn: async () => {
+      const res = await fetch(`/api/leads/${selectedConv!.leadId}/social-messages?platform=${selectedConv!.platform}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+    enabled: !!selectedConv && isSocial,
     refetchInterval: 5000,
   });
 
   const { data: leadInfo } = useQuery<LeadInfo>({
-    queryKey: ["/api/leads", selectedLeadId],
-    enabled: !!selectedLeadId,
+    queryKey: ["/api/leads", selectedConv?.leadId],
+    enabled: !!selectedConv,
   });
+
+  const messages: UnifiedMessage[] = isWhatsApp
+    ? waMessages.map(m => ({
+        id: m.id,
+        direction: m.direction ?? "inbound",
+        messageText: m.messageText,
+        agentName: m.agentName,
+        createdAt: m.createdAt ? String(m.createdAt) : null,
+        botActionsSummary: (m as any).botActionsSummary ?? null,
+      }))
+    : socialMessages.map(m => ({
+        id: m.id,
+        direction: m.direction ?? "inbound",
+        messageText: m.messageText,
+        agentName: m.agentName,
+        createdAt: m.createdAt ? String(m.createdAt) : null,
+        botActionsSummary: m.botActionsSummary ?? null,
+      }));
+
+  const messagesLoading = waMsgLoading || socialMsgLoading;
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -67,20 +179,28 @@ export default function ConversationsPage() {
     }
   }, [messages]);
 
-  useEffect(() => {
-    if (selectedLeadId) {
-      apiRequest("POST", `/api/whatsapp/inbox/${selectedLeadId}/mark-read`).then(() => {
-        queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/inbox"] });
-      }).catch(() => {});
-    }
-  }, [selectedLeadId]);
+  const sendSocialMutation = useMutation({
+    mutationFn: ({ leadId, messageText, platform }: { leadId: string; messageText: string; platform: string }) =>
+      apiRequest("POST", `/api/leads/${leadId}/social-messages/send`, { messageText, platform }),
+    onSuccess: () => {
+      if (selectedConv) {
+        queryClient.invalidateQueries({ queryKey: ["/api/leads", selectedConv.leadId, "social-messages", selectedConv.platform] });
+        queryClient.invalidateQueries({ queryKey: ["/api/social-inbox"] });
+      }
+      setReplyText("");
+      toast({ title: "تم إرسال الرسالة" });
+    },
+    onError: () => toast({ title: "فشل الإرسال", variant: "destructive" }),
+  });
 
-  const sendMutation = useMutation({
+  const sendWhatsAppMutation = useMutation({
     mutationFn: ({ leadId, message }: { leadId: string; message: string }) =>
       apiRequest("POST", "/api/whatsapp/send", { leadId, message }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/leads", selectedLeadId, "whatsapp-log"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/inbox"] });
+      if (selectedConv) {
+        queryClient.invalidateQueries({ queryKey: ["/api/leads", selectedConv.leadId, "whatsapp-log"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/inbox"] });
+      }
       setReplyText("");
     },
     onError: () => toast({ title: "فشل إرسال الرسالة", variant: "destructive" }),
@@ -90,7 +210,9 @@ export default function ConversationsPage() {
     mutationFn: (leadId: string) =>
       apiRequest("POST", `/api/leads/${leadId}/bot/takeover`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/leads", selectedLeadId] });
+      if (selectedConv) {
+        queryClient.invalidateQueries({ queryKey: ["/api/leads", selectedConv.leadId] });
+      }
       toast({ title: "تم تسلّم المحادثة من البوت" });
     },
   });
@@ -99,24 +221,48 @@ export default function ConversationsPage() {
     mutationFn: (leadId: string) =>
       apiRequest("POST", `/api/leads/${leadId}/bot/reactivate`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/leads", selectedLeadId] });
+      if (selectedConv) {
+        queryClient.invalidateQueries({ queryKey: ["/api/leads", selectedConv.leadId] });
+      }
       toast({ title: "تم تفعيل البوت مجدداً" });
     },
   });
 
-  const selectedEntry = inbox.find(e => e.leadId === selectedLeadId) ?? null;
+  const handleSend = () => {
+    if (!selectedConv || !replyText.trim()) return;
+    if (selectedConv.platform === "whatsapp") {
+      sendWhatsAppMutation.mutate({ leadId: selectedConv.leadId, message: replyText.trim() });
+    } else {
+      sendSocialMutation.mutate({
+        leadId: selectedConv.leadId,
+        messageText: replyText.trim(),
+        platform: selectedConv.platform,
+      });
+    }
+  };
+
+  const isSending = sendSocialMutation.isPending || sendWhatsAppMutation.isPending;
+  const isLoading = waLoading || socialLoading;
   const botActive = leadInfo?.botActive ?? true;
   const botStage = leadInfo?.botStage ?? "greeting";
 
-  const filtered = inbox.filter(entry => {
+  const filtered = unified.filter(c => {
+    if (activeTab !== "all" && c.platform !== activeTab) return false;
     if (!searchTerm) return true;
     const s = searchTerm.toLowerCase();
     return (
-      (entry.leadName?.toLowerCase().includes(s)) ||
-      entry.phone.includes(s) ||
-      (entry.lastMessage?.toLowerCase().includes(s))
+      (c.leadName?.toLowerCase().includes(s)) ||
+      c.identifier.includes(s) ||
+      (c.lastMessage?.toLowerCase().includes(s))
     );
   });
+
+  const tabs: { key: FilterTab; label: string; count: number }[] = [
+    { key: "all", label: "الكل", count: unified.length },
+    { key: "whatsapp", label: "واتساب", count: unified.filter(c => c.platform === "whatsapp").length },
+    { key: "messenger", label: "ماسنجر", count: unified.filter(c => c.platform === "messenger").length },
+    { key: "instagram", label: "إنستجرام", count: unified.filter(c => c.platform === "instagram").length },
+  ];
 
   const getBotBadge = () => {
     if (!botActive || botStage === "handed_off") {
@@ -125,11 +271,43 @@ export default function ConversationsPage() {
     return <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">بوت نشط</Badge>;
   };
 
+  const handleSelectConv = (conv: UnifiedConversation) => {
+    setSelectedConv(conv);
+    if (conv.platform === "whatsapp") {
+      apiRequest("POST", `/api/whatsapp/inbox/${conv.leadId}/mark-read`).then(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/inbox"] });
+      }).catch(() => {});
+    } else {
+      apiRequest("POST", `/api/leads/${conv.leadId}/social-messages/read`, { platform: conv.platform }).catch(() => {});
+    }
+  };
+
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col" data-testid="page-conversations">
       <div className="mb-4">
         <h1 className="text-2xl font-semibold tracking-tight">صندوق المحادثات</h1>
-        <p className="text-muted-foreground">محادثات واتساب مع العملاء</p>
+        <p className="text-muted-foreground">جميع المحادثات عبر واتساب وماسنجر وإنستجرام</p>
+      </div>
+
+      <div className="flex gap-1 mb-4 border-b">
+        {tabs.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            data-testid={`tab-${tab.key}`}
+            className={cn(
+              "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+              activeTab === tab.key
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {tab.label}
+            {tab.count > 0 && (
+              <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs">{tab.count}</span>
+            )}
+          </button>
+        ))}
       </div>
 
       <div className="flex flex-1 min-h-0 gap-0 border rounded-lg overflow-hidden">
@@ -153,35 +331,35 @@ export default function ConversationsPage() {
             </div>
           ) : (
             <div className="overflow-y-auto flex-1">
-              {filtered.map(entry => (
+              {filtered.map(conv => (
                 <button
-                  key={entry.leadId}
-                  onClick={() => setSelectedLeadId(entry.leadId)}
-                  data-testid={`conv-item-${entry.leadId}`}
+                  key={`${conv.platform}-${conv.leadId}`}
+                  onClick={() => handleSelectConv(conv)}
+                  data-testid={`conv-item-${conv.leadId}`}
                   className={cn(
                     "w-full text-start px-3 py-3 border-b hover:bg-muted/50 transition-colors",
-                    selectedLeadId === entry.leadId && "bg-muted"
+                    selectedConv?.leadId === conv.leadId && selectedConv?.platform === conv.platform && "bg-muted"
                   )}
                 >
                   <div className="flex items-start gap-2">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-green-500/10 shrink-0 mt-0.5">
-                      <SiWhatsapp className="h-4 w-4 text-[#25D366]" />
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 shrink-0 mt-0.5">
+                      {PLATFORM_ICON[conv.platform] ?? <MessageSquare className="h-4 w-4 text-primary" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1">
-                        <span className="font-medium text-sm truncate">{entry.leadName ?? entry.phone}</span>
+                        <span className="font-medium text-sm truncate">{conv.leadName || conv.identifier}</span>
                         <span className="text-xs text-muted-foreground shrink-0">
-                          {entry.lastMessageAt ? format(new Date(entry.lastMessageAt), "HH:mm") : ""}
+                          {conv.lastMessageAt ? format(new Date(conv.lastMessageAt), "HH:mm") : ""}
                         </span>
                       </div>
                       <p className="text-xs text-muted-foreground truncate mt-0.5">
-                        {entry.lastMessage ?? "لا توجد رسائل"}
+                        {conv.lastMessage ?? "لا توجد رسائل"}
                       </p>
                       <div className="flex items-center gap-1 mt-0.5">
-                        <span className="text-xs text-muted-foreground">{entry.phone}</span>
-                        {entry.unreadCount > 0 && (
+                        <span className="text-xs text-muted-foreground">{PLATFORM_LABEL[conv.platform] || conv.platform}</span>
+                        {conv.unreadCount > 0 && (
                           <span className="ml-auto inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">
-                            {entry.unreadCount}
+                            {conv.unreadCount}
                           </span>
                         )}
                       </div>
@@ -194,7 +372,7 @@ export default function ConversationsPage() {
         </div>
 
         <div className="flex flex-1 min-w-0 min-h-0">
-          {!selectedEntry ? (
+          {!selectedConv ? (
             <div className="flex flex-1 items-center justify-center text-muted-foreground flex-col gap-2">
               <MessageSquare className="h-12 w-12" />
               <p>اختر محادثة للعرض</p>
@@ -204,8 +382,9 @@ export default function ConversationsPage() {
               <div className="flex flex-col flex-1 min-w-0 min-h-0">
                 <div className="flex items-center justify-between gap-2 px-4 py-3 border-b bg-card shrink-0">
                   <div className="flex items-center gap-2">
-                    <SiWhatsapp className="h-4 w-4 text-[#25D366]" />
-                    <span className="font-semibold">{selectedEntry.leadName ?? selectedEntry.phone}</span>
+                    {PLATFORM_ICON[selectedConv.platform] ?? <MessageSquare className="h-4 w-4" />}
+                    <span className="font-semibold">{selectedConv.leadName || selectedConv.identifier}</span>
+                    <Badge variant="outline" className="text-xs">{PLATFORM_LABEL[selectedConv.platform]}</Badge>
                     {getBotBadge()}
                   </div>
                   <div className="flex items-center gap-2">
@@ -213,7 +392,7 @@ export default function ConversationsPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => selectedLeadId && takeoverMutation.mutate(selectedLeadId)}
+                        onClick={() => selectedConv && takeoverMutation.mutate(selectedConv.leadId)}
                         disabled={takeoverMutation.isPending}
                         data-testid="button-takeover"
                       >
@@ -224,7 +403,7 @@ export default function ConversationsPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => selectedLeadId && reactivateMutation.mutate(selectedLeadId)}
+                        onClick={() => selectedConv && reactivateMutation.mutate(selectedConv.leadId)}
                         disabled={reactivateMutation.isPending}
                         data-testid="button-reactivate-bot"
                       >
@@ -296,15 +475,15 @@ export default function ConversationsPage() {
                       data-testid="input-reply"
                       dir="rtl"
                       onKeyDown={e => {
-                        if (e.key === "Enter" && !e.shiftKey && replyText.trim() && selectedLeadId) {
-                          sendMutation.mutate({ leadId: selectedLeadId, message: replyText.trim() });
+                        if (e.key === "Enter" && !e.shiftKey && replyText.trim()) {
+                          handleSend();
                         }
                       }}
                     />
                     <Button
                       size="icon"
-                      onClick={() => replyText.trim() && selectedLeadId && sendMutation.mutate({ leadId: selectedLeadId, message: replyText.trim() })}
-                      disabled={!replyText.trim() || sendMutation.isPending}
+                      onClick={handleSend}
+                      disabled={!replyText.trim() || isSending}
                       data-testid="button-send-reply"
                     >
                       <Send className="h-4 w-4" />
@@ -320,15 +499,15 @@ export default function ConversationsPage() {
                     <User className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                     <div>
                       <p className="text-muted-foreground text-xs">الاسم</p>
-                      <p className="font-medium">{leadInfo?.name ?? selectedEntry.leadName ?? "غير معروف"}</p>
+                      <p className="font-medium">{leadInfo?.name ?? selectedConv.leadName ?? "غير معروف"}</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <Phone className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                     <div>
-                      <p className="text-muted-foreground text-xs">الهاتف</p>
-                      <p className="font-medium">{selectedEntry.phone}</p>
-                      {selectedEntry.phone2 && <p className="text-xs text-muted-foreground">{selectedEntry.phone2}</p>}
+                      <p className="text-muted-foreground text-xs">{selectedConv.platform === "whatsapp" ? "الهاتف" : "المعرّف"}</p>
+                      <p className="font-medium">{selectedConv.identifier}</p>
+                      {selectedConv.phone2 && <p className="text-xs text-muted-foreground">{selectedConv.phone2}</p>}
                     </div>
                   </div>
 
@@ -375,8 +554,9 @@ export default function ConversationsPage() {
                   </div>
 
                   <div className="pt-2 border-t text-xs text-muted-foreground">
-                    <p>الرسائل: {selectedEntry.totalCount}</p>
-                    <p>غير مقروءة: {selectedEntry.unreadCount}</p>
+                    <p>المنصة: {PLATFORM_LABEL[selectedConv.platform]}</p>
+                    <p>الرسائل: {selectedConv.totalCount}</p>
+                    <p>غير مقروءة: {selectedConv.unreadCount}</p>
                   </div>
                 </div>
               </div>
