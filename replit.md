@@ -32,7 +32,7 @@ Preferred communication style: Simple, everyday language.
 - **Authentication**: Passport.js with local strategy and session-based auth
 - **Session Storage**: PostgreSQL-backed sessions via connect-pg-simple
 - **WhatsApp**: Baileys library (QR-based connection, not Cloud API)
-- **AI Engine**: OpenRouter (Gemini) or OpenAI for chatbot responses
+- **AI Engine**: OpenRouter (default, Gemini models) or OpenAI — configurable via Integrations page with DB-persisted settings (integration_settings table: ai_provider, openrouter_api_key, openrouter_model)
 
 ### Data Model (shared/schema.ts)
 - **leads** — CRM leads with bot tracking fields (botActive, botStage)

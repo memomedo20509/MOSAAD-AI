@@ -1,12 +1,12 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Eye, EyeOff, CheckCircle2, XCircle, RefreshCw, Smartphone, Wifi, WifiOff, Copy, ExternalLink, AlertCircle, Trash2 } from "lucide-react";
-import { SiFacebook, SiInstagram, SiWhatsapp, SiOpenai } from "react-icons/si";
+import { Eye, EyeOff, CheckCircle2, XCircle, RefreshCw, Smartphone, Wifi, WifiOff, Copy, ExternalLink, AlertCircle, Trash2, Bot } from "lucide-react";
+import { SiFacebook, SiInstagram, SiWhatsapp } from "react-icons/si";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -533,34 +533,202 @@ function MetaSettingsTab() {
   );
 }
 
-export default function IntegrationsPage() {
+interface AISettingsData {
+  aiProvider?: string | null;
+  openrouterApiKey?: string | null;
+  openrouterModel?: string | null;
+  openAiApiKey?: string | null;
+  openAiModel?: string | null;
+}
+
+function AIProviderTab() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const [aiStatus, setAiStatus] = useState<ConnectionState>("disconnected");
-  const [aiForm, setAiForm] = useState({ apiKey: "", model: "gpt-4o-mini" });
-  const [saving, setSaving] = useState(false);
+  const [provider, setProvider] = useState<"openrouter" | "openai">("openrouter");
+  const [orApiKey, setOrApiKey] = useState("");
+  const [orModel, setOrModel] = useState("google/gemini-flash-1.5");
+  const [oaiApiKey, setOaiApiKey] = useState("");
+  const [oaiModel, setOaiModel] = useState("gpt-4o-mini");
+  const [testStatus, setTestStatus] = useState<ConnectionState>("disconnected");
+  const [loaded, setLoaded] = useState(false);
 
-  const testConnection = (platform: "openai") => {
-    setAiStatus("testing");
-    setTimeout(() => {
-      const hasValues = Object.values(aiForm).some(v => v.trim().length > 0);
-      setAiStatus(hasValues ? "connected" : "disconnected");
-      toast({
-        title: hasValues ? "Connection successful" : "Connection failed",
-        description: hasValues ? "Integration is working correctly." : "Please check your credentials.",
-        variant: hasValues ? "default" : "destructive",
+  const { data: settings } = useQuery<AISettingsData>({
+    queryKey: ["/api/integration-settings"],
+  });
+
+  useEffect(() => {
+    if (settings && !loaded) {
+      setProvider((settings.aiProvider as "openrouter" | "openai") || "openrouter");
+      setOrApiKey(settings.openrouterApiKey || "");
+      setOrModel(settings.openrouterModel || "google/gemini-flash-1.5");
+      setOaiApiKey(settings.openAiApiKey || "");
+      setOaiModel(settings.openAiModel || "gpt-4o-mini");
+      if (settings.openrouterApiKey || settings.openAiApiKey) {
+        setTestStatus("connected");
+      }
+      setLoaded(true);
+    }
+  }, [settings, loaded]);
+
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      apiRequest("PUT", "/api/integration-settings", {
+        aiProvider: provider,
+        openrouterApiKey: orApiKey,
+        openrouterModel: orModel,
+        openAiApiKey: oaiApiKey,
+        openAiModel: oaiModel,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/integration-settings"] });
+      toast({ title: "تم حفظ إعدادات الذكاء الاصطناعي" });
+    },
+    onError: () => toast({ title: "فشل حفظ الإعدادات", variant: "destructive" }),
+  });
+
+  const testMutation = useMutation({
+    mutationFn: async () => {
+      const apiKey = provider === "openrouter" ? orApiKey : oaiApiKey;
+      const model = provider === "openrouter" ? orModel : oaiModel;
+      if (!apiKey || apiKey === "••••••••") {
+        throw new Error("أدخل مفتاح API أولاً");
+      }
+      const res = await apiRequest("POST", "/api/integration-settings/test-ai", {
+        provider,
+        apiKey,
+        model,
       });
-    }, 1500);
-  };
+      return res.json() as Promise<{ success: boolean; reply?: string }>;
+    },
+    onMutate: () => setTestStatus("testing"),
+    onSuccess: (data) => {
+      setTestStatus("connected");
+      toast({
+        title: "الاتصال ناجح!",
+        description: data.reply ? `رد النموذج: "${data.reply}"` : undefined,
+      });
+    },
+    onError: (err) => {
+      setTestStatus("disconnected");
+      toast({
+        title: "فشل الاتصال",
+        description: err instanceof Error ? err.message : "تحقق من المفتاح",
+        variant: "destructive",
+      });
+    },
+  });
 
-  const saveSettings = (platform: string) => {
-    setSaving(true);
-    setTimeout(() => {
-      setSaving(false);
-      toast({ title: `${platform} settings saved` });
-    }, 800);
-  };
+  return (
+    <div className="space-y-4 pt-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">حالة الاتصال</p>
+        <ConnectionStatus state={testStatus} />
+      </div>
 
+      <div>
+        <Label>مزود الذكاء الاصطناعي</Label>
+        <select
+          value={provider}
+          onChange={e => { setProvider(e.target.value as "openrouter" | "openai"); setTestStatus("disconnected"); }}
+          className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          data-testid="select-ai-provider"
+        >
+          <option value="openrouter">OpenRouter (أرخص — موصى به)</option>
+          <option value="openai">OpenAI</option>
+        </select>
+      </div>
+
+      {provider === "openrouter" && (
+        <>
+          <div className="rounded-md bg-muted/50 border p-3 text-sm text-muted-foreground">
+            OpenRouter يوفر وصول لعدة نماذج ذكاء اصطناعي بأسعار منخفضة. احصل على مفتاح من{" "}
+            <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="underline text-primary inline-flex items-center gap-0.5">
+              openrouter.ai/keys <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+          <TokenField
+            label="OpenRouter API Key"
+            placeholder="sk-or-v1-xxxxxxxxxxxxxxxx"
+            helpText="مفتاح API من OpenRouter"
+            value={orApiKey}
+            onChange={setOrApiKey}
+          />
+          <div>
+            <Label>النموذج</Label>
+            <select
+              value={orModel}
+              onChange={e => setOrModel(e.target.value)}
+              className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              data-testid="select-openrouter-model"
+            >
+              <option value="google/gemini-flash-1.5">Google Gemini Flash 1.5 (موصى به)</option>
+              <option value="google/gemini-2.0-flash-001">Google Gemini 2.0 Flash</option>
+              <option value="deepseek/deepseek-chat">DeepSeek Chat</option>
+              <option value="meta-llama/llama-3-8b-instruct">Meta Llama 3 8B</option>
+              <option value="meta-llama/llama-3.1-70b-instruct">Meta Llama 3.1 70B</option>
+              <option value="mistralai/mistral-7b-instruct">Mistral 7B</option>
+              <option value="anthropic/claude-3.5-haiku">Claude 3.5 Haiku</option>
+            </select>
+          </div>
+        </>
+      )}
+
+      {provider === "openai" && (
+        <>
+          <div className="rounded-md bg-muted/50 border p-3 text-sm text-muted-foreground">
+            اربط حساب OpenAI لتشغيل الردود الذكية. احصل على مفتاح من{" "}
+            <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline text-primary inline-flex items-center gap-0.5">
+              platform.openai.com <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+          <TokenField
+            label="OpenAI API Key"
+            placeholder="sk-xxxxxxxxxxxxxxxx"
+            helpText="مفتاح OpenAI السري"
+            value={oaiApiKey}
+            onChange={setOaiApiKey}
+          />
+          <div>
+            <Label>النموذج</Label>
+            <select
+              value={oaiModel}
+              onChange={e => setOaiModel(e.target.value)}
+              className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              data-testid="select-openai-model"
+            >
+              <option value="gpt-4o-mini">GPT-4o Mini (موصى به)</option>
+              <option value="gpt-4o">GPT-4o</option>
+              <option value="gpt-4-turbo">GPT-4 Turbo</option>
+              <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+            </select>
+          </div>
+        </>
+      )}
+
+      <div className="flex gap-2 pt-2">
+        <Button
+          variant="outline"
+          onClick={() => testMutation.mutate()}
+          disabled={testStatus === "testing"}
+          data-testid="button-test-ai"
+        >
+          {testStatus === "testing" ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+          اختبار الاتصال
+        </Button>
+        <Button
+          onClick={() => saveMutation.mutate()}
+          disabled={saveMutation.isPending}
+          data-testid="button-save-ai"
+        >
+          {saveMutation.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+export default function IntegrationsPage() {
   return (
     <div className="space-y-6 max-w-2xl" data-testid="page-integrations">
       <div>
@@ -584,9 +752,9 @@ export default function IntegrationsPage() {
                 <SiWhatsapp className="h-4 w-4 text-[#25D366]" />
                 WhatsApp
               </TabsTrigger>
-              <TabsTrigger value="openai" data-testid="tab-openai" className="gap-2">
-                <SiOpenai className="h-4 w-4" />
-                OpenAI
+              <TabsTrigger value="ai-provider" data-testid="tab-ai-provider" className="gap-2">
+                <Bot className="h-4 w-4" />
+                الذكاء الاصطناعي
               </TabsTrigger>
             </TabsList>
 
@@ -598,46 +766,8 @@ export default function IntegrationsPage() {
               <WhatsAppQRTab />
             </TabsContent>
 
-            <TabsContent value="openai">
-              <div className="space-y-4 pt-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">Integration Status</p>
-                  <ConnectionStatus state={aiStatus} />
-                </div>
-                <div className="rounded-md bg-muted/50 border p-3 text-sm text-muted-foreground">
-                  Connect your OpenAI account to power the AI responses. Get your API key from platform.openai.com.
-                </div>
-                <TokenField
-                  label="API Key"
-                  placeholder="sk-xxxxxxxxxxxxxxxx"
-                  helpText="Your secret OpenAI API key"
-                  value={aiForm.apiKey}
-                  onChange={v => setAiForm(f => ({ ...f, apiKey: v }))}
-                />
-                <div>
-                  <Label>Model</Label>
-                  <select
-                    value={aiForm.model}
-                    onChange={e => setAiForm(f => ({ ...f, model: e.target.value }))}
-                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    data-testid="select-openai-model"
-                  >
-                    <option value="gpt-4o-mini">GPT-4o Mini (Recommended)</option>
-                    <option value="gpt-4o">GPT-4o</option>
-                    <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                  </select>
-                </div>
-                <div className="flex gap-2 pt-2">
-                  <Button variant="outline" onClick={() => testConnection("openai")} disabled={aiStatus === "testing"} data-testid="button-test-openai">
-                    {aiStatus === "testing" ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-                    Test Connection
-                  </Button>
-                  <Button onClick={() => saveSettings("OpenAI")} disabled={saving} data-testid="button-save-openai">
-                    {saving ? "Saving..." : "Save Settings"}
-                  </Button>
-                </div>
-              </div>
+            <TabsContent value="ai-provider">
+              <AIProviderTab />
             </TabsContent>
           </Tabs>
         </CardContent>

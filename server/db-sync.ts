@@ -342,11 +342,18 @@ export async function syncDatabaseSchema(): Promise<void> {
       CREATE TABLE IF NOT EXISTS integration_settings (
         id INTEGER PRIMARY KEY DEFAULT 1,
         whatsapp_cloud_token TEXT, whatsapp_phone_number_id TEXT,
-        whatsapp_verify_token TEXT, openai_api_key TEXT,
+        whatsapp_verify_token TEXT,
+        ai_provider TEXT DEFAULT 'openrouter',
+        openrouter_api_key TEXT,
+        openrouter_model TEXT DEFAULT 'google/gemini-flash-1.5',
+        openai_api_key TEXT,
         openai_model TEXT DEFAULT 'gpt-4o-mini',
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `);
+    await client.query(`ALTER TABLE integration_settings ADD COLUMN IF NOT EXISTS ai_provider TEXT DEFAULT 'openrouter'`);
+    await client.query(`ALTER TABLE integration_settings ADD COLUMN IF NOT EXISTS openrouter_api_key TEXT`);
+    await client.query(`ALTER TABLE integration_settings ADD COLUMN IF NOT EXISTS openrouter_model TEXT DEFAULT 'google/gemini-flash-1.5'`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS stale_lead_settings (

@@ -1,15 +1,37 @@
-import type { Lead, WhatsappMessagesLog, Project, Unit, KnowledgeBaseItem } from "@shared/schema";
+import type { Lead, WhatsappMessagesLog, Project, Unit, KnowledgeBaseItem, IntegrationSettings } from "@shared/schema";
+import { storage } from "./storage";
 
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const OPENROUTER_REFERER = process.env.OPENROUTER_REFERER ?? "https://crm.seosahl.cloud";
 const OPENROUTER_TITLE = process.env.OPENROUTER_TITLE ?? "HomeAdvisor CRM";
 
-// google/gemini-flash-1.5 is the default per task spec.
-// Falls back to google/gemini-2.0-flash-001 if the 1.5 alias returns 404.
-const MODEL = process.env.OPENROUTER_MODEL ?? "google/gemini-flash-1.5";
-
 const OPENAI_BASE_URL = "https://api.openai.com/v1";
+
+let _cachedSettings: IntegrationSettings | null = null;
+let _settingsCachedAt = 0;
+const SETTINGS_CACHE_TTL = 30_000;
+
+export function invalidateAISettingsCache(): void {
+  _cachedSettings = null;
+  _settingsCachedAt = 0;
+}
+
+async function loadAISettings(): Promise<IntegrationSettings | undefined> {
+  const now = Date.now();
+  if (_cachedSettings && (now - _settingsCachedAt) < SETTINGS_CACHE_TTL) {
+    return _cachedSettings;
+  }
+  try {
+    const settings = await storage.getIntegrationSettings();
+    if (settings) {
+      _cachedSettings = settings;
+      _settingsCachedAt = now;
+    }
+    return settings;
+  } catch {
+    return _cachedSettings ?? undefined;
+  }
+}
 
 interface OpenAIChoice {
   message: { role: string; content: string };
@@ -56,14 +78,31 @@ async function callOpenAI(
 async function callAI(
   systemPrompt: string,
   userPrompt: string,
-  openAiApiKey?: string | null,
-  openAiModel?: string | null
+  _openAiApiKey?: string | null,
+  _openAiModel?: string | null
 ): Promise<string> {
-  const resolvedOpenAiKey = openAiApiKey || process.env.OPENAI_API_KEY || null;
-  if (resolvedOpenAiKey) {
-    return callOpenAI(systemPrompt, userPrompt, resolvedOpenAiKey, openAiModel || "gpt-4o-mini");
+  const settings = await loadAISettings();
+  const provider = settings?.aiProvider || "openrouter";
+
+  if (provider === "openai") {
+    const resolvedKey = settings?.openAiApiKey || process.env.OPENAI_API_KEY || null;
+    if (resolvedKey) {
+      return callOpenAI(systemPrompt, userPrompt, resolvedKey, settings?.openAiModel || "gpt-4o-mini");
+    }
   }
-  return callGemini(systemPrompt, userPrompt);
+
+  const orKey = settings?.openrouterApiKey || process.env.OPENROUTER_API_KEY || null;
+  if (orKey) {
+    const orModel = settings?.openrouterModel || process.env.OPENROUTER_MODEL || "google/gemini-flash-1.5";
+    return callOpenRouter(systemPrompt, userPrompt, orKey, orModel);
+  }
+
+  const resolvedOpenAiKey = settings?.openAiApiKey || process.env.OPENAI_API_KEY || null;
+  if (resolvedOpenAiKey) {
+    return callOpenAI(systemPrompt, userPrompt, resolvedOpenAiKey, settings?.openAiModel || "gpt-4o-mini");
+  }
+
+  throw new Error("لا يوجد مفتاح API لأي مزود ذكاء اصطناعي. أضف مفتاح OpenRouter أو OpenAI من صفحة الإعدادات.");
 }
 
 interface OpenRouterChoice {
@@ -78,21 +117,22 @@ interface OpenRouterResponse {
   error?: { message: string };
 }
 
-async function callGemini(systemPrompt: string, userPrompt: string): Promise<string> {
-  if (!OPENROUTER_API_KEY) {
-    throw new Error("OPENROUTER_API_KEY غير مضبوط في المتغيرات البيئية");
-  }
-
+async function callOpenRouter(
+  systemPrompt: string,
+  userPrompt: string,
+  apiKey: string,
+  model: string
+): Promise<string> {
   const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
       "HTTP-Referer": OPENROUTER_REFERER,
       "X-Title": OPENROUTER_TITLE,
     },
     body: JSON.stringify({
-      model: MODEL,
+      model,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -104,9 +144,8 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<str
 
   if (!response.ok) {
     const errText = await response.text();
-    // Try to fall back to the 2.0 variant if the 1.5 alias is not found
-    if (response.status === 404 && MODEL === "google/gemini-flash-1.5") {
-      return callGeminiFallback(systemPrompt, userPrompt);
+    if (response.status === 404 && model === "google/gemini-flash-1.5") {
+      return callOpenRouter(systemPrompt, userPrompt, apiKey, "google/gemini-2.0-flash-001");
     }
     throw new Error(`OpenRouter API error ${response.status}: ${errText}`);
   }
@@ -119,39 +158,6 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<str
   return content.trim();
 }
 
-async function callGeminiFallback(systemPrompt: string, userPrompt: string): Promise<string> {
-  const fallbackModel = "google/gemini-2.0-flash-001";
-  const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${OPENROUTER_API_KEY!}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": OPENROUTER_REFERER,
-      "X-Title": OPENROUTER_TITLE,
-    },
-    body: JSON.stringify({
-      model: fallbackModel,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      max_tokens: 1024,
-      temperature: 0.7,
-    }),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`OpenRouter API error ${response.status}: ${errText}`);
-  }
-
-  const data = (await response.json()) as OpenRouterResponse;
-  const content = data?.choices?.[0]?.message?.content;
-  if (!content) {
-    throw new Error("لم يُرجع النموذج أي محتوى");
-  }
-  return content.trim();
-}
 
 function buildLeadContext(lead: Lead): string {
   const parts: string[] = [];
@@ -212,7 +218,7 @@ ${buildConversationHistory(messages)}
 
 اقترح 3 ردود مناسبة.`;
 
-  const raw = await callGemini(systemPrompt, userPrompt);
+  const raw = await callAI(systemPrompt, userPrompt);
 
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
@@ -607,7 +613,7 @@ ${buildConversationHistory(messages)}
 
 حلّل هذه المحادثة واستخرج البيانات المطلوبة.`;
 
-  const raw = await callGemini(systemPrompt, userPrompt);
+  const raw = await callAI(systemPrompt, userPrompt);
 
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {

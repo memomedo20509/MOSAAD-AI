@@ -587,6 +587,11 @@ export const integrationSettings = pgTable("integration_settings", {
   whatsappCloudToken: text("whatsapp_cloud_token"),
   whatsappPhoneNumberId: text("whatsapp_phone_number_id"),
   whatsappVerifyToken: text("whatsapp_verify_token"),
+  // AI Provider preference: "openrouter" (default) or "openai"
+  aiProvider: text("ai_provider").default("openrouter"),
+  // OpenRouter
+  openrouterApiKey: text("openrouter_api_key"),
+  openrouterModel: text("openrouter_model").default("google/gemini-flash-1.5"),
   // OpenAI
   openAiApiKey: text("openai_api_key"),
   openAiModel: text("openai_model").default("gpt-4o-mini"),

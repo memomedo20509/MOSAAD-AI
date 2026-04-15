@@ -4749,11 +4749,11 @@ export async function registerRoutes(
     try {
       const settings = await storage.getIntegrationSettings();
       if (!settings) return res.json({});
-      // Mask secrets before sending to frontend
       const masked = {
         ...settings,
         whatsappCloudToken: settings.whatsappCloudToken ? "••••••••" : null,
         openAiApiKey: settings.openAiApiKey ? "••••••••" : null,
+        openrouterApiKey: settings.openrouterApiKey ? "••••••••" : null,
       };
       res.json(masked);
     } catch (error) {
@@ -4768,22 +4768,34 @@ export async function registerRoutes(
         whatsappCloudToken?: string;
         whatsappPhoneNumberId?: string;
         whatsappVerifyToken?: string;
+        aiProvider?: string;
+        openrouterApiKey?: string;
+        openrouterModel?: string;
         openAiApiKey?: string;
         openAiModel?: string;
       };
 
-      // Load existing to avoid overwriting masked values
       const existing = await storage.getIntegrationSettings();
       const update: Record<string, unknown> = {};
 
       if (body.whatsappPhoneNumberId !== undefined) update.whatsappPhoneNumberId = body.whatsappPhoneNumberId || null;
       if (body.whatsappVerifyToken !== undefined) update.whatsappVerifyToken = body.whatsappVerifyToken || null;
+      if (body.aiProvider !== undefined) {
+        const validProviders = ["openrouter", "openai"];
+        update.aiProvider = validProviders.includes(body.aiProvider) ? body.aiProvider : "openrouter";
+      }
+      if (body.openrouterModel !== undefined) update.openrouterModel = body.openrouterModel || null;
       if (body.openAiModel !== undefined) update.openAiModel = body.openAiModel || null;
-      // Only update secrets if a real value is provided (not masked)
+
       if (body.whatsappCloudToken && body.whatsappCloudToken !== "••••••••") {
         update.whatsappCloudToken = body.whatsappCloudToken;
       } else if (!body.whatsappCloudToken && existing) {
         update.whatsappCloudToken = existing.whatsappCloudToken;
+      }
+      if (body.openrouterApiKey && body.openrouterApiKey !== "••••••••") {
+        update.openrouterApiKey = body.openrouterApiKey;
+      } else if (!body.openrouterApiKey && existing) {
+        update.openrouterApiKey = existing.openrouterApiKey;
       }
       if (body.openAiApiKey && body.openAiApiKey !== "••••••••") {
         update.openAiApiKey = body.openAiApiKey;
@@ -4792,15 +4804,88 @@ export async function registerRoutes(
       }
 
       const saved = await storage.upsertIntegrationSettings(update);
+      const { invalidateAISettingsCache } = await import("./ai");
+      invalidateAISettingsCache();
       const masked = {
         ...saved,
         whatsappCloudToken: saved.whatsappCloudToken ? "••••••••" : null,
         openAiApiKey: saved.openAiApiKey ? "••••••••" : null,
+        openrouterApiKey: saved.openrouterApiKey ? "••••••••" : null,
       };
       res.json(masked);
     } catch (error) {
       console.error("Error saving integration settings:", error);
       res.status(500).json({ error: "Failed to save integration settings" });
+    }
+  });
+
+  app.post("/api/integration-settings/test-ai", isAuthenticated, requireRole("super_admin", "admin", "company_owner"), async (req, res) => {
+    try {
+      const body = req.body as { provider: string; apiKey: string; model: string };
+      if (!body.apiKey || !body.provider) {
+        return res.status(400).json({ error: "API key and provider are required" });
+      }
+
+      const testSystem = "You are a helpful assistant. Reply in one short sentence.";
+      const testUser = "Say hello in Arabic.";
+
+      if (body.provider === "openrouter") {
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${body.apiKey}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": process.env.OPENROUTER_REFERER ?? "https://crm.seosahl.cloud",
+            "X-Title": process.env.OPENROUTER_TITLE ?? "HomeAdvisor CRM",
+          },
+          body: JSON.stringify({
+            model: body.model || "google/gemini-flash-1.5",
+            messages: [
+              { role: "system", content: testSystem },
+              { role: "user", content: testUser },
+            ],
+            max_tokens: 50,
+          }),
+        });
+        if (!response.ok) {
+          const errText = await response.text();
+          return res.status(400).json({ error: `OpenRouter error ${response.status}: ${errText}` });
+        }
+        const data = await response.json() as { choices?: { message?: { content?: string } }[] };
+        const reply = data?.choices?.[0]?.message?.content;
+        return res.json({ success: true, reply: reply || "OK" });
+      }
+
+      if (body.provider === "openai") {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${body.apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: body.model || "gpt-4o-mini",
+            messages: [
+              { role: "system", content: testSystem },
+              { role: "user", content: testUser },
+            ],
+            max_tokens: 50,
+          }),
+        });
+        if (!response.ok) {
+          const errText = await response.text();
+          return res.status(400).json({ error: `OpenAI error ${response.status}: ${errText}` });
+        }
+        const data = await response.json() as { choices?: { message?: { content?: string } }[] };
+        const reply = data?.choices?.[0]?.message?.content;
+        return res.json({ success: true, reply: reply || "OK" });
+      }
+
+      return res.status(400).json({ error: "Unknown provider" });
+    } catch (error) {
+      console.error("Error testing AI connection:", error);
+      const msg = error instanceof Error ? error.message : "Test failed";
+      res.status(500).json({ error: msg });
     }
   });
 
