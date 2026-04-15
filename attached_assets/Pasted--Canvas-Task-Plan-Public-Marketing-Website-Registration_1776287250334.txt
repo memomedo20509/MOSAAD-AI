@@ -1,0 +1,57 @@
+
+
+Canvas
+
+
+
+/
+
+
+Task Plan
+Public Marketing Website & Registration
+What & Why
+Build the public-facing marketing website that converts visitors into trial signups. This is the storefront of the SaaS platform — it needs to clearly communicate the value proposition (AI chatbot that manages conversations and converts them to customers through a CRM), show pricing, and make it easy to sign up for a trial. All pages must be SEO-optimized for organic traffic acquisition.
+
+Done looks like
+Professional multi-section homepage at / with: hero section (headline + CTA), features grid (AI Chatbot, Multi-channel Inbox, CRM, Campaigns, Analytics, Knowledge Base), how-it-works steps, testimonials section, pricing preview with CTA, FAQ accordion, footer with links
+Pricing page at /pricing with monthly/annual toggle, 3 plan cards (Free, Professional, Enterprise), feature comparison table, FAQ section
+About page at /about with company story, mission, team section
+Contact page at /contact with contact form (name, email, phone, message, company) that saves to platform leads
+Registration page at /register with multi-step form: Step 1 (company name, industry, size), Step 2 (owner name, email, phone, password), Step 3 (confirmation + redirect to onboarding)
+Legal pages: /privacy-policy and /terms-of-service with proper Arabic content
+Public layout with its own header (logo, nav links, language toggle, login button, signup CTA) and footer — completely separate from the app layout
+All pages fully responsive (mobile, tablet, desktop)
+SEO on every page: unique title tag, meta description, Open Graph tags, Twitter Card tags
+JSON-LD structured data: Organization on homepage, SoftwareApplication on features, FAQPage on FAQ sections, BreadcrumbList on all pages
+Auto-generated XML sitemap at /sitemap.xml covering all public pages
+robots.txt blocking /app/, /platform/, /api/
+All public pages support Arabic (RTL) and English
+Contact form submissions are saved as platform leads automatically
+Out of scope
+Payment gateway on signup
+Blog/articles (Phase 6)
+Industry-specific landing pages
+Email newsletter
+Tasks
+Create public layout — Build a PublicLayout component with marketing header (logo, nav, language toggle, Login, Sign Up buttons) and footer (links, social, copyright). Route all public pages through this layout in App.tsx.
+
+Build homepage — Create the homepage at / with hero section, features grid (6 features with icons and descriptions), how-it-works (3 steps), testimonials (3 cards), pricing preview (3 plans with CTA), FAQ accordion (8 questions), and call-to-action banner.
+
+Build pricing page — Create /pricing with monthly/annual toggle, 3 plan cards pulling from the subscription_plans API, full feature comparison table, and FAQ section.
+
+Build about and contact pages — Create /about with company narrative and mission. Create /contact with a form that POSTs to the platform leads API.
+
+Build registration flow — Create /register with a multi-step form (3 steps) that creates a new company, company_owner user, and trial subscription. Redirect to the app after registration.
+
+Build legal pages — Create /privacy-policy and /terms-of-service with proper bilingual content.
+
+Add SEO infrastructure — Add meta tags, Open Graph, Twitter Cards, JSON-LD structured data to all public pages. Create sitemap.xml endpoint and robots.txt. Add proper page titles.
+
+Relevant files
+client/src/App.tsx
+client/src/pages/auth-page.tsx
+shared/schema.ts
+server/routes.ts
+Dependencies
+
+المرحلة 2: نظام الاشتراكات وتتبع الاستخدام

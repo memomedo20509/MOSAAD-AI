@@ -1,0 +1,56 @@
+
+
+Canvas
+
+
+
+/
+
+
+Task Plan
+Onboarding Wizard & Guided Tour
+What & Why
+New companies that sign up need a smooth onboarding experience that guides them through setting up their account step by step. Without this, users will be dropped into an empty CRM and won't know where to start, leading to high churn. The onboarding wizard walks them through essential setup, and an in-app guided tour highlights key features on first login.
+
+Done looks like
+After registration, new company owners are redirected to /app/onboarding — a 5-step wizard
+Step 1: Company Profile — company name, logo upload, industry, working hours, timezone
+Step 2: Add Team Members — invite first team member(s) by email or create accounts directly
+Step 3: Knowledge Base Setup — add first products/services that the AI bot will use to respond to customers
+Step 4: WhatsApp Connection — show QR code to connect WhatsApp (with a "Skip for now" option)
+Step 5: Done Screen — congratulations message with quick-start guide links (Add your first lead, Configure chatbot, Import leads)
+Progress is persisted in the company record (onboarding_step field) so the user can continue later if they close the browser
+The wizard is skippable at any step with a "Skip setup" link
+After completing or skipping the wizard, the user lands on the main dashboard
+An in-app guided tour auto-triggers on first login after onboarding: tooltip-based walkthrough of 6-8 key UI elements (sidebar, dashboard KPIs, add lead button, conversations inbox, knowledge base, chatbot settings)
+The tour shows a progress indicator (step X of Y) and can be dismissed
+The tour can be replayed from a Help menu item
+A has_completed_onboarding and has_seen_tour flag on the user record prevents re-triggering
+Out of scope
+Email verification during signup
+Automated data import during onboarding
+Video tutorials
+Multi-language onboarding (Arabic only for now, English later)
+Tasks
+Add onboarding fields to schema — Add onboarding_step (integer), has_completed_onboarding (boolean), has_seen_tour (boolean) to the companies table and/or users table.
+
+Build onboarding wizard pages — Create the 5-step wizard UI at /app/onboarding with step navigation, progress bar, and form validation per step. Each step saves progress to the backend.
+
+Build onboarding API endpoints — Create endpoints for saving each step's data: PATCH /api/onboarding/step with step number and data payload. Create GET /api/onboarding/status to check current progress.
+
+Build guided tour component — Create a reusable tooltip-based tour component that highlights specific DOM elements, shows explanatory text, and tracks progress. Integrate with the main app layout.
+
+Add tour trigger and replay — Auto-trigger the tour on first login after onboarding. Add a "Replay tour" option in the Help menu or settings. Persist tour completion status.
+
+Relevant files
+shared/schema.ts
+server/routes.ts
+client/src/App.tsx
+client/src/pages/dashboard.tsx
+client/src/components/app-sidebar.tsx
+client/src/hooks/use-auth.tsx
+Dependencies
+
+المرحلة 1: البنية التحتية للـ Multi-Tenant
+Open task
+

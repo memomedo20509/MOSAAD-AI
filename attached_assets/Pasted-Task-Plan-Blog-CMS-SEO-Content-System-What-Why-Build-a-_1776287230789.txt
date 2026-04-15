@@ -1,0 +1,44 @@
+Task Plan
+Blog CMS & SEO Content System
+What & Why
+Build a complete Blog/Article CMS so the platform can acquire organic traffic through content marketing. The platform admin writes and publishes SEO-optimized articles that attract potential customers searching for solutions related to chatbots, customer management, and automated messaging. Includes a WYSIWYG editor with inline SEO scoring and a public blog with full SEO metadata.
+
+Done looks like
+Platform admin can create/edit/publish articles through a rich WYSIWYG editor (TipTap) at /platform/blog
+Each article has: title, slug (auto-generated from title), excerpt, body (rich HTML), featured_image, category, tags, author_id, status (draft/published/archived), meta_title, meta_description, og_image, published_at
+Inline SEO scoring panel (0-100) with actionable checks: keyword in title, meta description length (120-160 chars), word count (>800), internal links present, image alt text, heading structure (H2/H3 usage), keyword density
+Article categories management page with CRUD
+Public blog listing page at /blog with category filter, search, and pagination (10 per page)
+Individual article pages at /blog/:slug with: rendered content, table of contents (auto-generated from headings), social share buttons (WhatsApp, Twitter, Facebook, LinkedIn, copy link), author bio section, related articles (same category), reading time estimate
+Full SEO metadata on article pages: meta title, meta description, OG image, Article schema markup (JSON-LD), canonical URL
+Auto-updated XML sitemap includes all published articles
+Blog supports Arabic (RTL) and English content
+Out of scope
+Comments on articles
+Email newsletter integration
+Image CDN / optimization
+AI-powered content generation
+Multi-author workflow (approval/review)
+Tasks
+Create blog schema — Add articles table and article_categories table to shared/schema.ts with all fields, insert schemas, and types.
+
+Build articles API — Create CRUD endpoints at /api/platform/articles (platform_admin only) and public GET endpoints at /api/blog/articles and /api/blog/articles/:slug for the public blog.
+
+Build article editor page — Create the article editor at /platform/blog/editor with TipTap WYSIWYG editor, slug auto-generation, category/tag selector, featured image upload, SEO fields (meta_title, meta_description), and publish/draft controls.
+
+Build SEO scoring panel — Create an inline SEO scoring component that analyzes the article in real-time and shows a 0-100 score with individual check results.
+
+Build article management page — Create the articles list at /platform/blog with status filters, search, and quick actions (edit, publish, archive, delete). Build categories management at /platform/blog/categories.
+
+Build public blog pages — Create the blog listing page at /blog with category filter, search, pagination. Create individual article page at /blog/:slug with rendered content, table of contents, share buttons, author bio, related articles, and reading time.
+
+Add article SEO metadata — Add Article JSON-LD schema markup, Open Graph tags, and canonical URLs to article pages. Update the sitemap endpoint to include published articles.
+
+Relevant files
+shared/schema.ts
+server/routes.ts
+server/storage.ts
+client/src/App.tsx
+Dependencies
+
+المرحلة 1: البنية التحتية للـ Multi-Tenant

@@ -1,0 +1,58 @@
+
+
+Canvas
+
+
+
+/
+
+
+Task Plan
+Platform Admin Dashboard
+What & Why
+Build the platform owner's admin dashboard — a complete management control center for running the SaaS business. The platform admin needs to see all companies, manage subscriptions, track revenue, handle support, and monitor the health of the entire platform from one place.
+
+Done looks like
+Platform admin has a completely separate layout and sidebar at /platform/* routes
+Platform dashboard homepage shows live KPIs: total active companies, MRR, ARR, new signups this month, churned companies, trial-to-paid conversion rate, open support tickets, upcoming renewals in next 30 days
+Company list page with filters (plan, status, industry, creation date) and status badges (Active, Trial, Suspended, Expired, Cancelled)
+Company detail page showing: full profile, usage metrics (users/leads/messages), WhatsApp bot connection status, subscription history, all invoices, activity log, and support tickets
+Company actions working: Suspend (with reason), Reactivate, Change plan, Reset owner password, Login-as-company (impersonation session), Export company data
+Revenue dashboard: MRR chart (12 months), new vs churned vs expansion MRR breakdown, revenue by plan (pie chart), upcoming renewals list, overdue invoices list
+Platform invoice management: list all invoices across companies, filter by status, manual creation, PDF export, send-reminder action
+Support ticket system: tickets list with priority and status filters, ticket detail with internal notes and status tracking
+Platform notification center: chronological feed of system events (new signup, trial expiring, payment overdue, WhatsApp disconnected) with mark-as-read
+Platform sidebar navigation in Arabic with sections: لوحة التحكم, الشركات, الإيرادات, الباقات, التذاكر, الإشعارات, إعدادات المنصة
+Out of scope
+Online payment processing
+White-label / reseller management
+Public API for company data
+Mobile app
+Tasks
+Create platform layout and routing — Build a separate PlatformLayout component with its own sidebar, header, and navigation. Register all /platform/* routes in App.tsx with platform_admin role protection.
+
+Build platform dashboard page — Create the KPI dashboard at /platform with metric cards (MRR, ARR, active companies, signups, churn rate, conversion rate, tickets, renewals). Add MRR trend sparkline chart.
+
+Build company management pages — Create company list page at /platform/companies with filters and status badges. Build company detail page at /platform/companies/:id with tabbed sections (Profile, Usage, Subscription, Invoices, Activity, Tickets).
+
+Build company actions — Implement: Suspend company (modal with reason + status update), Reactivate, Change plan (modal with plan selector), Reset owner password, Login-as-company (create impersonation session), Export company data (CSV).
+
+Build revenue dashboard — Create revenue page at /platform/revenue with MRR chart (12-month), MRR breakdown, revenue-by-plan pie chart, upcoming renewals table, overdue invoices list.
+
+Build support ticket system — Create tickets schema (tickets table with company_id, subject, description, priority, status, assigned_to, ticket_replies sub-table). Build API endpoints. Build ticket list and detail pages at /platform/tickets.
+
+Build platform notification center — Create platform_notifications table for system events. Build notification bell in platform header and notification feed page at /platform/notifications.
+
+Relevant files
+client/src/App.tsx
+client/src/components/app-sidebar.tsx
+shared/schema.ts
+server/routes.ts
+server/storage.ts
+server/db-sync.ts
+Dependencies
+
+المرحلة 1: البنية التحتية للـ Multi-Tenant
+Open task
+
+المرحلة 2: نظام الاشتراكات وتتبع الاستخدام

@@ -1,0 +1,56 @@
+
+
+Canvas
+
+
+
+/
+
+
+Task Plan
+Subscription Plans & Usage Tracking
+What & Why
+Build the subscription and usage tracking system that controls what each company can access. This includes plan definitions with feature flags and usage limits, per-company subscriptions with status tracking, and middleware that enforces limits in real-time. This is required before building the platform admin dashboard or public pricing page.
+
+Done looks like
+A subscription_plans table with: name, name_ar, description, price_monthly, price_annual, currency, max_users, max_leads_per_month, max_whatsapp_messages_per_month, max_channels, feature flags (has_ai_chatbot, has_campaigns, has_analytics, has_api_access, has_custom_branding, has_knowledge_base, has_priority_support), is_active, trial_days, sort_order
+A subscriptions table with: company_id, plan_id, status (trial, active, past_due, suspended, cancelled, expired), current_period_start, current_period_end, trial_ends_at, cancelled_at, cancel_reason
+A usage_records table tracking monthly usage per company: company_id, month (YYYY-MM), leads_count, messages_count, users_count, ai_calls_count
+A invoices table with: company_id, subscription_id, amount, currency, status (draft, sent, paid, overdue, cancelled), due_date, paid_at, invoice_number, pdf_url
+API endpoints for CRUD on plans (platform_admin only)
+API endpoints for viewing current subscription and usage (company_owner)
+A requireFeature(featureName) middleware that checks if the company's plan includes that feature
+A checkUsageLimit(resource) middleware that checks monthly usage against plan limits
+Usage counters increment automatically when leads are created, messages are sent, etc.
+Seed data includes 3 default plans: Free (limited), Professional, Enterprise
+A usage dashboard widget showing the company how much of their limits they've consumed
+Out of scope
+Payment gateway integration (Stripe, PayMob, Fawry)
+Automatic invoice generation
+Plan upgrade/downgrade proration logic
+Public pricing page (Phase 5)
+Tasks
+Create subscription schema — Add subscription_plans, subscriptions, usage_records, and invoices tables to shared/schema.ts with all fields, insert schemas, and types.
+
+Build plan management API — Create CRUD endpoints for subscription_plans (platform_admin only): GET /api/platform/plans, POST, PATCH, DELETE. Include seed data for 3 default plans.
+
+Build subscription management API — Create endpoints: GET /api/subscription (current company's subscription), POST /api/platform/subscriptions (assign plan to company), PATCH (change status/plan). Auto-create a trial subscription when a new company is created.
+
+Build usage tracking system — Create the usage_records increment logic that hooks into existing lead creation, message sending, and user creation flows. Build GET /api/usage endpoint showing current month's usage vs limits.
+
+Build feature and usage enforcement middleware — Create requireFeature() and checkUsageLimit() middlewares. Apply them to relevant routes (e.g., AI chatbot requires has_ai_chatbot, campaign creation requires has_campaigns).
+
+Build invoice management API — Create CRUD for invoices (platform_admin): list, create, update status, PDF export placeholder. Company owners can view their own invoices via GET /api/invoices.
+
+Add usage dashboard widget — Add a usage consumption card to the company's dashboard showing leads used/limit, messages used/limit, users used/limit with progress bars.
+
+Relevant files
+shared/schema.ts
+server/storage.ts
+server/routes.ts
+server/db-sync.ts
+server/seed.ts
+client/src/pages/dashboard.tsx
+Dependencies
+
+المرحلة 1: البنية التحتية للـ Multi-Tenant

@@ -1,0 +1,48 @@
+
+
+Canvas
+
+
+
+/
+
+
+Task Plan
+Platform Admin Sales CRM
+What & Why
+The platform owner needs their own CRM to sell the SaaS platform itself. They run marketing campaigns, receive leads from the public website, and need to track those leads through a sales pipeline — using the same CRM concepts already built for tenants. This reuses existing CRM components but in the platform admin context, with a separate pipeline specifically for platform sales leads.
+
+Done looks like
+Platform admin has a "Sales Pipeline" section in their platform sidebar
+A platform leads pipeline at /platform/leads with a Kanban board (stages: New Lead, Contacted, Demo Scheduled, Demo Done, Proposal Sent, Negotiation, Won, Lost)
+Platform leads table with fields: company_name, contact_name, email, phone, source (website, referral, social, cold_outreach), assigned_rep, notes, next_action_date, deal_value
+Lead detail drawer/page showing all fields, activity log, and notes
+List view with filters (source, stage, assigned rep, date range)
+Activity log per lead (created, status changed, note added, email sent)
+Platform admin can assign leads to other platform-level users
+Dashboard KPIs include platform sales metrics (leads this month, demos scheduled, conversion rate, pipeline value)
+Out of scope
+Automated email sequences for platform leads
+Integration with external CRM tools
+Commission tracking for platform sales reps
+Tasks
+Create platform leads schema — Add platform_leads and platform_lead_history tables to shared/schema.ts with appropriate fields (separate from tenant leads).
+
+Build platform leads API — Create CRUD endpoints at /api/platform/leads with pipeline stages, assignment, status changes, and activity logging.
+
+Build platform leads Kanban page — Create the Kanban board at /platform/leads/pipeline reusing the drag-and-drop pattern from the tenant lead-pipeline page but with platform-specific stages.
+
+Build platform leads list and detail — Create list view at /platform/leads with filters and a detail drawer/page showing full lead info, notes, and activity timeline.
+
+Add platform sales KPIs to dashboard — Add a sales metrics section to the platform dashboard showing leads this month, demos scheduled, conversion rate, and total pipeline value.
+
+Relevant files
+shared/schema.ts
+server/routes.ts
+server/storage.ts
+client/src/pages/lead-pipeline.tsx
+client/src/pages/leads.tsx
+Dependencies
+
+المرحلة 1: البنية التحتية للـ Multi-Tenant
+Open task
