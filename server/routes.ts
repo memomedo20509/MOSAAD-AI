@@ -6020,6 +6020,93 @@ ${pages.map(p => `  <url>
     }
   });
 
+  // Company-facing Ticket Routes (authenticated by companyId)
+  app.get("/api/company/tickets", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const companyId = user?.companyId;
+      if (!companyId) return res.status(403).json({ error: "No company associated with this account" });
+      const companyTickets = await storage.getAllTickets({ companyId });
+      res.json(companyTickets);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch tickets" });
+    }
+  });
+
+  app.post("/api/company/tickets", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const companyId = user?.companyId;
+      if (!companyId) return res.status(403).json({ error: "No company associated with this account" });
+      const { insertTicketSchema, companies: companiesTable } = await import("@shared/schema");
+      const { db: drizzleDb } = await import("./db");
+      const { eq } = await import("drizzle-orm");
+      const userName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username || "Unknown";
+      const companyRows = await drizzleDb.select().from(companiesTable).where(eq(companiesTable.id, companyId));
+      const companyName = companyRows[0]?.name ?? null;
+      const data = insertTicketSchema.parse({
+        ...req.body,
+        companyId,
+        companyName,
+        createdByUserId: user.id,
+        createdByName: userName,
+        status: "open",
+      });
+      const ticket = await storage.createTicket(data);
+      await storage.createPlatformNotification({
+        type: "new_support_ticket",
+        message: `تذكرة دعم جديدة من ${companyName ?? "شركة"}: ${data.subject}`,
+        companyId,
+        companyName,
+        isRead: false,
+      });
+      res.status(201).json(ticket);
+    } catch (error) {
+      console.error("Error creating company ticket:", error);
+      res.status(400).json({ error: "Failed to create ticket" });
+    }
+  });
+
+  app.get("/api/company/tickets/:id", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const companyId = user?.companyId;
+      if (!companyId) return res.status(403).json({ error: "No company associated with this account" });
+      const ticket = await storage.getTicket(req.params.id);
+      if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+      if (ticket.companyId !== companyId) return res.status(403).json({ error: "Access denied" });
+      const replies = await storage.getTicketReplies(req.params.id);
+      const visibleReplies = replies.filter((r) => !r.isInternal);
+      res.json({ ...ticket, replies: visibleReplies });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch ticket" });
+    }
+  });
+
+  app.post("/api/company/tickets/:id/replies", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const companyId = user?.companyId;
+      if (!companyId) return res.status(403).json({ error: "No company associated with this account" });
+      const ticket = await storage.getTicket(req.params.id);
+      if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+      if (ticket.companyId !== companyId) return res.status(403).json({ error: "Access denied" });
+      const { insertTicketReplySchema } = await import("@shared/schema");
+      const userName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username || "Unknown";
+      const data = insertTicketReplySchema.parse({
+        ticketId: req.params.id,
+        userId: user.id,
+        userName,
+        content: req.body.content,
+        isInternal: false,
+      });
+      const reply = await storage.createTicketReply(data);
+      res.status(201).json(reply);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to create reply" });
+    }
+  });
+
   // Tickets
   app.get("/api/platform/tickets", isAuthenticated, requirePlatformAdmin, async (req, res) => {
     try {

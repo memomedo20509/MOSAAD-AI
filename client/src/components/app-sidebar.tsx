@@ -23,6 +23,7 @@ import {
   TrendingUp,
   Building2,
   PlayCircle,
+  LifeBuoy,
 } from "lucide-react";
 import { useTour } from "@/hooks/use-tour";
 import { Badge } from "@/components/ui/badge";
@@ -305,6 +306,23 @@ export function AppSidebar() {
                 </SidebarGroupContent>
               </CollapsibleContent>
             </Collapsible>
+          </SidebarGroup>
+        )}
+
+        {!isPlatformAdmin(userRole) && (
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isActive("/support/tickets")}>
+                    <Link href="/support/tickets" data-testid="link-nav-support">
+                      <LifeBuoy className="h-4 w-4" />
+                      <span>الدعم الفني</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
           </SidebarGroup>
         )}
 

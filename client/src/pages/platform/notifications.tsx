@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Bell, Check, Building2, CreditCard, AlertTriangle, UserPlus, Wifi } from "lucide-react";
+import { Bell, Check, Building2, CreditCard, AlertTriangle, UserPlus, Wifi, LifeBuoy } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -24,6 +24,7 @@ const TYPE_ICONS: Record<string, React.ElementType> = {
   whatsapp_disconnect: Wifi,
   subscription_cancelled: AlertTriangle,
   plan_upgraded: Building2,
+  new_support_ticket: LifeBuoy,
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -33,6 +34,7 @@ const TYPE_LABELS: Record<string, string> = {
   whatsapp_disconnect: "واتساب منفصل",
   subscription_cancelled: "اشتراك ملغي",
   plan_upgraded: "ترقية الباقة",
+  new_support_ticket: "تذكرة دعم جديدة",
 };
 
 const TYPE_COLORS: Record<string, string> = {
@@ -42,6 +44,7 @@ const TYPE_COLORS: Record<string, string> = {
   whatsapp_disconnect: "text-orange-500",
   subscription_cancelled: "text-red-500",
   plan_upgraded: "text-blue-500",
+  new_support_ticket: "text-purple-500",
 };
 
 export default function PlatformNotificationsPage() {

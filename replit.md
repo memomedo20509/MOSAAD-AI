@@ -183,3 +183,9 @@ Preferred communication style: Simple, everyday language.
 - `GET/POST /api/platform/notifications` — Platform notifications
 - `PATCH /api/platform/notifications/:id/read` — Mark notification read
 - `PATCH /api/platform/notifications/read-all` — Mark all read
+
+### Company-Facing Support API Routes (authenticated by companyId)
+- `GET /api/company/tickets` — Company's own tickets
+- `POST /api/company/tickets` — Submit new support ticket (triggers platform_notification)
+- `GET /api/company/tickets/:id` — Ticket detail with visible replies (no internal notes)
+- `POST /api/company/tickets/:id/replies` — Company reply to ticket
