@@ -947,5 +947,22 @@ export interface Message {
   isRead: boolean | null;
 }
 
+// Platform Leads (contact form submissions from public marketing website)
+export const platformLeads = pgTable("platform_leads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone"),
+  company: text("company"),
+  message: text("message"),
+  source: text("source").default("contact_form"),
+  status: text("status").default("new"), // new | contacted | converted | closed
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertPlatformLeadSchema = createInsertSchema(platformLeads).omit({ id: true, createdAt: true });
+export type InsertPlatformLead = z.infer<typeof insertPlatformLeadSchema>;
+export type PlatformLead = typeof platformLeads.$inferSelect;
+
 // Export auth models (users, teams, sessions, role_permissions)
 export * from "./models/auth";

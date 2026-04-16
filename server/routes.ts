@@ -116,6 +116,202 @@ export async function registerRoutes(
   setupAuth(app);
   registerAuthRoutes(app);
 
+  // ─── Public Routes (no auth required) ────────────────────────────────────────
+
+  // Get active subscription plans for marketing pages
+  app.get("/api/public/plans", async (_req, res) => {
+    try {
+      const plans = await storage.getAllSubscriptionPlans();
+      res.json(plans.filter(p => p.isActive));
+    } catch (error) {
+      console.error("Error fetching public plans:", error);
+      res.status(500).json({ error: "Failed to fetch plans" });
+    }
+  });
+
+  // Contact form submission → creates a marketing_contact_submissions entry
+  app.post("/api/public/contact", async (req, res) => {
+    try {
+      const { pool: pgPool } = await import("./db");
+      const { name, email, phone, company, message } = req.body;
+      if (!name || !email || !message) {
+        return res.status(400).json({ error: "Name, email and message are required" });
+      }
+      const client = await pgPool.connect();
+      try {
+        // Use a separate table name to avoid conflicts with existing platform_leads schema
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS marketing_contact_submissions (
+            id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+            name TEXT NOT NULL,
+            email TEXT NOT NULL,
+            phone TEXT,
+            company TEXT,
+            message TEXT,
+            source TEXT DEFAULT 'contact_form',
+            status TEXT DEFAULT 'new',
+            created_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        const result = await client.query(
+          `INSERT INTO marketing_contact_submissions (name, email, phone, company, message, source)
+           VALUES ($1, $2, $3, $4, $5, 'contact_form')
+           RETURNING id`,
+          [name, email, phone || null, company || null, message]
+        );
+        client.release();
+        res.status(201).json({ success: true, id: result.rows[0]?.id });
+      } catch (dbError) {
+        client.release();
+        throw dbError;
+      }
+    } catch (error) {
+      console.error("Error creating marketing contact submission:", error);
+      res.status(500).json({ error: "Failed to submit contact form" });
+    }
+  });
+
+  // Public company registration (multi-step form → creates company + owner user + trial subscription)
+  app.post("/api/public/register", async (req, res) => {
+    try {
+      const { companies } = await import("@shared/schema");
+      const { db: drizzleDb } = await import("./db");
+      const { companyName, industry, size, ownerName, email, phone, password, username } = req.body;
+
+      if (!companyName || !ownerName || !email || !password || !username) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      if (password.length < 6) {
+        return res.status(400).json({ error: "Password must be at least 6 characters" });
+      }
+
+      // Check username uniqueness
+      const existingUser = await storage.getUserByUsername(username);
+      if (existingUser) return res.status(400).json({ error: "Username already exists" });
+
+      // Check email uniqueness
+      const existingEmail = await storage.getUserByEmail(email);
+      if (existingEmail) return res.status(400).json({ error: "Email already exists" });
+
+      // Generate slug from company name
+      const slug = companyName
+        .toLowerCase()
+        .replace(/[^a-z0-9\u0600-\u06ff\s]/g, "")
+        .replace(/\s+/g, "-")
+        .substring(0, 50) + "-" + Date.now().toString(36);
+
+      // Create company
+      const [company] = await drizzleDb.insert(companies).values({
+        name: companyName,
+        slug,
+        industry: industry || null,
+        status: "trial",
+      }).returning();
+
+      // Hash password and create company owner user
+      const hashedPassword = await hashPassword(password);
+      const [firstName, ...lastParts] = ownerName.split(" ");
+      const newUser = await storage.createUser({
+        username,
+        password: hashedPassword,
+        email,
+        firstName: firstName || null,
+        lastName: lastParts.join(" ") || null,
+        phone: phone || null,
+        role: "company_owner",
+        companyId: company.id,
+        isActive: true,
+      });
+
+      // Find the cheapest active subscription plan for trial
+      const plans = await storage.getAllSubscriptionPlans();
+      const activePlans = plans.filter(p => p.isActive).sort((a, b) => (a.priceMonthly ?? 0) - (b.priceMonthly ?? 0));
+      const trialPlan = activePlans[0];
+
+      // Create trial subscription
+      if (trialPlan) {
+        const trialEnds = new Date();
+        trialEnds.setDate(trialEnds.getDate() + (trialPlan.trialDays || 14));
+        await storage.createSubscription({
+          companyId: company.id,
+          planId: trialPlan.id,
+          status: "trial",
+          trialEndsAt: trialEnds,
+          currentPeriodStart: new Date(),
+          currentPeriodEnd: trialEnds,
+        });
+      }
+
+      // Notify platform admins of new registration
+      try {
+        const { platformNotifications } = await import("@shared/schema");
+        await drizzleDb.insert(platformNotifications).values({
+          type: "new_registration",
+          message: `شركة جديدة: ${companyName} (${email})`,
+          companyId: company.id,
+          companyName: companyName,
+          isRead: false,
+        });
+      } catch (_) {}
+
+      // Log the user in automatically
+      const userForSession = await storage.getUser(newUser.id);
+      req.login(userForSession!, (err) => {
+        if (err) {
+          console.error("Login after registration error:", err);
+          return res.status(201).json({ success: true, companyId: company.id });
+        }
+        res.status(201).json({ success: true, companyId: company.id, user: { id: newUser.id, username: newUser.username } });
+      });
+    } catch (error) {
+      console.error("Error in public registration:", error);
+      res.status(400).json({ error: "Registration failed. Please try again." });
+    }
+  });
+
+  // robots.txt
+  app.get("/robots.txt", (_req, res) => {
+    res.type("text/plain");
+    res.send(`User-agent: *
+Allow: /
+Allow: /pricing
+Allow: /about
+Allow: /contact
+Allow: /register
+Allow: /privacy-policy
+Allow: /terms-of-service
+Disallow: /app/*
+Disallow: /platform/*
+Disallow: /api/*
+
+Sitemap: ${process.env.APP_URL || "https://salesbot.ai"}/sitemap.xml`);
+  });
+
+  // sitemap.xml
+  app.get("/sitemap.xml", (_req, res) => {
+    const baseUrl = process.env.APP_URL || "https://salesbot.ai";
+    const today = new Date().toISOString().split("T")[0];
+    const pages = [
+      { loc: "/", priority: "1.0", changefreq: "weekly" },
+      { loc: "/pricing", priority: "0.9", changefreq: "weekly" },
+      { loc: "/about", priority: "0.7", changefreq: "monthly" },
+      { loc: "/contact", priority: "0.7", changefreq: "monthly" },
+      { loc: "/privacy-policy", priority: "0.3", changefreq: "yearly" },
+      { loc: "/terms-of-service", priority: "0.3", changefreq: "yearly" },
+    ];
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${pages.map(p => `  <url>
+    <loc>${baseUrl}${p.loc}</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>${p.changefreq}</changefreq>
+    <priority>${p.priority}</priority>
+  </url>`).join("\n")}
+</urlset>`;
+    res.type("application/xml");
+    res.send(xml);
+  });
+
   // Teams endpoints (admin only for mutations, all authenticated can view)
   app.get("/api/teams", isAuthenticated, async (req, res) => {
     try {

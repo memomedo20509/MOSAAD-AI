@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -17,6 +17,7 @@ import { Loader2 } from "lucide-react";
 import { ProtectedRoute } from "@/components/protected-route";
 import { NotificationBell } from "@/components/notification-bell";
 import { PlatformLayout } from "@/components/platform-layout";
+import { PublicLayout } from "@/components/public-layout";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import LeadsPage from "@/pages/leads";
@@ -47,6 +48,16 @@ import PlatformNotificationsPage from "@/pages/platform/notifications";
 import PlatformSettingsPage from "@/pages/platform/settings";
 import PlatformLeadsPage from "@/pages/platform-leads";
 import PlatformLeadPipelinePage from "@/pages/platform-lead-pipeline";
+import HomePage from "@/pages/public/home";
+import PricingPage from "@/pages/public/pricing";
+import AboutPage from "@/pages/public/about";
+import ContactPage from "@/pages/public/contact";
+import RegisterPage from "@/pages/public/register";
+import PrivacyPolicyPage from "@/pages/public/privacy-policy";
+import TermsOfServicePage from "@/pages/public/terms-of-service";
+
+// Public-only paths — always shown with PublicLayout, no auth required
+const ALWAYS_PUBLIC_PATHS = ["/pricing", "/about", "/contact", "/privacy-policy", "/terms-of-service"];
 
 function LogoutButton() {
   const { logoutMutation } = useAuth();
@@ -67,7 +78,7 @@ function LogoutButton() {
 
 const ADMIN_ONLY_ROLES = ["super_admin", "admin", "sales_admin"] as const;
 
-function Router() {
+function AppRouter() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
@@ -155,15 +166,33 @@ function AuthenticatedApp() {
           </div>
         </header>
         <main className="flex-1 overflow-auto p-6">
-          <Router />
+          <AppRouter />
         </main>
       </div>
     </SidebarProvider>
   );
 }
 
+function PublicRouter() {
+  return (
+    <PublicLayout>
+      <Switch>
+        <Route path="/" component={HomePage} />
+        <Route path="/pricing" component={PricingPage} />
+        <Route path="/about" component={AboutPage} />
+        <Route path="/contact" component={ContactPage} />
+        <Route path="/register" component={RegisterPage} />
+        <Route path="/privacy-policy" component={PrivacyPolicyPage} />
+        <Route path="/terms-of-service" component={TermsOfServicePage} />
+        <Route component={NotFound} />
+      </Switch>
+    </PublicLayout>
+  );
+}
+
 function AppContent() {
   const { user, isLoading } = useAuth();
+  const [location] = useLocation();
 
   if (isLoading) {
     return (
@@ -173,10 +202,34 @@ function AppContent() {
     );
   }
 
+  // Always-public paths are shown in PublicLayout regardless of auth state
+  if (ALWAYS_PUBLIC_PATHS.includes(location)) {
+    return <PublicRouter />;
+  }
+
+  // Auth page is always accessible
+  if (location === "/auth") {
+    if (user) return <Redirect to="/" />;
+    return <AuthPage />;
+  }
+
+  // Register page: only for non-authenticated users
+  if (location === "/register") {
+    if (user) return <Redirect to="/" />;
+    return <PublicRouter />;
+  }
+
+  // Root route: marketing home if not logged in, dashboard if logged in
+  if (location === "/" && !user) {
+    return <PublicRouter />;
+  }
+
+  // Not logged in for app routes → show auth page
   if (!user) {
     return <AuthPage />;
   }
 
+  // Logged in → show the authenticated app
   return <AuthenticatedApp />;
 }
 
