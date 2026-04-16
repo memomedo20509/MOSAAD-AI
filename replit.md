@@ -6,6 +6,18 @@ SalesBot AI is a real estate CRM platform with an integrated AI-powered WhatsApp
 
 Built as a full-stack TypeScript application with React frontend and Express backend, using PostgreSQL for data persistence and Baileys (WhatsApp Web) for messaging.
 
+## Public Website Design
+
+The public marketing website (`/`, `/pricing`, `/about`, `/contact`) uses a modern dark-gradient aesthetic:
+- **Color scheme**: Dark gradients (indigo-950 → purple-900 → blue-950) for hero sections
+- **Header**: Transparent over hero, transitions to solid white on scroll (fixed positioned)
+- **Shared mockup components**: `client/src/components/public-mockups.tsx` contains CSS-only product mockups:
+  - `WAChatMockup` — WhatsApp chat interface with Arabic bot/customer bubbles
+  - `UnifiedInboxMockup` — Multi-channel inbox with conversation list
+  - `CRMPipelineMockup` — Kanban board with lead cards
+  - `FloatingBadge`, `GradientText` — Utility display components
+- **Layout**: `client/src/components/public-layout.tsx` — RTL layout with transparent-to-solid header and 5-column footer
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.

@@ -2,15 +2,19 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, X } from "lucide-react";
+import { CheckCircle2, X, Zap, Shield, Star } from "lucide-react";
 import type { SubscriptionPlan } from "@shared/schema";
 
-const FEATURE_TABLE = [
+type FeatureRow = {
+  label: string;
+  key: keyof SubscriptionPlan;
+  bool?: boolean;
+  format?: (v: number) => string;
+};
+
+const FEATURE_TABLE: FeatureRow[] = [
   { label: "عدد المستخدمين", key: "maxUsers", format: (v: number) => v === -1 ? "غير محدود" : String(v) },
   { label: "ليدز شهرياً", key: "maxLeadsPerMonth", format: (v: number) => v === -1 ? "غير محدود" : String(v) },
   { label: "رسائل واتساب شهرياً", key: "maxWhatsappMessagesPerMonth", format: (v: number) => v === -1 ? "غير محدود" : String(v) },
@@ -42,57 +46,6 @@ const FAQS = [
   },
 ];
 
-function PlanCard({
-  plan,
-  annual,
-  popular,
-}: {
-  plan: SubscriptionPlan;
-  annual: boolean;
-  popular: boolean;
-}) {
-  const price = annual ? plan.priceAnnual / 12 : plan.priceMonthly;
-  const saving = plan.priceMonthly > 0
-    ? Math.round(((plan.priceMonthly * 12 - plan.priceAnnual) / (plan.priceMonthly * 12)) * 100)
-    : 0;
-
-  return (
-    <Card className={`relative flex flex-col ${popular ? "border-primary shadow-xl scale-105" : "border shadow"}`}>
-      {popular && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <Badge className="bg-primary px-4">الأكثر شعبية</Badge>
-        </div>
-      )}
-      <CardContent className="p-6 flex flex-col flex-1">
-        <h3 className="text-xl font-bold text-gray-900 mb-1">{plan.nameAr}</h3>
-        {plan.description && <p className="text-sm text-gray-500 mb-4">{plan.description}</p>}
-
-        <div className="my-4">
-          <span className="text-4xl font-bold text-primary">${Math.round(price)}</span>
-          <span className="text-gray-500 text-sm mr-1">/شهر</span>
-          {annual && saving > 0 && (
-            <Badge variant="secondary" className="mr-2 text-xs">وفّر {saving}٪</Badge>
-          )}
-        </div>
-
-        {annual && (
-          <p className="text-xs text-gray-500 mb-4">يُفوتر ${Math.round(plan.priceAnnual)} سنوياً</p>
-        )}
-
-        <Link href="/register" className="mt-auto">
-          <Button className="w-full" variant={popular ? "default" : "outline"} data-testid={`button-plan-${plan.id}`}>
-            ابدأ تجربة مجانية
-          </Button>
-        </Link>
-
-        <p className="text-xs text-center text-gray-400 mt-2">
-          {plan.trialDays} يوم مجاناً — بدون بطاقة ائتمانية
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
-
 const FALLBACK_PLANS = [
   {
     id: "starter", nameAr: "أساسي", name: "Starter", description: "للشركات الناشئة",
@@ -120,6 +73,93 @@ const FALLBACK_PLANS = [
   },
 ] as SubscriptionPlan[];
 
+function PlanCard({
+  plan,
+  annual,
+  popular,
+}: {
+  plan: SubscriptionPlan;
+  annual: boolean;
+  popular: boolean;
+}) {
+  const price = annual ? plan.priceAnnual / 12 : plan.priceMonthly;
+  const saving = plan.priceMonthly > 0
+    ? Math.round(((plan.priceMonthly * 12 - plan.priceAnnual) / (plan.priceMonthly * 12)) * 100)
+    : 0;
+
+  if (popular) {
+    return (
+      <div className="relative flex flex-col rounded-2xl overflow-hidden" data-testid={`plan-card-${plan.id}`}>
+        {/* Glassmorphism popular card */}
+        <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl"></div>
+        <div className="absolute inset-0 bg-white/5 backdrop-blur-sm rounded-2xl"></div>
+        <div className="absolute inset-0 rounded-2xl ring-2 ring-white/20"></div>
+
+        <div className="relative p-7 flex flex-col flex-1">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h3 className="text-xl font-bold text-white">{plan.nameAr}</h3>
+              {plan.description && <p className="text-sm text-indigo-200 mt-0.5">{plan.description}</p>}
+            </div>
+            <Badge className="bg-yellow-400 text-yellow-900 border-0 font-bold shadow-lg">
+              <Star className="h-3 w-3 ml-1" /> الأكثر شعبية
+            </Badge>
+          </div>
+
+          <div className="mb-5">
+            <div className="flex items-baseline gap-1">
+              <span className="text-5xl font-extrabold text-white">${Math.round(price)}</span>
+              <span className="text-indigo-200 text-sm">/شهر</span>
+            </div>
+            {annual && saving > 0 && (
+              <p className="text-indigo-300 text-xs mt-1">وفّر {saving}٪ مع الفوترة السنوية</p>
+            )}
+            {annual && (
+              <p className="text-indigo-300 text-xs">${Math.round(plan.priceAnnual)} يُفوتر سنوياً</p>
+            )}
+          </div>
+
+          <Link href="/register" className="mt-auto mb-4">
+            <Button className="w-full bg-white text-indigo-700 hover:bg-indigo-50 font-bold shadow-lg" data-testid={`button-plan-${plan.id}`}>
+              ابدأ تجربة مجانية
+            </Button>
+          </Link>
+          <p className="text-xs text-center text-indigo-300">{plan.trialDays} يوم مجاناً — بدون بطاقة ائتمانية</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative flex flex-col rounded-2xl border border-gray-200 bg-white shadow-sm hover:shadow-md hover:border-indigo-200 transition-all p-7" data-testid={`plan-card-${plan.id}`}>
+      <div className="mb-5">
+        <h3 className="text-xl font-bold text-gray-900">{plan.nameAr}</h3>
+        {plan.description && <p className="text-sm text-gray-500 mt-0.5">{plan.description}</p>}
+      </div>
+
+      <div className="mb-5">
+        <div className="flex items-baseline gap-1">
+          <span className="text-5xl font-extrabold text-indigo-600">${Math.round(price)}</span>
+          <span className="text-gray-400 text-sm">/شهر</span>
+          {annual && saving > 0 && (
+            <Badge variant="secondary" className="mr-2 text-xs text-green-700 bg-green-100">وفّر {saving}٪</Badge>
+          )}
+        </div>
+        {annual && (
+          <p className="text-xs text-gray-400 mt-1">يُفوتر ${Math.round(plan.priceAnnual)} سنوياً</p>
+        )}
+      </div>
+
+      <Link href="/register" className="mt-auto mb-4">
+        <Button className="w-full" variant="outline" data-testid={`button-plan-${plan.id}`}>
+          ابدأ تجربة مجانية
+        </Button>
+      </Link>
+      <p className="text-xs text-center text-gray-400">{plan.trialDays} يوم مجاناً — بدون بطاقة ائتمانية</p>
+    </div>
+  );
+}
+
 export default function PricingPage() {
   const [annual, setAnnual] = useState(false);
   const { data: fetchedPlans } = useQuery<SubscriptionPlan[]>({
@@ -135,71 +175,108 @@ export default function PricingPage() {
       <meta name="description" content="أسعار واضحة وشفافة لمنصة SalesBot AI. ابدأ مجاناً لمدة 14 يوماً." />
 
       {/* Hero */}
-      <section className="bg-gradient-to-br from-primary/10 to-blue-50 py-16">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4" data-testid="text-pricing-headline">
+      <section className="relative overflow-hidden bg-gradient-to-br from-indigo-950 via-purple-900 to-blue-950 py-28">
+        <div className="absolute inset-0 opacity-[0.04]"
+          style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "32px 32px" }}>
+        </div>
+        <div className="absolute top-1/2 right-1/4 h-64 w-64 bg-indigo-500/20 rounded-full blur-3xl"></div>
+        <div className="absolute top-1/2 left-1/4 h-64 w-64 bg-purple-500/20 rounded-full blur-3xl"></div>
+
+        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <Badge className="bg-white/10 text-white border-white/20 mb-6 px-4 py-1.5">الأسعار</Badge>
+          <h1 className="text-5xl font-extrabold text-white mb-5" data-testid="text-pricing-headline">
             أسعار تناسب كل نمو
           </h1>
-          <p className="text-xl text-gray-600 mb-8">
+          <p className="text-xl text-indigo-200 mb-10">
             ابدأ مجاناً 14 يوماً، بدون بطاقة ائتمانية
           </p>
 
-          <div className="flex items-center justify-center gap-3" dir="ltr">
-            <Label htmlFor="billing-toggle" className="text-gray-700 font-medium">شهري</Label>
-            <Switch
-              id="billing-toggle"
-              checked={annual}
-              onCheckedChange={setAnnual}
-              data-testid="toggle-billing"
-            />
-            <Label htmlFor="billing-toggle" className="text-gray-700 font-medium">
+          {/* Billing Toggle */}
+          <div className="inline-flex items-center gap-4 bg-white/10 backdrop-blur-sm rounded-2xl px-6 py-3 border border-white/20">
+            <button
+              onClick={() => setAnnual(false)}
+              className={`text-sm font-medium px-4 py-2 rounded-xl transition-all ${!annual ? "bg-white text-indigo-700 shadow-md font-bold" : "text-white/70 hover:text-white"}`}
+              data-testid="toggle-monthly"
+            >
+              شهري
+            </button>
+            <button
+              onClick={() => setAnnual(true)}
+              className={`text-sm font-medium px-4 py-2 rounded-xl transition-all flex items-center gap-2 ${annual ? "bg-white text-indigo-700 shadow-md font-bold" : "text-white/70 hover:text-white"}`}
+              data-testid="toggle-annual"
+            >
               سنوي
-              <Badge variant="secondary" className="mr-2 text-xs">وفّر حتى 20٪</Badge>
-            </Label>
+              <span className="bg-green-400 text-green-900 text-xs px-2 py-0.5 rounded-full font-bold">وفّر 20٪</span>
+            </button>
           </div>
         </div>
       </section>
 
       {/* Plans */}
-      <section className="py-16 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="py-16 bg-gray-50">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
             {plans.map((plan, i) => (
               <PlanCard key={plan.id} plan={plan} annual={annual} popular={i === middleIdx} />
+            ))}
+          </div>
+
+          {/* Trust indicators */}
+          <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              { icon: Shield, title: "مضمون", desc: "14 يوم مجاناً بدون بطاقة ائتمانية" },
+              { icon: Zap, title: "إلغاء فوري", desc: "لا رسوم إلغاء، لا التزامات" },
+              { icon: Star, title: "دعم متميز", desc: "فريق دعم متخصص على مدار الساعة" },
+            ].map((item) => (
+              <div key={item.title} className="flex items-center gap-4 bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                <div className="h-10 w-10 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                  <item.icon className="h-5 w-5 text-indigo-600" />
+                </div>
+                <div>
+                  <div className="font-semibold text-gray-900 text-sm">{item.title}</div>
+                  <div className="text-xs text-gray-500">{item.desc}</div>
+                </div>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
       {/* Feature comparison table */}
-      <section className="py-16 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl font-bold text-gray-900 text-center mb-10">مقارنة تفصيلية للمميزات</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse bg-white rounded-xl shadow-sm overflow-hidden">
+      <section className="py-16 bg-white">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">مقارنة تفصيلية للمميزات</h2>
+            <p className="text-gray-500">كل ما تحتاج معرفته للاختيار الصحيح</p>
+          </div>
+          <div className="overflow-x-auto rounded-2xl border border-gray-100 shadow-sm">
+            <table className="w-full border-collapse bg-white overflow-hidden">
               <thead>
-                <tr className="bg-gray-50">
-                  <th className="text-right p-4 text-gray-600 font-medium w-1/3">الميزة</th>
-                  {plans.map(p => (
-                    <th key={p.id} className="p-4 text-center text-gray-900 font-bold">{p.nameAr}</th>
+                <tr>
+                  <th className="text-right p-5 text-gray-500 font-medium text-sm w-1/3 bg-gray-50 border-b border-gray-100">الميزة</th>
+                  {plans.map((p, i) => (
+                    <th key={p.id} className={`p-5 text-center border-b border-gray-100 ${i === middleIdx ? "bg-indigo-50" : "bg-gray-50"}`}>
+                      <div className={`font-bold text-sm ${i === middleIdx ? "text-indigo-700" : "text-gray-900"}`}>{p.nameAr}</div>
+                      {i === middleIdx && <div className="text-[10px] text-indigo-500 mt-0.5">الأكثر شعبية</div>}
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {FEATURE_TABLE.map((row, i) => (
-                  <tr key={row.key} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"} data-testid={`table-row-${row.key}`}>
-                    <td className="p-4 text-gray-700 font-medium">{row.label}</td>
-                    {plans.map(plan => {
-                      const val = (plan as any)[row.key];
+                  <tr key={row.key} className={`border-b border-gray-50 ${i % 2 === 0 ? "bg-white" : "bg-gray-50/50"}`} data-testid={`table-row-${row.key}`}>
+                    <td className="p-4 text-gray-700 font-medium text-sm">{row.label}</td>
+                    {plans.map((plan, pi) => {
+                      const val = plan[row.key];
                       return (
-                        <td key={plan.id} className="p-4 text-center">
+                        <td key={plan.id} className={`p-4 text-center ${pi === middleIdx ? "bg-indigo-50/30" : ""}`}>
                           {row.bool ? (
                             val
                               ? <CheckCircle2 className="h-5 w-5 text-green-500 mx-auto" />
-                              : <X className="h-5 w-5 text-gray-300 mx-auto" />
+                              : <X className="h-4 w-4 text-gray-300 mx-auto" />
                           ) : (
-                            <span className="text-gray-900 font-medium">
-                              {row.format ? row.format(val) : val}
+                            <span className="text-gray-900 font-semibold text-sm">
+                              {row.format ? row.format(Number(val)) : String(val)}
                             </span>
                           )}
                         </td>
@@ -214,14 +291,16 @@ export default function PricingPage() {
       </section>
 
       {/* FAQ */}
-      <section className="py-16 bg-white">
+      <section className="py-16 bg-gray-50">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl font-bold text-gray-900 text-center mb-8">أسئلة عن الأسعار</h2>
-          <Accordion type="single" collapsible>
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">أسئلة عن الأسعار</h2>
+          </div>
+          <Accordion type="single" collapsible className="space-y-3">
             {FAQS.map((faq, i) => (
-              <AccordionItem key={i} value={`faq-${i}`} data-testid={`faq-pricing-${i}`}>
-                <AccordionTrigger className="text-right">{faq.q}</AccordionTrigger>
-                <AccordionContent className="text-gray-600">{faq.a}</AccordionContent>
+              <AccordionItem key={i} value={`faq-${i}`} className="border border-gray-200 rounded-xl px-5 bg-white shadow-sm" data-testid={`faq-pricing-${i}`}>
+                <AccordionTrigger className="text-right font-medium text-gray-900 hover:text-indigo-600 hover:no-underline">{faq.q}</AccordionTrigger>
+                <AccordionContent className="text-gray-600 leading-relaxed">{faq.a}</AccordionContent>
               </AccordionItem>
             ))}
           </Accordion>
@@ -229,12 +308,16 @@ export default function PricingPage() {
       </section>
 
       {/* CTA */}
-      <section className="py-16 bg-primary">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-2xl font-bold text-white mb-4">ابدأ تجربتك المجانية اليوم</h2>
-          <p className="text-primary-foreground/90 mb-6">14 يوماً مجاناً — بدون بطاقة ائتمانية — إلغاء في أي وقت.</p>
+      <section className="relative py-20 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-purple-700 to-blue-800"></div>
+        <div className="absolute inset-0 opacity-10"
+          style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "32px 32px" }}>
+        </div>
+        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-4xl font-extrabold text-white mb-4">ابدأ تجربتك المجانية اليوم</h2>
+          <p className="text-indigo-200 mb-8 text-lg">14 يوماً مجاناً — بدون بطاقة ائتمانية — إلغاء في أي وقت.</p>
           <Link href="/register">
-            <Button size="lg" variant="secondary" data-testid="button-pricing-cta">
+            <Button size="lg" className="bg-white text-indigo-700 hover:bg-indigo-50 shadow-xl font-bold text-lg px-10" data-testid="button-pricing-cta">
               ابدأ مجاناً
             </Button>
           </Link>
