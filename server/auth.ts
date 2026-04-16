@@ -138,6 +138,26 @@ export function registerAuthRoutes(app: Express) {
       if (!user) {
         return res.status(401).json({ error: info?.message || "Invalid credentials" });
       }
+      if (isPlatformAdmin(user.role)) {
+        return res.status(403).json({ error: "Platform admin must log in via /platform/login" });
+      }
+      req.login(user, (err) => {
+        if (err) return next(err);
+        const { password: _, ...userWithoutPassword } = user;
+        res.status(200).json(userWithoutPassword);
+      });
+    })(req, res, next);
+  });
+
+  app.post("/api/platform/login", (req, res, next) => {
+    passport.authenticate("local", (err: Error | null, user: SelectUser | false, info: { message: string } | undefined) => {
+      if (err) return next(err);
+      if (!user) {
+        return res.status(401).json({ error: info?.message || "Invalid credentials" });
+      }
+      if (!isPlatformAdmin(user.role)) {
+        return res.status(403).json({ error: "Access denied: platform admin credentials required" });
+      }
       req.login(user, (err) => {
         if (err) return next(err);
         const { password: _, ...userWithoutPassword } = user;

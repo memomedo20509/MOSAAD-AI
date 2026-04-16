@@ -62,6 +62,7 @@ import TermsOfServicePage from "@/pages/public/terms-of-service";
 import PlatformBlogPage from "@/pages/platform/blog";
 import BlogCategoriesPage from "@/pages/platform/blog-categories";
 import BlogEditorPage from "@/pages/platform/blog-editor";
+import PlatformLoginPage from "@/pages/platform/login";
 import BlogIndexPage from "@/pages/blog/index";
 import BlogArticlePage from "@/pages/blog/article";
 import OnboardingPage from "@/pages/onboarding";
@@ -286,6 +287,13 @@ function AppContent() {
     return <PublicRouter />;
   }
 
+  // Platform login page: always accessible
+  if (location === "/platform/login") {
+    if (user?.role === "platform_admin") return <Redirect to="/platform" />;
+    if (user) return <Redirect to="/" />;
+    return <PlatformLoginPage />;
+  }
+
   // Auth page is always accessible
   if (location === "/auth") {
     if (user) return <Redirect to="/" />;
@@ -303,6 +311,11 @@ function AppContent() {
     return <PublicRouter />;
   }
 
+  // Platform routes: unauthenticated users go to platform login
+  if (!user && (location === "/platform" || location.startsWith("/platform/"))) {
+    return <Redirect to="/platform/login" />;
+  }
+
   // Not logged in for app routes → show auth page
   if (!user) {
     return <AuthPage />;
@@ -311,6 +324,11 @@ function AppContent() {
   // Onboarding wizard: show without sidebar/header for clean UX
   if (location === "/onboarding") {
     return <OnboardingPage />;
+  }
+
+  // Company users trying to access platform paths → redirect to dashboard
+  if (user.role !== "platform_admin" && (location === "/platform" || location.startsWith("/platform/"))) {
+    return <Redirect to="/" />;
   }
 
   // Logged in → show the authenticated app
