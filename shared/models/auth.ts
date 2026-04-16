@@ -43,6 +43,8 @@ export const users = pgTable("users", {
   teamId: varchar("team_id").references(() => teams.id),
   isActive: boolean("is_active").default(true),
   lastLogin: timestamp("last_login"),
+  hasCompletedOnboarding: boolean("has_completed_onboarding").default(false),
+  hasSeenTour: boolean("has_seen_tour").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -26,11 +26,16 @@ export async function syncDatabaseSchema(): Promise<void> {
     await client.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS plan_id TEXT`);
     await client.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS industry TEXT`);
     await client.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS onboarding_step INTEGER DEFAULT 0`);
+    await client.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS has_completed_onboarding BOOLEAN DEFAULT false`);
     await client.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS logo_url TEXT`);
     await client.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS primary_color TEXT DEFAULT '#6366f1'`);
+    await client.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS working_hours TEXT`);
+    await client.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS timezone TEXT`);
 
     // Add company_id to users table (users table exists before db-sync runs)
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS has_completed_onboarding BOOLEAN DEFAULT false`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS has_seen_tour BOOLEAN DEFAULT false`);
 
     await client.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone2 TEXT`);
     await client.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS state_id VARCHAR`);

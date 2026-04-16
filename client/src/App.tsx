@@ -18,6 +18,10 @@ import { ProtectedRoute } from "@/components/protected-route";
 import { NotificationBell } from "@/components/notification-bell";
 import { PlatformLayout } from "@/components/platform-layout";
 import { PublicLayout } from "@/components/public-layout";
+import { TourProvider, useTour } from "@/hooks/use-tour";
+import { GuidedTour } from "@/components/guided-tour";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import LeadsPage from "@/pages/leads";
@@ -60,6 +64,7 @@ import BlogCategoriesPage from "@/pages/platform/blog-categories";
 import BlogEditorPage from "@/pages/platform/blog-editor";
 import BlogIndexPage from "@/pages/blog/index";
 import BlogArticlePage from "@/pages/blog/article";
+import OnboardingPage from "@/pages/onboarding";
 
 // Public-only paths — always shown with PublicLayout, no auth required
 const ALWAYS_PUBLIC_PATHS = ["/pricing", "/about", "/contact", "/privacy-policy", "/terms-of-service"];
@@ -133,6 +138,47 @@ function PlatformRouter() {
   );
 }
 
+type OnboardingStatus = {
+  onboardingStep: number;
+  hasCompletedOnboarding: boolean;
+  hasSeenTour: boolean;
+};
+
+function OnboardingGuard({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const [location, navigate] = useLocation();
+  const { isTourOpen, openTour, closeTour } = useTour();
+
+  const { data: onboardingStatus } = useQuery<OnboardingStatus>({
+    queryKey: ["/api/onboarding/status"],
+    enabled: !!user && user.role !== "platform_admin",
+  });
+
+  useEffect(() => {
+    if (!user || user.role === "platform_admin") return;
+    if (location === "/onboarding") return;
+    if (!onboardingStatus) return;
+
+    const ownerRoles = ["company_owner", "super_admin"];
+    if (ownerRoles.includes(user.role ?? "") && !onboardingStatus.hasCompletedOnboarding) {
+      navigate("/onboarding");
+      return;
+    }
+
+    if (onboardingStatus.hasCompletedOnboarding && !onboardingStatus.hasSeenTour && location === "/") {
+      const timer = setTimeout(() => openTour(), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [user, onboardingStatus, location, navigate, openTour]);
+
+  return (
+    <>
+      {children}
+      <GuidedTour open={isTourOpen} onClose={closeTour} />
+    </>
+  );
+}
+
 function AuthenticatedApp() {
   const { user } = useAuth();
   useRealtime();
@@ -147,38 +193,42 @@ function AuthenticatedApp() {
   };
 
   return (
-    <SidebarProvider style={style as React.CSSProperties}>
-      <AppSidebar />
-      <div className="flex flex-col flex-1 overflow-hidden min-w-0">
-        <header className="flex h-14 items-center justify-between gap-4 border-b px-4 shrink-0">
-          <SidebarTrigger data-testid="button-sidebar-toggle" />
-          <div className="flex items-center gap-2">
-            {user && (
-              <div className="flex items-center gap-2 text-sm">
-                {user.profileImageUrl && (
-                  <img
-                    src={user.profileImageUrl}
-                    alt={user.firstName || "User"}
-                    className="h-8 w-8 rounded-full"
-                    data-testid="img-user-avatar"
-                  />
+    <TourProvider>
+      <OnboardingGuard>
+        <SidebarProvider style={style as React.CSSProperties}>
+          <AppSidebar />
+          <div className="flex flex-col flex-1 overflow-hidden min-w-0">
+            <header className="flex h-14 items-center justify-between gap-4 border-b px-4 shrink-0">
+              <SidebarTrigger data-testid="button-sidebar-toggle" />
+              <div className="flex items-center gap-2">
+                {user && (
+                  <div className="flex items-center gap-2 text-sm">
+                    {user.profileImageUrl && (
+                      <img
+                        src={user.profileImageUrl}
+                        alt={user.firstName || "User"}
+                        className="h-8 w-8 rounded-full"
+                        data-testid="img-user-avatar"
+                      />
+                    )}
+                    <span className="hidden md:inline text-muted-foreground" data-testid="text-user-name">
+                      {user.firstName} {user.lastName}
+                    </span>
+                  </div>
                 )}
-                <span className="hidden md:inline text-muted-foreground" data-testid="text-user-name">
-                  {user.firstName} {user.lastName}
-                </span>
+                <NotificationBell />
+                <LanguageToggle />
+                <ThemeToggle />
+                <LogoutButton />
               </div>
-            )}
-            <NotificationBell />
-            <LanguageToggle />
-            <ThemeToggle />
-            <LogoutButton />
+            </header>
+            <main className="flex-1 overflow-auto p-6">
+              <AppRouter />
+            </main>
           </div>
-        </header>
-        <main className="flex-1 overflow-auto p-6">
-          <AppRouter />
-        </main>
-      </div>
-    </SidebarProvider>
+        </SidebarProvider>
+      </OnboardingGuard>
+    </TourProvider>
   );
 }
 
@@ -252,6 +302,11 @@ function AppContent() {
   // Not logged in for app routes → show auth page
   if (!user) {
     return <AuthPage />;
+  }
+
+  // Onboarding wizard: show without sidebar/header for clean UX
+  if (location === "/onboarding") {
+    return <OnboardingPage />;
   }
 
   // Logged in → show the authenticated app

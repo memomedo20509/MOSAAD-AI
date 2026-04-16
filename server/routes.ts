@@ -5844,6 +5844,80 @@ ${pages.map(p => `  <url>
     }
   });
 
+  // ─── Onboarding ───────────────────────────────────────────────────────────────
+
+  app.get("/api/onboarding/status", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user!;
+      const { db: drizzleDb } = await import("./db");
+      const { companies } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      let company = null;
+      if (user.companyId) {
+        const rows = await drizzleDb.select().from(companies).where(eq(companies.id, user.companyId));
+        company = rows[0] ?? null;
+      }
+      res.json({
+        onboardingStep: company?.onboardingStep ?? 0,
+        hasCompletedOnboarding: company?.hasCompletedOnboarding ?? user.hasCompletedOnboarding ?? false,
+        hasSeenTour: user.hasSeenTour ?? false,
+        company: company ? { name: company.name, industry: company.industry, logoUrl: company.logoUrl, workingHours: company.workingHours, timezone: company.timezone } : null,
+      });
+    } catch (err) {
+      console.error("Error fetching onboarding status:", err);
+      res.status(500).json({ error: "Failed to fetch onboarding status" });
+    }
+  });
+
+  app.patch("/api/onboarding/step", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user!;
+      const { db: drizzleDb } = await import("./db");
+      const { companies } = await import("@shared/schema");
+      const { users: usersTable } = await import("@shared/models/auth");
+      const { eq } = await import("drizzle-orm");
+      const { step, completed, companyData, markTourSeen } = req.body;
+
+      if (markTourSeen) {
+        await drizzleDb.update(usersTable).set({ hasSeenTour: true } as any).where(eq(usersTable.id, user.id));
+        return res.json({ success: true });
+      }
+
+      if (user.companyId && companyData) {
+        const updateData: Record<string, unknown> = {};
+        if (companyData.name !== undefined) updateData.name = companyData.name;
+        if (companyData.industry !== undefined) updateData.industry = companyData.industry;
+        if (companyData.logoUrl !== undefined) updateData.logoUrl = companyData.logoUrl;
+        if (companyData.workingHours !== undefined) updateData.workingHours = companyData.workingHours;
+        if (companyData.timezone !== undefined) updateData.timezone = companyData.timezone;
+        if (step !== undefined) updateData.onboardingStep = step;
+        if (completed) {
+          updateData.hasCompletedOnboarding = true;
+          updateData.onboardingStep = 5;
+        }
+        if (Object.keys(updateData).length > 0) {
+          await drizzleDb.update(companies).set(updateData as any).where(eq(companies.id, user.companyId));
+        }
+      } else if (user.companyId && step !== undefined) {
+        const updateData: Record<string, unknown> = { onboardingStep: step };
+        if (completed) {
+          updateData.hasCompletedOnboarding = true;
+          updateData.onboardingStep = 5;
+        }
+        await drizzleDb.update(companies).set(updateData as any).where(eq(companies.id, user.companyId));
+      }
+
+      if (completed) {
+        await drizzleDb.update(usersTable).set({ hasCompletedOnboarding: true } as any).where(eq(usersTable.id, user.id));
+      }
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Error updating onboarding step:", err);
+      res.status(500).json({ error: "Failed to update onboarding step" });
+    }
+  });
+
   // ─── Subscription / Usage / Invoices (for current company) ───────────────────
   app.get("/api/subscription", isAuthenticated, async (_req, res) => {
     try {

@@ -22,7 +22,9 @@ import {
   UserPlus,
   TrendingUp,
   Building2,
+  PlayCircle,
 } from "lucide-react";
+import { useTour } from "@/hooks/use-tour";
 import { Badge } from "@/components/ui/badge";
 import {
   Sidebar,
@@ -59,6 +61,7 @@ export function AppSidebar() {
   const { user } = useAuth();
   const { t, isRTL } = useLanguage();
   const userRole = user?.role ? normalizeRole(user.role) : undefined;
+  const { openTour } = useTour();
 
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ["/api/manager-comments/unread-count"],
@@ -378,6 +381,16 @@ export function AppSidebar() {
             )}
           </div>
         )}
+        <div className="border-t pt-2 mb-1">
+          <button
+            onClick={openTour}
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            data-testid="button-replay-tour"
+          >
+            <PlayCircle className="h-3.5 w-3.5" />
+            <span>جولة تعريفية</span>
+          </button>
+        </div>
         <div className="text-xs text-muted-foreground">SalesBot AI v1.0</div>
       </SidebarFooter>
     </Sidebar>

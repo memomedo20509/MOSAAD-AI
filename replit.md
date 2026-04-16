@@ -79,6 +79,20 @@ Preferred communication style: Simple, everyday language.
 - `/blog` → Public blog listing with category filter, search, pagination (10/page)
 - `/blog/:slug` → Article page with rendered content, TOC, share buttons (WhatsApp/Twitter/Facebook/LinkedIn/Copy), related articles, author bio, reading time
 
+### Onboarding & Guided Tour
+- `/onboarding` → 5-step wizard for new company owners (shown without sidebar)
+  - Step 1: Company Profile (name, industry, working hours, timezone)
+  - Step 2: Add Team Members (create users with role selection)
+  - Step 3: Knowledge Base Setup (add products/services for AI bot)
+  - Step 4: WhatsApp Connection (info screen with QR placeholder)
+  - Step 5: Done screen with quick-start links
+- Progress saved to `companies.onboarding_step` and `companies.has_completed_onboarding`
+- Company owners/super_admins auto-redirected to `/onboarding` if not yet completed
+- After wizard, guided tour auto-triggers on first dashboard visit
+- Guided Tour: 8 tooltip-based steps highlighting sidebar, KPIs, leads, conversations, knowledge base, chatbot, analytics
+- Tour status saved to `users.has_seen_tour`
+- "جولة تعريفية" replay button in sidebar footer
+
 ### Company Pages
 - `/` → Dashboard (overview stats)
 - `/leaderboard` → Sales agent rankings with deals/leads metrics (manager+)
@@ -105,6 +119,8 @@ Preferred communication style: Simple, everyday language.
 - `GET/POST/PATCH/DELETE /api/platform/blog/articles` — Article CRUD (platform_admin)
 - `GET/POST/PATCH/DELETE /api/platform/blog/categories` — Category CRUD (platform_admin)
 - `GET /sitemap.xml` — Auto-generated XML sitemap including all published articles
+- `GET /api/onboarding/status` — Current onboarding step, completion flags, company profile
+- `PATCH /api/onboarding/step` — Save onboarding step progress, company data, or mark tour seen
 - `GET /api/subscription` — Current company subscription (with plan details)
 - `GET /api/usage` — Current month usage counters + plan limits
 - `GET /api/invoices` — Company invoice history

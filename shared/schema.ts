@@ -13,8 +13,11 @@ export const companies = pgTable("companies", {
   planId: text("plan_id"),
   status: text("status").notNull().default("active"), // active | trial | suspended | cancelled
   onboardingStep: integer("onboarding_step").default(0),
+  hasCompletedOnboarding: boolean("has_completed_onboarding").default(false),
   logoUrl: text("logo_url"),
   primaryColor: text("primary_color").default("#6366f1"),
+  workingHours: text("working_hours"),
+  timezone: text("timezone"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -1000,22 +1003,6 @@ export interface Message {
   isRead: boolean | null;
 }
 
-// Platform Leads (contact form submissions from public marketing website)
-export const platformLeads = pgTable("platform_leads", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull(),
-  email: text("email").notNull(),
-  phone: text("phone"),
-  company: text("company"),
-  message: text("message"),
-  source: text("source").default("contact_form"),
-  status: text("status").default("new"), // new | contacted | converted | closed
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const insertPlatformLeadSchema = createInsertSchema(platformLeads).omit({ id: true, createdAt: true });
-export type InsertPlatformLead = z.infer<typeof insertPlatformLeadSchema>;
-export type PlatformLead = typeof platformLeads.$inferSelect;
 
 // Export auth models (users, teams, sessions, role_permissions)
 export * from "./models/auth";
