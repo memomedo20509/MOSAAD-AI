@@ -72,6 +72,10 @@ import {
   insertPlatformLeadSchema,
   updatePlatformLeadSchema,
   insertPlatformLeadHistorySchema,
+  insertArticleSchema,
+  updateArticleSchema,
+  insertArticleCategorySchema,
+  updateArticleCategorySchema,
   type Lead,
   type InsertLead,
 } from "@shared/schema";
@@ -6068,6 +6072,188 @@ ${pages.map(p => `  <url>
     } catch (err) {
       console.error("Error adding platform lead history:", err);
       res.status(400).json({ error: "Failed to add history entry" });
+    }
+  });
+
+  // ─── Blog / CMS ──────────────────────────────────────────────────────────────
+
+  // Article Categories - platform admin CRUD
+  app.get("/api/platform/blog/categories", isAuthenticated, async (req, res) => {
+    try {
+      const cats = await storage.getAllArticleCategories();
+      res.json(cats);
+    } catch (err) {
+      console.error("Error fetching article categories:", err);
+      res.status(500).json({ error: "Failed to fetch categories" });
+    }
+  });
+
+  app.post("/api/platform/blog/categories", isAuthenticated, async (req, res) => {
+    try {
+      if (!isPlatformAdmin(req.user?.role)) return res.status(403).json({ error: "Forbidden" });
+      const data = insertArticleCategorySchema.parse(req.body);
+      const cat = await storage.createArticleCategory(data);
+      res.status(201).json(cat);
+    } catch (err) {
+      console.error("Error creating article category:", err);
+      res.status(400).json({ error: "Failed to create category" });
+    }
+  });
+
+  app.patch("/api/platform/blog/categories/:id", isAuthenticated, async (req, res) => {
+    try {
+      if (!isPlatformAdmin(req.user?.role)) return res.status(403).json({ error: "Forbidden" });
+      const data = updateArticleCategorySchema.parse(req.body);
+      const cat = await storage.updateArticleCategory(req.params.id, data);
+      if (!cat) return res.status(404).json({ error: "Category not found" });
+      res.json(cat);
+    } catch (err) {
+      console.error("Error updating article category:", err);
+      res.status(400).json({ error: "Failed to update category" });
+    }
+  });
+
+  app.delete("/api/platform/blog/categories/:id", isAuthenticated, async (req, res) => {
+    try {
+      if (!isPlatformAdmin(req.user?.role)) return res.status(403).json({ error: "Forbidden" });
+      const deleted = await storage.deleteArticleCategory(req.params.id);
+      if (!deleted) return res.status(404).json({ error: "Category not found" });
+      res.status(204).send();
+    } catch (err) {
+      console.error("Error deleting article category:", err);
+      res.status(500).json({ error: "Failed to delete category" });
+    }
+  });
+
+  // Articles - platform admin CRUD
+  app.get("/api/platform/blog/articles", isAuthenticated, async (req, res) => {
+    try {
+      if (!isPlatformAdmin(req.user?.role)) return res.status(403).json({ error: "Forbidden" });
+      const { status, categoryId, search, page, limit } = req.query as Record<string, string>;
+      const result = await storage.getAllArticles({
+        status: status || undefined,
+        categoryId: categoryId || undefined,
+        search: search || undefined,
+        page: page ? parseInt(page) : 1,
+        limit: limit ? parseInt(limit) : 20,
+      });
+      res.json(result);
+    } catch (err) {
+      console.error("Error fetching articles:", err);
+      res.status(500).json({ error: "Failed to fetch articles" });
+    }
+  });
+
+  app.get("/api/platform/blog/articles/:id", isAuthenticated, async (req, res) => {
+    try {
+      if (!isPlatformAdmin(req.user?.role)) return res.status(403).json({ error: "Forbidden" });
+      const article = await storage.getArticle(req.params.id);
+      if (!article) return res.status(404).json({ error: "Article not found" });
+      res.json(article);
+    } catch (err) {
+      console.error("Error fetching article:", err);
+      res.status(500).json({ error: "Failed to fetch article" });
+    }
+  });
+
+  app.post("/api/platform/blog/articles", isAuthenticated, async (req, res) => {
+    try {
+      if (!isPlatformAdmin(req.user?.role)) return res.status(403).json({ error: "Forbidden" });
+      const user = req.user!;
+      const data = insertArticleSchema.parse({
+        ...req.body,
+        authorId: user.id,
+        authorName: user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.username,
+      });
+      const article = await storage.createArticle(data);
+      res.status(201).json(article);
+    } catch (err) {
+      console.error("Error creating article:", err);
+      res.status(400).json({ error: "Failed to create article" });
+    }
+  });
+
+  app.patch("/api/platform/blog/articles/:id", isAuthenticated, async (req, res) => {
+    try {
+      if (!isPlatformAdmin(req.user?.role)) return res.status(403).json({ error: "Forbidden" });
+      const data = updateArticleSchema.parse(req.body);
+      const article = await storage.updateArticle(req.params.id, data);
+      if (!article) return res.status(404).json({ error: "Article not found" });
+      res.json(article);
+    } catch (err) {
+      console.error("Error updating article:", err);
+      res.status(400).json({ error: "Failed to update article" });
+    }
+  });
+
+  app.delete("/api/platform/blog/articles/:id", isAuthenticated, async (req, res) => {
+    try {
+      if (!isPlatformAdmin(req.user?.role)) return res.status(403).json({ error: "Forbidden" });
+      const deleted = await storage.deleteArticle(req.params.id);
+      if (!deleted) return res.status(404).json({ error: "Article not found" });
+      res.status(204).send();
+    } catch (err) {
+      console.error("Error deleting article:", err);
+      res.status(500).json({ error: "Failed to delete article" });
+    }
+  });
+
+  // Public Blog API
+  app.get("/api/blog/articles", async (req, res) => {
+    try {
+      const { category, search, page, limit } = req.query as Record<string, string>;
+      const result = await storage.getPublishedArticles({
+        categorySlug: category || undefined,
+        search: search || undefined,
+        page: page ? parseInt(page) : 1,
+        limit: limit ? parseInt(limit) : 10,
+      });
+      res.json(result);
+    } catch (err) {
+      console.error("Error fetching public articles:", err);
+      res.status(500).json({ error: "Failed to fetch articles" });
+    }
+  });
+
+  app.get("/api/blog/categories", async (req, res) => {
+    try {
+      const cats = await storage.getAllArticleCategories();
+      res.json(cats);
+    } catch (err) {
+      console.error("Error fetching blog categories:", err);
+      res.status(500).json({ error: "Failed to fetch categories" });
+    }
+  });
+
+  app.get("/api/blog/articles/:slug", async (req, res) => {
+    try {
+      const article = await storage.getArticleBySlug(req.params.slug);
+      if (!article || article.status !== "published") {
+        return res.status(404).json({ error: "Article not found" });
+      }
+      const related = await storage.getRelatedArticles(article.id, article.categoryId, 3);
+      res.json({ article, related });
+    } catch (err) {
+      console.error("Error fetching article by slug:", err);
+      res.status(500).json({ error: "Failed to fetch article" });
+    }
+  });
+
+  // Sitemap
+  app.get("/sitemap.xml", async (req, res) => {
+    try {
+      const { articles: publishedArticles } = await storage.getPublishedArticles({ limit: 1000 });
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      const urls = [
+        `<url><loc>${baseUrl}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>`,
+        `<url><loc>${baseUrl}/blog</loc><changefreq>daily</changefreq><priority>0.9</priority></url>`,
+        ...publishedArticles.map(a => `<url><loc>${baseUrl}/blog/${a.slug}</loc><lastmod>${a.publishedAt ? new Date(a.publishedAt).toISOString().split("T")[0] : new Date(a.updatedAt!).toISOString().split("T")[0]}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>`),
+      ];
+      res.setHeader("Content-Type", "application/xml");
+      res.send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join("")}</urlset>`);
+    } catch (err) {
+      console.error("Error generating sitemap:", err);
+      res.status(500).send("Failed to generate sitemap");
     }
   });
 

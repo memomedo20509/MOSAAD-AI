@@ -1,5 +1,5 @@
 import { db, pool } from "./db";
-import { eq, and, or, ne, isNotNull, isNull, lt, gte, lte, sql } from "drizzle-orm";
+import { eq, and, or, ne, isNotNull, isNull, lt, gte, lte, sql, ilike, desc, count, asc } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { computeScore, getScoringConfig, type ScoringContext } from "./scoring";
@@ -141,6 +141,14 @@ import {
   type UpdatePlatformLead,
   type PlatformLeadHistory,
   type InsertPlatformLeadHistory,
+  articleCategories,
+  articles,
+  type ArticleCategory,
+  type InsertArticleCategory,
+  type UpdateArticleCategory,
+  type Article,
+  type InsertArticle,
+  type UpdateArticle,
 } from "@shared/schema";
 import {
   customRoles,
@@ -666,6 +674,23 @@ export interface IStorage {
     conversionRate: number;
     pipelineValue: number;
   }>;
+
+  // Blog / CMS
+  getAllArticleCategories(): Promise<ArticleCategory[]>;
+  getArticleCategory(id: string): Promise<ArticleCategory | undefined>;
+  getArticleCategoryBySlug(slug: string): Promise<ArticleCategory | undefined>;
+  createArticleCategory(data: InsertArticleCategory): Promise<ArticleCategory>;
+  updateArticleCategory(id: string, data: UpdateArticleCategory): Promise<ArticleCategory | undefined>;
+  deleteArticleCategory(id: string): Promise<boolean>;
+
+  getAllArticles(filters?: { status?: string; categoryId?: string; search?: string; page?: number; limit?: number }): Promise<{ articles: Article[]; total: number }>;
+  getArticle(id: string): Promise<Article | undefined>;
+  getArticleBySlug(slug: string): Promise<Article | undefined>;
+  createArticle(data: InsertArticle): Promise<Article>;
+  updateArticle(id: string, data: UpdateArticle): Promise<Article | undefined>;
+  deleteArticle(id: string): Promise<boolean>;
+  getPublishedArticles(filters?: { categorySlug?: string; search?: string; page?: number; limit?: number }): Promise<{ articles: (Article & { category: ArticleCategory | null })[]; total: number }>;
+  getRelatedArticles(articleId: string, categoryId?: string | null, limit?: number): Promise<Article[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3668,6 +3693,113 @@ export class DatabaseStorage implements IStorage {
       .filter(l => !["won", "lost"].includes(l.stage))
       .reduce((sum, l) => sum + (l.dealValue ?? 0), 0);
     return { leadsThisMonth, demosScheduled, conversionRate, pipelineValue };
+  }
+
+  // Blog / CMS
+  async getAllArticleCategories(): Promise<ArticleCategory[]> {
+    return db.select().from(articleCategories).orderBy(asc(articleCategories.name));
+  }
+
+  async getArticleCategory(id: string): Promise<ArticleCategory | undefined> {
+    const [cat] = await db.select().from(articleCategories).where(eq(articleCategories.id, id));
+    return cat;
+  }
+
+  async getArticleCategoryBySlug(slug: string): Promise<ArticleCategory | undefined> {
+    const [cat] = await db.select().from(articleCategories).where(eq(articleCategories.slug, slug));
+    return cat;
+  }
+
+  async createArticleCategory(data: InsertArticleCategory): Promise<ArticleCategory> {
+    const [cat] = await db.insert(articleCategories).values(data).returning();
+    return cat;
+  }
+
+  async updateArticleCategory(id: string, data: UpdateArticleCategory): Promise<ArticleCategory | undefined> {
+    const [cat] = await db.update(articleCategories).set(data).where(eq(articleCategories.id, id)).returning();
+    return cat;
+  }
+
+  async deleteArticleCategory(id: string): Promise<boolean> {
+    const result = await db.delete(articleCategories).where(eq(articleCategories.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getAllArticles(filters?: { status?: string; categoryId?: string; search?: string; page?: number; limit?: number }): Promise<{ articles: Article[]; total: number }> {
+    const conditions = [];
+    if (filters?.status) conditions.push(eq(articles.status, filters.status));
+    if (filters?.categoryId) conditions.push(eq(articles.categoryId, filters.categoryId));
+    if (filters?.search) conditions.push(ilike(articles.title, `%${filters.search}%`));
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    const page = filters?.page ?? 1;
+    const limit = filters?.limit ?? 20;
+    const offset = (page - 1) * limit;
+
+    const [{ total }] = await db.select({ total: count() }).from(articles).where(where);
+    const rows = await db.select().from(articles).where(where).orderBy(desc(articles.createdAt)).limit(limit).offset(offset);
+    return { articles: rows, total };
+  }
+
+  async getArticle(id: string): Promise<Article | undefined> {
+    const [article] = await db.select().from(articles).where(eq(articles.id, id));
+    return article;
+  }
+
+  async getArticleBySlug(slug: string): Promise<Article | undefined> {
+    const [article] = await db.select().from(articles).where(eq(articles.slug, slug));
+    return article;
+  }
+
+  async createArticle(data: InsertArticle): Promise<Article> {
+    const [article] = await db.insert(articles).values(data).returning();
+    return article;
+  }
+
+  async updateArticle(id: string, data: UpdateArticle): Promise<Article | undefined> {
+    const [article] = await db.update(articles).set({ ...data, updatedAt: new Date() }).where(eq(articles.id, id)).returning();
+    return article;
+  }
+
+  async deleteArticle(id: string): Promise<boolean> {
+    const result = await db.delete(articles).where(eq(articles.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getPublishedArticles(filters?: { categorySlug?: string; search?: string; page?: number; limit?: number }): Promise<{ articles: (Article & { category: ArticleCategory | null })[]; total: number }> {
+    const page = filters?.page ?? 1;
+    const limit = filters?.limit ?? 10;
+    const offset = (page - 1) * limit;
+
+    let categoryId: string | undefined;
+    if (filters?.categorySlug) {
+      const cat = await this.getArticleCategoryBySlug(filters.categorySlug);
+      categoryId = cat?.id;
+    }
+
+    const conditions = [eq(articles.status, "published")];
+    if (categoryId) conditions.push(eq(articles.categoryId, categoryId));
+    if (filters?.search) conditions.push(ilike(articles.title, `%${filters.search}%`));
+
+    const where = and(...conditions);
+
+    const [{ total }] = await db.select({ total: count() }).from(articles).where(where);
+    const rows = await db.select().from(articles).where(where).orderBy(desc(articles.publishedAt)).limit(limit).offset(offset);
+
+    const allCategories = await this.getAllArticleCategories();
+    const catMap = Object.fromEntries(allCategories.map(c => [c.id, c]));
+
+    const result = rows.map(a => ({
+      ...a,
+      category: a.categoryId ? (catMap[a.categoryId] ?? null) : null,
+    }));
+    return { articles: result, total };
+  }
+
+  async getRelatedArticles(articleId: string, categoryId?: string | null, limit = 3): Promise<Article[]> {
+    const conditions = [eq(articles.status, "published"), ne(articles.id, articleId)];
+    if (categoryId) conditions.push(eq(articles.categoryId, categoryId));
+    return db.select().from(articles).where(and(...conditions)).orderBy(desc(articles.publishedAt)).limit(limit);
   }
 }
 

@@ -612,6 +612,42 @@ export async function syncDatabaseSchema(): Promise<void> {
       )
     `);
 
+    // Article Categories
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS article_categories (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        name TEXT NOT NULL,
+        name_en TEXT,
+        slug TEXT NOT NULL UNIQUE,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    // Articles
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS articles (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        title TEXT NOT NULL,
+        slug TEXT NOT NULL UNIQUE,
+        excerpt TEXT,
+        body TEXT,
+        featured_image TEXT,
+        category_id VARCHAR REFERENCES article_categories(id),
+        tags TEXT[],
+        author_id VARCHAR,
+        author_name TEXT,
+        status TEXT NOT NULL DEFAULT 'draft',
+        meta_title TEXT,
+        meta_description TEXT,
+        og_image TEXT,
+        published_at TIMESTAMP,
+        reading_time_minutes INTEGER,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
     await client.query("COMMIT");
     console.log("[db-sync] All tables verified/created successfully");
   } catch (error) {

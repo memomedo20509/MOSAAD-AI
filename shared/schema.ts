@@ -922,6 +922,59 @@ export const insertPlatformLeadHistorySchema = createInsertSchema(platformLeadHi
 export type InsertPlatformLeadHistory = z.infer<typeof insertPlatformLeadHistorySchema>;
 export type PlatformLeadHistory = typeof platformLeadHistory.$inferSelect;
 
+// ─── Blog / CMS ──────────────────────────────────────────────────────────────
+
+export const articleCategories = pgTable("article_categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  nameEn: text("name_en"),
+  slug: text("slug").notNull().unique(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertArticleCategorySchema = createInsertSchema(articleCategories).omit({ id: true, createdAt: true });
+export const updateArticleCategorySchema = insertArticleCategorySchema.partial();
+export type InsertArticleCategory = z.infer<typeof insertArticleCategorySchema>;
+export type UpdateArticleCategory = z.infer<typeof updateArticleCategorySchema>;
+export type ArticleCategory = typeof articleCategories.$inferSelect;
+
+export const ARTICLE_STATUSES = ["draft", "published", "archived"] as const;
+export type ArticleStatus = typeof ARTICLE_STATUSES[number];
+
+export const articles = pgTable("articles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  slug: text("slug").notNull().unique(),
+  excerpt: text("excerpt"),
+  body: text("body"),
+  featuredImage: text("featured_image"),
+  categoryId: varchar("category_id").references(() => articleCategories.id),
+  tags: text("tags").array(),
+  authorId: varchar("author_id"),
+  authorName: text("author_name"),
+  status: text("status").notNull().default("draft"),
+  metaTitle: text("meta_title"),
+  metaDescription: text("meta_description"),
+  ogImage: text("og_image"),
+  publishedAt: timestamp("published_at"),
+  readingTimeMinutes: integer("reading_time_minutes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertArticleSchema = createInsertSchema(articles).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  status: z.enum(ARTICLE_STATUSES).default("draft"),
+  title: z.string().min(1, "Title is required"),
+  slug: z.string().min(1, "Slug is required"),
+});
+export const updateArticleSchema = insertArticleSchema.partial().extend({
+  publishedAt: z.coerce.date().optional().nullable(),
+});
+export type InsertArticle = z.infer<typeof insertArticleSchema>;
+export type UpdateArticle = z.infer<typeof updateArticleSchema>;
+export type Article = typeof articles.$inferSelect;
+
 // TypeScript interfaces for WhatsApp conversation inbox (mapped from whatsapp_messages_log)
 export interface Conversation {
   leadId: string;

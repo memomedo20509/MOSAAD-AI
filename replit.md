@@ -49,6 +49,8 @@ Preferred communication style: Simple, everyday language.
 - **usage_records** — Monthly counters: leads_count, messages_count, users_count, ai_calls_count
 - **invoices** — Billing records per company subscription
 - **Conversation** / **Message** — TypeScript interfaces mapping WhatsApp inbox data
+- **article_categories** — Blog category taxonomy (name, name_en, slug, description)
+- **articles** — Blog articles with rich HTML body, SEO fields (meta_title, meta_description, og_image), status (draft/published/archived), category, tags, reading_time_minutes
 
 ### Auth Data Model (shared/models/auth.ts)
 - **users** – Platform users with roles: super_admin, admin, sales_admin, team_leader, sales_agent, platform_admin
@@ -68,6 +70,14 @@ Preferred communication style: Simple, everyday language.
 - `/platform/tickets` → Support ticket list and detail view
 - `/platform/notifications` → Platform-wide notifications center
 - `/platform/settings` → Platform settings
+- `/platform/blog` → Article management (list, filter by status, search, quick actions)
+- `/platform/blog/categories` → Article category CRUD
+- `/platform/blog/editor` → New article editor with TipTap WYSIWYG + SEO scoring panel
+- `/platform/blog/editor/:id` → Edit existing article
+
+### Public Blog Pages (no auth required)
+- `/blog` → Public blog listing with category filter, search, pagination (10/page)
+- `/blog/:slug` → Article page with rendered content, TOC, share buttons (WhatsApp/Twitter/Facebook/LinkedIn/Copy), related articles, author bio, reading time
 
 ### Company Pages
 - `/` → Dashboard (overview stats)
@@ -89,6 +99,12 @@ Preferred communication style: Simple, everyday language.
 - `/settings/teams` → Team management (admin only)
 
 ### Key API Endpoints
+- `GET /api/blog/articles` — Public published articles (filter: category, search, page, limit)
+- `GET /api/blog/articles/:slug` — Single published article + related articles
+- `GET /api/blog/categories` — All article categories (public)
+- `GET/POST/PATCH/DELETE /api/platform/blog/articles` — Article CRUD (platform_admin)
+- `GET/POST/PATCH/DELETE /api/platform/blog/categories` — Category CRUD (platform_admin)
+- `GET /sitemap.xml` — Auto-generated XML sitemap including all published articles
 - `GET /api/subscription` — Current company subscription (with plan details)
 - `GET /api/usage` — Current month usage counters + plan limits
 - `GET /api/invoices` — Company invoice history

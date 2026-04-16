@@ -55,6 +55,11 @@ import ContactPage from "@/pages/public/contact";
 import RegisterPage from "@/pages/public/register";
 import PrivacyPolicyPage from "@/pages/public/privacy-policy";
 import TermsOfServicePage from "@/pages/public/terms-of-service";
+import PlatformBlogPage from "@/pages/platform/blog";
+import BlogCategoriesPage from "@/pages/platform/blog-categories";
+import BlogEditorPage from "@/pages/platform/blog-editor";
+import BlogIndexPage from "@/pages/blog/index";
+import BlogArticlePage from "@/pages/blog/article";
 
 // Public-only paths — always shown with PublicLayout, no auth required
 const ALWAYS_PUBLIC_PATHS = ["/pricing", "/about", "/contact", "/privacy-policy", "/terms-of-service"];
@@ -118,6 +123,10 @@ function PlatformRouter() {
         <Route path="/platform/settings" component={PlatformSettingsPage} />
         <Route path="/platform/leads/pipeline" component={PlatformLeadPipelinePage} />
         <Route path="/platform/leads" component={PlatformLeadsPage} />
+        <Route path="/platform/blog/categories" component={BlogCategoriesPage} />
+        <Route path="/platform/blog/editor/:id">{(params) => <BlogEditorPage params={params} />}</Route>
+        <Route path="/platform/blog/editor">{() => <BlogEditorPage />}</Route>
+        <Route path="/platform/blog" component={PlatformBlogPage} />
         <Route component={NotFound} />
       </Switch>
     </PlatformLayout>
@@ -190,9 +199,25 @@ function PublicRouter() {
   );
 }
 
+function PublicBlogRouter() {
+  return (
+    <Switch>
+      <Route path="/blog/:slug">{(params) => <BlogArticlePage params={params} />}</Route>
+      <Route path="/blog" component={BlogIndexPage} />
+      <Route component={null} />
+    </Switch>
+  );
+}
+
 function AppContent() {
   const { user, isLoading } = useAuth();
   const [location] = useLocation();
+
+  // Blog pages are always public
+  const isPublicBlog = location === "/blog" || location.startsWith("/blog/");
+  if (isPublicBlog) {
+    return <PublicBlogRouter />;
+  }
 
   if (isLoading) {
     return (

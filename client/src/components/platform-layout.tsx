@@ -11,6 +11,7 @@ import {
   LogOut,
   ChevronDown,
   Loader2,
+  BookOpen,
 } from "lucide-react";
 import {
   Sidebar,
@@ -39,6 +40,7 @@ const NAV_ITEMS = [
   { href: "/platform/plans", label: "الباقات", icon: Package },
   { href: "/platform/tickets", label: "التذاكر", icon: Ticket },
   { href: "/platform/notifications", label: "الإشعارات", icon: Bell },
+  { href: "/platform/blog", label: "المدونة", icon: BookOpen },
   { href: "/platform/settings", label: "إعدادات المنصة", icon: Settings },
 ];
 
