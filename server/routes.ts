@@ -5735,45 +5735,112 @@ ${pages.map(p => `  <url>
   app.get("/api/platform/revenue", isAuthenticated, requirePlatformAdmin, async (req, res) => {
     try {
       const { db } = await import("./db");
-      const { companies, plans } = await import("@shared/schema");
+      const { subscriptions, subscriptionPlans, invoices } = await import("@shared/schema");
+      const { eq, and, gte, lte, desc } = await import("drizzle-orm");
 
-      const allCompanies = await db.select().from(companies);
-      const allPlans = await db.select().from(plans);
-      const planMap = new Map(allPlans.map(p => [p.id, p]));
+      // Get all active subscriptions with their plans
+      const activeSubs = await db
+        .select()
+        .from(subscriptions)
+        .leftJoin(subscriptionPlans, eq(subscriptions.planId, subscriptionPlans.id))
+        .where(eq(subscriptions.status, "active"));
 
-      const activeCompanies = allCompanies.filter(c => c.status === "active" || c.status === "trial");
       let mrr = 0;
       const planBreakdown: Record<string, { name: string; count: number; revenue: number }> = {};
 
-      for (const c of activeCompanies) {
-        if (c.planId && planMap.has(c.planId)) {
-          const plan = planMap.get(c.planId)!;
+      for (const row of activeSubs) {
+        const plan = row.subscription_plans;
+        if (plan) {
           const price = plan.priceMonthly ?? 0;
           mrr += price;
-          if (!planBreakdown[c.planId]) {
-            planBreakdown[c.planId] = { name: plan.name, count: 0, revenue: 0 };
+          if (!planBreakdown[plan.id]) {
+            planBreakdown[plan.id] = { name: plan.nameAr || plan.name, count: 0, revenue: 0 };
           }
-          planBreakdown[c.planId].count++;
-          planBreakdown[c.planId].revenue += price;
+          planBreakdown[plan.id].count++;
+          planBreakdown[plan.id].revenue += price;
         }
       }
 
       const arr = mrr * 12;
       const breakdown = Object.values(planBreakdown);
 
+      // Build MRR history from paid invoices over last 12 months
+      const twelveMonthsAgo = new Date();
+      twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
+      twelveMonthsAgo.setDate(1);
+      twelveMonthsAgo.setHours(0, 0, 0, 0);
+
+      const paidInvoices = await db.select().from(invoices)
+        .where(and(eq(invoices.status, "paid"), gte(invoices.paidAt, twelveMonthsAgo)));
+
+      // Aggregate by month
+      const mrrByMonth: Record<string, number> = {};
+      for (const inv of paidInvoices) {
+        if (inv.paidAt) {
+          const key = inv.paidAt.toISOString().slice(0, 7); // YYYY-MM
+          mrrByMonth[key] = (mrrByMonth[key] ?? 0) + (inv.amount ?? 0);
+        }
+      }
+
       const mrrHistory = Array.from({ length: 12 }, (_, i) => {
         const d = new Date();
         d.setMonth(d.getMonth() - (11 - i));
+        const key = d.toISOString().slice(0, 7);
         return {
           month: d.toLocaleDateString("ar-EG", { month: "short", year: "numeric" }),
-          mrr: Math.round(mrr * (0.7 + i * 0.025)),
+          mrr: mrrByMonth[key] ?? (i === 11 ? mrr : 0),
         };
       });
 
-      res.json({ mrr, arr, breakdown, mrrHistory });
+      // Renewals in next 30 days
+      const now = new Date();
+      const in30Days = new Date();
+      in30Days.setDate(in30Days.getDate() + 30);
+      const renewalSubs = await db.select().from(subscriptions)
+        .where(and(
+          eq(subscriptions.status, "active"),
+          gte(subscriptions.currentPeriodEnd, now),
+          lte(subscriptions.currentPeriodEnd, in30Days),
+        ));
+      const renewalsNext30Days = renewalSubs.length;
+
+      res.json({ mrr, arr, breakdown, mrrHistory, renewalsNext30Days });
     } catch (error) {
       console.error("Error fetching revenue:", error);
       res.status(500).json({ error: "Failed to fetch revenue data" });
+    }
+  });
+
+  // Company Invoices
+  app.get("/api/platform/companies/:id/invoices", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const inv = await storage.getCompanyInvoices(req.params.id);
+      res.json(inv);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch invoices" });
+    }
+  });
+
+  app.post("/api/platform/companies/:id/invoices", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const { insertInvoiceSchema } = await import("@shared/schema");
+      const data = insertInvoiceSchema.parse({ ...req.body, companyId: req.params.id });
+      const inv = await storage.createCompanyInvoice(data);
+      res.status(201).json(inv);
+    } catch (error) {
+      console.error("Error creating invoice:", error);
+      res.status(400).json({ error: "Failed to create invoice" });
+    }
+  });
+
+  // Company Subscription (for platform admin view)
+  app.get("/api/platform/companies/:id/subscription", isAuthenticated, requirePlatformAdmin, async (req, res) => {
+    try {
+      const detail = await storage.getPlatformCompanyDetail(req.params.id);
+      if (!detail) return res.status(404).json({ error: "Company not found" });
+      res.json(detail.subscription ?? null);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch subscription" });
     }
   });
 

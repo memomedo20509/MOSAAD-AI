@@ -64,8 +64,8 @@ Preferred communication style: Simple, everyday language.
 ### Platform Admin Pages (role: platform_admin only)
 - `/platform` → Platform dashboard with MRR/ARR KPIs and company stats
 - `/platform/companies` → All companies list with filters, status badges, user/lead counts
-- `/platform/companies/:id` → Company detail with tabs (Profile, Users, Tickets)
-- `/platform/revenue` → Revenue analytics with MRR/ARR charts
+- `/platform/companies/:id` → Company detail with tabs (Profile, Users, Subscription, Invoices) — subscription start/renewal dates and invoice history
+- `/platform/revenue` → Revenue analytics with MRR/ARR charts, renewals-in-30-days KPI, MRR history from paid invoices
 - `/platform/plans` → Subscription plan management (CRUD)
 - `/platform/tickets` → Support ticket list and detail view
 - `/platform/notifications` → Platform-wide notifications center
@@ -176,7 +176,10 @@ Preferred communication style: Simple, everyday language.
 - `GET /api/platform/tickets/:id` — Ticket detail
 - `PATCH /api/platform/tickets/:id` — Update ticket status
 - `POST /api/platform/tickets/:id/replies` — Add reply to ticket
-- `GET /api/platform/revenue` — Revenue analytics
+- `GET /api/platform/revenue` — Revenue analytics (real MRR/ARR from subscriptions, MRR history from paid invoices, renewals in 30 days)
+- `GET /api/platform/companies/:id/invoices` — Company invoice history
+- `POST /api/platform/companies/:id/invoices` — Create invoice for company
+- `GET /api/platform/companies/:id/subscription` — Company active subscription with plan details
 - `GET/POST /api/platform/notifications` — Platform notifications
 - `PATCH /api/platform/notifications/:id/read` — Mark notification read
 - `PATCH /api/platform/notifications/read-all` — Mark all read

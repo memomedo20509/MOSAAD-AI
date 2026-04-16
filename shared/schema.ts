@@ -1003,6 +1003,5 @@ export interface Message {
   isRead: boolean | null;
 }
 
-
 // Export auth models (users, teams, sessions, role_permissions)
 export * from "./models/auth";

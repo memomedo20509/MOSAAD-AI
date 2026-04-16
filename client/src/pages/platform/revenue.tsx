@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, DollarSign, Package } from "lucide-react";
+import { TrendingUp, DollarSign, Package, CalendarClock } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from "recharts";
@@ -11,6 +11,7 @@ interface RevenueData {
   arr: number;
   mrrHistory: { month: string; mrr: number }[];
   breakdown: { name: string; count: number; revenue: number }[];
+  renewalsNext30Days: number;
 }
 
 const COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"];
@@ -30,7 +31,7 @@ export default function PlatformRevenuePage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
         <Card className="bg-primary text-primary-foreground">
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
             <CardTitle className="text-sm text-primary-foreground/70">MRR</CardTitle>
@@ -54,6 +55,19 @@ export default function PlatformRevenuePage() {
               <p className="text-2xl font-bold" data-testid="stat-arr">{formatCurrency(revenue?.arr ?? 0)}</p>
             )}
             <p className="text-xs text-muted-foreground mt-1">الإيراد السنوي المتكرر</p>
+          </CardContent>
+        </Card>
+
+        <Card className="col-span-2 md:col-span-1">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm text-muted-foreground">تجديدات خلال 30 يوم</CardTitle>
+            <CalendarClock className="h-5 w-5 text-orange-500" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? <Skeleton className="h-8 w-20" /> : (
+              <p className="text-2xl font-bold" data-testid="stat-renewals">{revenue?.renewalsNext30Days ?? 0}</p>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">اشتراك يحتاج تجديد</p>
           </CardContent>
         </Card>
       </div>

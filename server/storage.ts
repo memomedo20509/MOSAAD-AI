@@ -658,7 +658,9 @@ export interface IStorage {
   }>;
 
   getPlatformCompanies(filters?: { status?: string; planId?: string }): Promise<(typeof companies.$inferSelect & { usersCount: number; leadsCount: number })[]>;
-  getPlatformCompanyDetail(id: string): Promise<(typeof companies.$inferSelect & { users: (typeof users.$inferSelect)[] }) | undefined>;
+  getPlatformCompanyDetail(id: string): Promise<(typeof companies.$inferSelect & { users: (typeof users.$inferSelect)[]; subscription: (Subscription & { plan: SubscriptionPlan | null }) | null }) | undefined>;
+  getCompanyInvoices(companyId: string): Promise<Invoice[]>;
+  createCompanyInvoice(data: InsertInvoice): Promise<Invoice>;
 
   // Platform Leads (Sales CRM for platform owner)
   getAllPlatformLeads(): Promise<PlatformLead[]>;
@@ -3580,11 +3582,21 @@ export class DatabaseStorage implements IStorage {
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
+    const now = new Date();
+    const in30Days = new Date();
+    in30Days.setDate(in30Days.getDate() + 30);
+
     const [activeRow] = await db.select({ count: sql<number>`COUNT(*)` }).from(companies).where(eq(companies.status, "active"));
     const [trialRow] = await db.select({ count: sql<number>`COUNT(*)` }).from(companies).where(eq(companies.status, "trial"));
     const [suspendedRow] = await db.select({ count: sql<number>`COUNT(*)` }).from(companies).where(eq(companies.status, "suspended"));
     const [newRegRow] = await db.select({ count: sql<number>`COUNT(*)` }).from(companies).where(gte(companies.createdAt, startOfMonth));
     const [openTicketsRow] = await db.select({ count: sql<number>`COUNT(*)` }).from(tickets).where(eq(tickets.status, "open"));
+    const [renewalsRow] = await db.select({ count: sql<number>`COUNT(*)` }).from(subscriptions)
+      .where(and(
+        eq(subscriptions.status, "active"),
+        gte(subscriptions.currentPeriodEnd, now),
+        lte(subscriptions.currentPeriodEnd, in30Days),
+      ));
 
     return {
       totalActiveCompanies: activeRow?.count ?? 0,
@@ -3592,7 +3604,7 @@ export class DatabaseStorage implements IStorage {
       totalSuspendedCompanies: suspendedRow?.count ?? 0,
       newRegistrationsThisMonth: newRegRow?.count ?? 0,
       openTickets: openTicketsRow?.count ?? 0,
-      renewalsNext30Days: 0,
+      renewalsNext30Days: renewalsRow?.count ?? 0,
     };
   }
 
@@ -3609,11 +3621,28 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async getPlatformCompanyDetail(id: string): Promise<(typeof companies.$inferSelect & { users: (typeof users.$inferSelect)[] }) | undefined> {
+  async getPlatformCompanyDetail(id: string): Promise<(typeof companies.$inferSelect & { users: (typeof users.$inferSelect)[]; subscription: (Subscription & { plan: SubscriptionPlan | null }) | null }) | undefined> {
     const [company] = await db.select().from(companies).where(eq(companies.id, id));
     if (!company) return undefined;
     const companyUsers = await db.select().from(users).where(eq(users.companyId, id));
-    return { ...company, users: companyUsers };
+    const subRows = await db.select().from(subscriptions)
+      .leftJoin(subscriptionPlans, eq(subscriptions.planId, subscriptionPlans.id))
+      .where(eq(subscriptions.companyId, id))
+      .orderBy(desc(subscriptions.createdAt))
+      .limit(1);
+    const subscription = subRows.length > 0
+      ? { ...subRows[0].subscriptions, plan: subRows[0].subscription_plans ?? null }
+      : null;
+    return { ...company, users: companyUsers, subscription };
+  }
+
+  async getCompanyInvoices(companyId: string): Promise<Invoice[]> {
+    return db.select().from(invoices).where(eq(invoices.companyId, companyId)).orderBy(desc(invoices.createdAt));
+  }
+
+  async createCompanyInvoice(data: InsertInvoice): Promise<Invoice> {
+    const [row] = await db.insert(invoices).values(data).returning();
+    return row;
   }
 
   // ─── Platform Leads ──────────────────────────────────────────────────────────
