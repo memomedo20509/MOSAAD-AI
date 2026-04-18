@@ -184,7 +184,7 @@ export default function PricingPage() {
 
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <Badge className="bg-white/10 text-white border-white/20 mb-6 px-4 py-1.5">الأسعار</Badge>
-          <h1 className="text-5xl font-extrabold text-white mb-5" data-testid="text-pricing-headline">
+          <h1 className="text-5xl font-display font-extrabold text-white mb-5" data-testid="text-pricing-headline">
             أسعار تناسب كل نمو
           </h1>
           <p className="text-xl text-indigo-200 mb-10">

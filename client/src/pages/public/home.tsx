@@ -337,7 +337,7 @@ export default function HomePage() {
                 🚀 الجيل القادم من CRM للمبيعات العربية
               </Badge>
 
-              <h1 className="text-5xl lg:text-7xl font-extrabold text-white leading-tight mb-6 tracking-tight" data-testid="text-hero-headline">
+              <h1 className="text-5xl lg:text-7xl font-display font-extrabold text-white leading-tight mb-6 tracking-tight" data-testid="text-hero-headline">
                 حوّل كل محادثة إلى{" "}
                 <span className="bg-gradient-to-r from-indigo-300 via-purple-300 to-pink-300 bg-clip-text text-transparent">
                   صفقة ناجحة
@@ -430,7 +430,7 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <AnimateIn direction="up" className="text-center mb-16">
             <Badge className="bg-indigo-500/10 text-indigo-400 border-indigo-500/20 mb-4 px-4 py-1">المميزات</Badge>
-            <h2 className="text-4xl font-bold text-white mb-4">كل ما تحتاجه في مكان واحد</h2>
+            <h2 className="text-4xl font-display font-bold text-white mb-4">كل ما تحتاجه في مكان واحد</h2>
             <p className="text-lg text-gray-400 max-w-2xl mx-auto">
               منصة متكاملة تجمع الذكاء الاصطناعي مع إدارة علاقات العملاء
             </p>

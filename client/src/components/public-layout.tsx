@@ -44,9 +44,15 @@ function PublicHeader() {
             <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-md">
               <Bot className="h-5 w-5 text-white" />
             </div>
-            <span className={`bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent font-extrabold tracking-tight ${isTransparent ? "text-white drop-shadow" : ""}`}>
-              SalesBot AI
-            </span>
+            {isTransparent ? (
+              <span className="text-white font-extrabold tracking-tight drop-shadow-sm">
+                SalesBot AI
+              </span>
+            ) : (
+              <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent font-extrabold tracking-tight">
+                SalesBot AI
+              </span>
+            )}
           </Link>
 
           <nav className="hidden md:flex items-center gap-7">
@@ -54,10 +60,14 @@ function PublicHeader() {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`text-sm font-medium transition-colors hover:text-indigo-600 ${
-                  location === link.href
-                    ? "text-indigo-600"
-                    : isTransparent ? "text-white/90" : "text-gray-700"
+                className={`text-sm font-medium transition-colors ${
+                  isTransparent
+                    ? location === link.href
+                      ? "text-white font-semibold"
+                      : "text-white/80 hover:text-white"
+                    : location === link.href
+                      ? "text-indigo-600"
+                      : "text-gray-700 hover:text-indigo-600"
                 }`}
               >
                 {t(link.label, link.labelEn)}

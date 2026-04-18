@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===== Arabic display font — Hacen Maghreb Bold ===== */
+@font-face {
+  font-family: 'HacenMaghreb';
+  src: url('/hacen-maghreb-bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* LIGHT MODE - Professional CRM Blue Theme */
 :root {
   --button-outline: rgba(0,0,0, .10);

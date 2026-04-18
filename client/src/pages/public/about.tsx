@@ -51,7 +51,7 @@ export default function AboutPage() {
 
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <Badge className="bg-white/10 text-white border-white/20 mb-6 px-4 py-1.5">من نحن</Badge>
-          <h1 className="text-5xl lg:text-6xl font-extrabold text-white mb-6 leading-tight" data-testid="text-about-headline">
+          <h1 className="text-5xl lg:text-6xl font-display font-extrabold text-white mb-6 leading-tight" data-testid="text-about-headline">
             نبنيها لأصحاب الأعمال{" "}
             <span className="bg-gradient-to-r from-indigo-300 via-purple-300 to-pink-300 bg-clip-text text-transparent">
               العرب
