@@ -18,7 +18,7 @@ function PublicHeader() {
   const [scrolled, setScrolled] = useState(false);
   const [location] = useLocation();
 
-  const hasDarkHero = DARK_HERO_ROUTES.has(location);
+  const hasDarkHero = DARK_HERO_ROUTES.has(location) || location === "/blog" || location.startsWith("/blog/");
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);

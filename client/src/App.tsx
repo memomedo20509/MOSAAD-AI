@@ -256,11 +256,13 @@ function PublicRouter() {
 
 function PublicBlogRouter() {
   return (
-    <Switch>
-      <Route path="/blog/:slug">{(params) => <BlogArticlePage params={params} />}</Route>
-      <Route path="/blog" component={BlogIndexPage} />
-      <Route component={null} />
-    </Switch>
+    <PublicLayout>
+      <Switch>
+        <Route path="/blog/:slug">{(params) => <BlogArticlePage params={params} />}</Route>
+        <Route path="/blog" component={BlogIndexPage} />
+        <Route component={null} />
+      </Switch>
+    </PublicLayout>
   );
 }
 

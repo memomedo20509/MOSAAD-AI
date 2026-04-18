@@ -3,10 +3,21 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { ArrowRight, Clock, Calendar, Share2, Copy, MessageCircle, Twitter, Facebook, Linkedin, CheckCheck } from "lucide-react";
+import {
+  ArrowRight,
+  Clock,
+  Calendar,
+  Share2,
+  Copy,
+  MessageCircle,
+  Twitter,
+  Facebook,
+  Linkedin,
+  CheckCheck,
+  BookOpen,
+} from "lucide-react";
 import type { Article, ArticleCategory } from "@shared/schema";
 
 interface TocItem {
@@ -15,12 +26,21 @@ interface TocItem {
   level: number;
 }
 
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
 function extractToc(html: string): TocItem[] {
   const doc = new DOMParser().parseFromString(html, "text/html");
   const headings = doc.querySelectorAll("h2, h3");
   const toc: TocItem[] = [];
   let counter = 0;
-  headings.forEach(el => {
+  headings.forEach((el) => {
     const id = `heading-${counter++}`;
     el.id = id;
     toc.push({ id, text: el.textContent ?? "", level: parseInt(el.tagName[1]) });
@@ -46,15 +66,17 @@ function ShareButtons({ title, url }: { title: string; url: string }) {
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-sm text-muted-foreground flex items-center gap-1">
+      <span className="text-sm text-gray-500 flex items-center gap-1">
         <Share2 className="h-4 w-4" />
         شارك:
       </span>
       <Button
         variant="outline"
         size="sm"
-        className="gap-1"
-        onClick={() => window.open(`https://wa.me/?text=${encodedTitle}%20${encodedUrl}`, "_blank")}
+        className="gap-1 border-gray-200 hover:border-green-300 hover:text-green-600"
+        onClick={() =>
+          window.open(`https://wa.me/?text=${encodedTitle}%20${encodedUrl}`, "_blank")
+        }
         data-testid="button-share-whatsapp"
       >
         <MessageCircle className="h-4 w-4 text-green-500" />
@@ -63,18 +85,24 @@ function ShareButtons({ title, url }: { title: string; url: string }) {
       <Button
         variant="outline"
         size="sm"
-        className="gap-1"
-        onClick={() => window.open(`https://twitter.com/intent/tweet?text=${encodedTitle}&url=${encodedUrl}`, "_blank")}
+        className="gap-1 border-gray-200 hover:border-sky-300 hover:text-sky-600"
+        onClick={() =>
+          window.open(
+            `https://twitter.com/intent/tweet?text=${encodedTitle}&url=${encodedUrl}`,
+            "_blank"
+          )
+        }
         data-testid="button-share-twitter"
       >
-        <Twitter className="h-4 w-4 text-sky-500" />
-        X
+        <Twitter className="h-4 w-4 text-sky-500" />X
       </Button>
       <Button
         variant="outline"
         size="sm"
-        className="gap-1"
-        onClick={() => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`, "_blank")}
+        className="gap-1 border-gray-200 hover:border-blue-300 hover:text-blue-600"
+        onClick={() =>
+          window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`, "_blank")
+        }
         data-testid="button-share-facebook"
       >
         <Facebook className="h-4 w-4 text-blue-600" />
@@ -83,15 +111,30 @@ function ShareButtons({ title, url }: { title: string; url: string }) {
       <Button
         variant="outline"
         size="sm"
-        className="gap-1"
-        onClick={() => window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`, "_blank")}
+        className="gap-1 border-gray-200 hover:border-blue-400 hover:text-blue-700"
+        onClick={() =>
+          window.open(
+            `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
+            "_blank"
+          )
+        }
         data-testid="button-share-linkedin"
       >
         <Linkedin className="h-4 w-4 text-blue-700" />
         لينكدإن
       </Button>
-      <Button variant="outline" size="sm" className="gap-1" onClick={copyLink} data-testid="button-share-copy">
-        {copied ? <CheckCheck className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+      <Button
+        variant="outline"
+        size="sm"
+        className="gap-1 border-gray-200 hover:border-indigo-300 hover:text-indigo-600"
+        onClick={copyLink}
+        data-testid="button-share-copy"
+      >
+        {copied ? (
+          <CheckCheck className="h-4 w-4 text-green-500" />
+        ) : (
+          <Copy className="h-4 w-4" />
+        )}
         {copied ? "تم النسخ" : "نسخ الرابط"}
       </Button>
     </div>
@@ -101,39 +144,44 @@ function ShareButtons({ title, url }: { title: string; url: string }) {
 function TableOfContents({ items }: { items: TocItem[] }) {
   if (items.length === 0) return null;
   return (
-    <Card className="sticky top-6">
-      <CardContent className="pt-4 pb-4">
-        <p className="font-semibold mb-3 text-sm">محتويات المقال</p>
-        <ul className="space-y-1">
-          {items.map(item => (
-            <li key={item.id} className={item.level === 3 ? "mr-4" : ""}>
-              <a
-                href={`#${item.id}`}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                onClick={e => {
-                  e.preventDefault();
-                  document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth" });
-                }}
-              >
-                {item.text}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </CardContent>
-    </Card>
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sticky top-6">
+      <p className="font-bold text-sm text-gray-800 mb-4 flex items-center gap-2">
+        <BookOpen className="h-4 w-4 text-indigo-500" />
+        محتويات المقال
+      </p>
+      <ul className="space-y-1.5">
+        {items.map((item) => (
+          <li key={item.id} className={item.level === 3 ? "mr-4" : ""}>
+            <a
+              href={`#${item.id}`}
+              className="text-sm text-gray-500 hover:text-indigo-600 transition-colors block py-0.5 leading-snug"
+              onClick={(e) => {
+                e.preventDefault();
+                document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth" });
+              }}
+            >
+              {item.text}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
 export default function BlogArticlePage({ params }: { params: { slug: string } }) {
   const slug = params.slug;
 
-  const { data, isLoading, isError } = useQuery<{ article: Article & { category?: ArticleCategory }; related: Article[] }>({
+  const { data, isLoading, isError } = useQuery<{
+    article: Article & { category?: ArticleCategory };
+    related: Article[];
+  }>({
     queryKey: ["/api/blog/articles", slug],
-    queryFn: () => fetch(`/api/blog/articles/${slug}`).then(r => {
-      if (!r.ok) throw new Error("Not found");
-      return r.json();
-    }),
+    queryFn: () =>
+      fetch(`/api/blog/articles/${slug}`).then((r) => {
+        if (!r.ok) throw new Error("Not found");
+        return r.json();
+      }),
   });
 
   const article = data?.article;
@@ -142,22 +190,34 @@ export default function BlogArticlePage({ params }: { params: { slug: string } }
   const processedBody = article?.body ? injectHeadingIds(article.body) : "";
   const toc = article?.body ? extractToc(article.body) : [];
   const currentUrl = typeof window !== "undefined" ? window.location.href : "";
+  const authorInitials = article?.authorName ? getInitials(article.authorName) : "S";
 
   useEffect(() => {
     if (article) {
       document.title = article.metaTitle || article.title;
       const descMeta = document.querySelector('meta[name="description"]');
-      if (descMeta) descMeta.setAttribute("content", article.metaDescription ?? article.excerpt ?? "");
+      if (descMeta)
+        descMeta.setAttribute("content", article.metaDescription ?? article.excerpt ?? "");
     }
   }, [article]);
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background" dir="rtl">
+      <div className="min-h-screen bg-gray-50" dir="rtl">
+        <div className="bg-gradient-to-br from-indigo-950 via-purple-900 to-blue-950 py-20 px-4">
+          <div className="max-w-5xl mx-auto space-y-4">
+            <Skeleton className="h-5 w-32 bg-white/10" />
+            <Skeleton className="h-10 w-3/4 bg-white/10" />
+            <Skeleton className="h-6 w-1/2 bg-white/10" />
+          </div>
+        </div>
         <div className="max-w-5xl mx-auto px-4 py-10">
-          <Skeleton className="h-8 w-64 mb-4" />
-          <Skeleton className="h-12 w-full mb-4" />
-          <Skeleton className="h-64 w-full" />
+          <Skeleton className="h-72 w-full rounded-2xl mb-8" />
+          <div className="space-y-3">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-5/6" />
+            <Skeleton className="h-4 w-4/5" />
+          </div>
         </div>
       </div>
     );
@@ -165,10 +225,14 @@ export default function BlogArticlePage({ params }: { params: { slug: string } }
 
   if (isError || !article) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center" dir="rtl">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center" dir="rtl">
         <div className="text-center">
-          <p className="text-2xl font-bold mb-2">المقال غير موجود</p>
-          <Button asChild variant="link">
+          <div className="h-20 w-20 rounded-full bg-indigo-50 flex items-center justify-center mx-auto mb-4">
+            <BookOpen className="h-10 w-10 text-indigo-300" />
+          </div>
+          <p className="text-2xl font-bold text-gray-800 mb-2">المقال غير موجود</p>
+          <p className="text-gray-500 mb-5">لم نتمكن من إيجاد هذا المقال</p>
+          <Button asChild className="bg-indigo-600 hover:bg-indigo-700 text-white">
             <Link href="/blog">العودة للمدونة</Link>
           </Button>
         </div>
@@ -177,7 +241,7 @@ export default function BlogArticlePage({ params }: { params: { slug: string } }
   }
 
   return (
-    <div className="min-h-screen bg-background" dir="rtl">
+    <div className="min-h-screen bg-gray-50" dir="rtl">
       {article.metaDescription && (
         <meta name="description" content={article.metaDescription} />
       )}
@@ -193,39 +257,84 @@ export default function BlogArticlePage({ params }: { params: { slug: string } }
             image: article.ogImage ?? article.featuredImage ?? undefined,
             datePublished: article.publishedAt,
             dateModified: article.updatedAt,
-            author: { "@type": "Person", name: article.authorName ?? "SalesBot AI" },
+            author: {
+              "@type": "Person",
+              name: article.authorName ?? "SalesBot AI",
+            },
           }),
         }}
       />
 
-      <header className="border-b bg-card">
-        <div className="max-w-5xl mx-auto px-4 py-6">
-          <Button variant="ghost" size="sm" asChild className="mb-4">
+      {/* Article Hero */}
+      <header className="relative overflow-hidden bg-gradient-to-br from-indigo-950 via-purple-900 to-blue-950 py-20">
+        <div
+          className="absolute inset-0 opacity-[0.04]"
+          style={{
+            backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)",
+            backgroundSize: "32px 32px",
+          }}
+        />
+        <div className="absolute top-1/3 right-1/4 h-64 w-64 bg-indigo-500/20 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-1/4 h-48 w-48 bg-purple-500/20 rounded-full blur-3xl" />
+
+        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Button
+            variant="ghost"
+            size="sm"
+            asChild
+            className="text-indigo-300 hover:text-white hover:bg-white/10 mb-6"
+          >
             <Link href="/blog">
               <ArrowRight className="h-4 w-4 ml-2" />
               المدونة
             </Link>
           </Button>
-          <div className="flex items-center gap-2 mb-3 flex-wrap">
+
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
             {article.category && (
-              <Badge variant="secondary">{(article.category as ArticleCategory).name}</Badge>
+              <Badge className="bg-white/15 text-white border-white/20 px-3 py-1">
+                {(article.category as ArticleCategory).name}
+              </Badge>
             )}
-            {article.tags?.map(tag => (
-              <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>
+            {article.tags?.map((tag) => (
+              <Badge
+                key={tag}
+                className="bg-white/10 text-indigo-200 border-white/10 text-xs px-2.5 py-0.5"
+              >
+                {tag}
+              </Badge>
             ))}
           </div>
-          <h1 className="text-3xl md:text-4xl font-bold leading-tight" data-testid="text-article-title">{article.title}</h1>
-          <div className="flex items-center gap-4 mt-4 text-sm text-muted-foreground flex-wrap">
-            {article.authorName && <span>{article.authorName}</span>}
+
+          <h1
+            className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-white leading-tight mb-5 max-w-3xl"
+            data-testid="text-article-title"
+          >
+            {article.title}
+          </h1>
+
+          <div className="flex items-center gap-4 flex-wrap">
+            {article.authorName && (
+              <div className="flex items-center gap-2">
+                <div className="h-9 w-9 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center shrink-0">
+                  <span className="text-white text-xs font-bold">{authorInitials}</span>
+                </div>
+                <span className="text-indigo-200 text-sm font-medium">{article.authorName}</span>
+              </div>
+            )}
             {article.publishedAt && (
-              <span className="flex items-center gap-1">
-                <Calendar className="h-3.5 w-3.5" />
-                {new Date(article.publishedAt).toLocaleDateString("ar", { year: "numeric", month: "long", day: "numeric" })}
+              <span className="flex items-center gap-1.5 text-indigo-300 text-sm">
+                <Calendar className="h-4 w-4" />
+                {new Date(article.publishedAt).toLocaleDateString("ar", {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
               </span>
             )}
             {article.readingTimeMinutes && (
-              <span className="flex items-center gap-1">
-                <Clock className="h-3.5 w-3.5" />
+              <span className="flex items-center gap-1.5 text-indigo-300 text-sm">
+                <Clock className="h-4 w-4" />
                 {article.readingTimeMinutes} دقيقة للقراءة
               </span>
             )}
@@ -233,60 +342,124 @@ export default function BlogArticlePage({ params }: { params: { slug: string } }
         </div>
       </header>
 
+      {/* Featured Image */}
       {article.featuredImage && (
-        <div className="max-w-5xl mx-auto px-4 pt-6">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 relative z-10">
           <img
             src={article.featuredImage}
             alt={article.title}
-            className="w-full max-h-96 object-cover rounded-xl"
+            className="w-full max-h-96 object-cover rounded-2xl shadow-2xl"
           />
         </div>
       )}
 
-      <main className="max-w-5xl mx-auto px-4 py-8">
+      {/* Main Content */}
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           <article className="lg:col-span-3">
             {article.excerpt && (
-              <p className="text-lg text-muted-foreground mb-6 border-r-4 border-primary pr-4 italic">{article.excerpt}</p>
+              <p className="text-lg text-gray-600 mb-8 border-r-4 border-indigo-500 pr-4 italic leading-relaxed bg-indigo-50 py-3 rounded-l-lg">
+                {article.excerpt}
+              </p>
             )}
+
             <div
-              className="prose prose-lg dark:prose-invert max-w-none"
+              className="prose prose-lg max-w-none
+                prose-headings:font-bold prose-headings:text-gray-900
+                prose-h2:text-2xl prose-h2:mt-10 prose-h2:mb-4
+                prose-h3:text-xl prose-h3:mt-8 prose-h3:mb-3
+                prose-p:text-gray-700 prose-p:leading-relaxed prose-p:mb-4
+                prose-a:text-indigo-600 prose-a:no-underline hover:prose-a:underline
+                prose-strong:text-gray-900
+                prose-ul:text-gray-700 prose-ol:text-gray-700
+                prose-li:mb-1
+                prose-blockquote:border-indigo-500 prose-blockquote:text-gray-600
+                prose-code:text-indigo-700 prose-code:bg-indigo-50 prose-code:px-1.5 prose-code:rounded
+                prose-pre:bg-gray-900 prose-pre:rounded-xl"
               dangerouslySetInnerHTML={{ __html: processedBody }}
               data-testid="article-content"
             />
-            <Separator className="my-8" />
-            <ShareButtons title={article.title} url={currentUrl} />
+
+            <Separator className="my-10" />
+
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <ShareButtons title={article.title} url={currentUrl} />
+            </div>
           </article>
 
           <aside className="space-y-6">
             <TableOfContents items={toc} />
+
+            {article.authorName && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <p className="font-bold text-sm text-gray-800 mb-4">الكاتب</p>
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0">
+                    <span className="text-white text-sm font-bold">{authorInitials}</span>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-800 text-sm">{article.authorName}</p>
+                    <p className="text-xs text-gray-400">كاتب في SalesBot AI</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </aside>
         </div>
       </main>
 
+      {/* Related Articles */}
       {related.length > 0 && (
-        <section className="border-t bg-muted/30 py-10" dir="rtl">
-          <div className="max-w-5xl mx-auto px-4">
-            <h2 className="text-xl font-bold mb-6">مقالات ذات صلة</h2>
+        <section className="bg-white border-t border-gray-100 py-14" dir="rtl">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center gap-3 mb-8">
+              <div className="h-1 w-8 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full" />
+              <h2 className="text-xl font-bold text-gray-900">مقالات ذات صلة</h2>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {related.map(rel => (
-                <Link key={rel.id} href={`/blog/${rel.slug}`}>
-                  <Card className="hover:shadow-md transition-shadow cursor-pointer group" data-testid={`card-related-${rel.id}`}>
-                    {rel.featuredImage && (
-                      <img src={rel.featuredImage} alt={rel.title} className="w-full h-36 object-cover rounded-t-lg" />
-                    )}
-                    <CardContent className="p-4">
-                      <p className="font-semibold text-sm leading-tight group-hover:text-primary transition-colors">{rel.title}</p>
-                      {rel.readingTimeMinutes && (
-                        <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {rel.readingTimeMinutes} دقيقة
-                        </p>
+              {related.map((rel) => {
+                const relInitials = rel.authorName ? getInitials(rel.authorName) : "S";
+                return (
+                  <Link key={rel.id} href={`/blog/${rel.slug}`}>
+                    <div
+                      className="group bg-gray-50 rounded-2xl border border-gray-100 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden"
+                      data-testid={`card-related-${rel.id}`}
+                    >
+                      {rel.featuredImage ? (
+                        <div className="overflow-hidden h-36">
+                          <img
+                            src={rel.featuredImage}
+                            alt={rel.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          />
+                        </div>
+                      ) : (
+                        <div className="h-36 bg-gradient-to-br from-indigo-100 via-purple-100 to-blue-100 flex items-center justify-center">
+                          <BookOpen className="h-8 w-8 text-indigo-300" />
+                        </div>
                       )}
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
+                      <div className="p-4">
+                        <p className="font-semibold text-sm text-gray-800 leading-snug group-hover:text-indigo-600 transition-colors mb-3">
+                          {rel.title}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          {rel.authorName && (
+                            <div className="h-6 w-6 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center shrink-0">
+                              <span className="text-white text-xs font-bold">{relInitials}</span>
+                            </div>
+                          )}
+                          {rel.readingTimeMinutes && (
+                            <p className="text-xs text-gray-400 flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {rel.readingTimeMinutes} دقيقة
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           </div>
         </section>
