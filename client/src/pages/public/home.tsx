@@ -248,7 +248,7 @@ function PricingPreview() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <AnimateIn direction="up" className="text-center mb-14">
           <Badge className="bg-indigo-100 text-indigo-700 border-0 mb-4 px-4 py-1">الأسعار</Badge>
-          <h2 className="text-4xl font-bold text-gray-900 mb-4">أسعار واضحة وبسيطة</h2>
+          <h2 className="text-4xl font-heading font-bold text-gray-900 mb-4">أسعار واضحة وبسيطة</h2>
           <p className="text-lg text-gray-600">ابدأ مجاناً، وسّع عندما تنمو</p>
         </AnimateIn>
 
@@ -327,6 +327,10 @@ export default function HomePage() {
           <div className="absolute inset-0 opacity-[0.03]"
             style={{ backgroundImage: "linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)", backgroundSize: "50px 50px" }}>
           </div>
+          {/* Top scrim for navbar readability */}
+          <div className="absolute inset-x-0 top-0 h-40 pointer-events-none"
+            style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 100%)" }}>
+          </div>
         </div>
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-16 w-full">
@@ -337,7 +341,7 @@ export default function HomePage() {
                 🚀 الجيل القادم من CRM للمبيعات العربية
               </Badge>
 
-              <h1 className="text-5xl lg:text-7xl font-display font-extrabold text-white leading-tight mb-6 tracking-tight" data-testid="text-hero-headline">
+              <h1 className="text-5xl lg:text-7xl font-heading font-extrabold text-white leading-tight mb-6 tracking-tight" data-testid="text-hero-headline">
                 حوّل كل محادثة إلى{" "}
                 <span className="bg-gradient-to-r from-indigo-300 via-purple-300 to-pink-300 bg-clip-text text-transparent">
                   صفقة ناجحة
@@ -430,7 +434,7 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <AnimateIn direction="up" className="text-center mb-16">
             <Badge className="bg-indigo-500/10 text-indigo-400 border-indigo-500/20 mb-4 px-4 py-1">المميزات</Badge>
-            <h2 className="text-4xl font-display font-bold text-white mb-4">كل ما تحتاجه في مكان واحد</h2>
+            <h2 className="text-4xl font-heading font-bold text-white mb-4">كل ما تحتاجه في مكان واحد</h2>
             <p className="text-lg text-gray-400 max-w-2xl mx-auto">
               منصة متكاملة تجمع الذكاء الاصطناعي مع إدارة علاقات العملاء
             </p>
@@ -536,7 +540,7 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <AnimateIn direction="up" className="text-center mb-16">
             <Badge className="bg-indigo-100 text-indigo-700 border-0 mb-4 px-4 py-1">كيف يعمل</Badge>
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">ثلاث خطوات للنجاح</h2>
+            <h2 className="text-4xl font-heading font-bold text-gray-900 mb-4">ثلاث خطوات للنجاح</h2>
             <p className="text-lg text-gray-600">من التسجيل إلى أول صفقة في أقل من يوم</p>
           </AnimateIn>
 
@@ -579,7 +583,7 @@ export default function HomePage() {
 
           <AnimateIn direction="up" className="text-center mb-12 mt-16">
             <Badge className="bg-indigo-100 text-indigo-700 border-0 mb-4 px-4 py-1">شهادات العملاء</Badge>
-            <h2 className="text-4xl font-bold text-gray-900">ماذا يقول عملاؤنا؟</h2>
+            <h2 className="text-4xl font-heading font-bold text-gray-900">ماذا يقول عملاؤنا؟</h2>
           </AnimateIn>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -619,7 +623,7 @@ export default function HomePage() {
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <AnimateIn direction="up" className="text-center mb-12">
             <Badge className="bg-indigo-100 text-indigo-700 border-0 mb-4 px-4 py-1">الأسئلة الشائعة</Badge>
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">كل ما تريد معرفته</h2>
+            <h2 className="text-4xl font-heading font-bold text-gray-900 mb-4">كل ما تريد معرفته</h2>
           </AnimateIn>
           <Accordion type="single" collapsible className="space-y-3">
             {FAQS.map((faq, i) => (
@@ -651,7 +655,7 @@ export default function HomePage() {
         <div className="absolute bottom-0 left-1/4 h-64 w-64 bg-purple-400/20 rounded-full blur-3xl"></div>
 
         <AnimateIn direction="scale" className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-4xl lg:text-5xl font-extrabold text-white mb-5">
+          <h2 className="text-4xl lg:text-5xl font-heading font-extrabold text-white mb-5">
             جاهز لمضاعفة مبيعاتك؟
           </h2>
           <p className="text-xl text-indigo-200 mb-10 leading-relaxed">

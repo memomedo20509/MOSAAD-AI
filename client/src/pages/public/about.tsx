@@ -46,12 +46,15 @@ export default function AboutPage() {
         <div className="absolute inset-0 opacity-[0.04]"
           style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "32px 32px" }}>
         </div>
+        <div className="absolute inset-x-0 top-0 h-40 pointer-events-none"
+          style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 100%)" }}>
+        </div>
         <div className="absolute top-1/3 right-1/4 h-80 w-80 bg-indigo-500/20 rounded-full blur-3xl"></div>
         <div className="absolute bottom-1/3 left-1/4 h-64 w-64 bg-purple-500/20 rounded-full blur-3xl"></div>
 
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <Badge className="bg-white/10 text-white border-white/20 mb-6 px-4 py-1.5">من نحن</Badge>
-          <h1 className="text-5xl lg:text-6xl font-display font-extrabold text-white mb-6 leading-tight" data-testid="text-about-headline">
+          <h1 className="text-5xl lg:text-6xl font-heading font-extrabold text-white mb-6 leading-tight" data-testid="text-about-headline">
             نبنيها لأصحاب الأعمال{" "}
             <span className="bg-gradient-to-r from-indigo-300 via-purple-300 to-pink-300 bg-clip-text text-transparent">
               العرب
@@ -87,7 +90,7 @@ export default function AboutPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
             <div>
               <Badge className="bg-indigo-100 text-indigo-700 border-0 mb-4 px-4 py-1">القصة</Badge>
-              <h2 className="text-3xl font-bold text-gray-900 mb-6">كيف بدأت الرحلة؟</h2>
+              <h2 className="text-3xl font-heading font-bold text-gray-900 mb-6">كيف بدأت الرحلة؟</h2>
               <div className="space-y-4 text-gray-600 leading-relaxed">
                 <p>
                   في عام 2021، كنا نعمل مع عشرات الشركات العقارية والتجارية في المنطقة العربية.
@@ -133,7 +136,7 @@ export default function AboutPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <Badge className="bg-indigo-100 text-indigo-700 border-0 mb-4 px-4 py-1">مهمتنا وقيمنا</Badge>
-            <h2 className="text-3xl font-bold text-gray-900">ما الذي يحرّكنا؟</h2>
+            <h2 className="text-3xl font-heading font-bold text-gray-900">ما الذي يحرّكنا؟</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {VALUES.map((v) => (
@@ -160,7 +163,7 @@ export default function AboutPage() {
           style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "32px 32px" }}>
         </div>
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-4xl font-extrabold text-white mb-4">هل أنت مستعد للانضمام؟</h2>
+          <h2 className="text-4xl font-heading font-extrabold text-white mb-4">هل أنت مستعد للانضمام؟</h2>
           <p className="text-indigo-200 mb-8 text-lg">ابدأ تجربتك المجانية لمدة 14 يوماً اليوم.</p>
           <Link href="/register">
             <Button size="lg" className="bg-white text-indigo-700 hover:bg-indigo-50 shadow-xl font-bold text-lg px-10" data-testid="button-about-cta">

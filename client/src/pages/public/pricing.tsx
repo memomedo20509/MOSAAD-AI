@@ -179,12 +179,15 @@ export default function PricingPage() {
         <div className="absolute inset-0 opacity-[0.04]"
           style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "32px 32px" }}>
         </div>
+        <div className="absolute inset-x-0 top-0 h-40 pointer-events-none"
+          style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 100%)" }}>
+        </div>
         <div className="absolute top-1/2 right-1/4 h-64 w-64 bg-indigo-500/20 rounded-full blur-3xl"></div>
         <div className="absolute top-1/2 left-1/4 h-64 w-64 bg-purple-500/20 rounded-full blur-3xl"></div>
 
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <Badge className="bg-white/10 text-white border-white/20 mb-6 px-4 py-1.5">الأسعار</Badge>
-          <h1 className="text-5xl font-display font-extrabold text-white mb-5" data-testid="text-pricing-headline">
+          <h1 className="text-5xl font-heading font-extrabold text-white mb-5" data-testid="text-pricing-headline">
             أسعار تناسب كل نمو
           </h1>
           <p className="text-xl text-indigo-200 mb-10">
@@ -246,7 +249,7 @@ export default function PricingPage() {
       <section className="py-16 bg-white">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-10">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">مقارنة تفصيلية للمميزات</h2>
+            <h2 className="text-3xl font-heading font-bold text-gray-900 mb-2">مقارنة تفصيلية للمميزات</h2>
             <p className="text-gray-500">كل ما تحتاج معرفته للاختيار الصحيح</p>
           </div>
           <div className="overflow-x-auto rounded-2xl border border-gray-100 shadow-sm">
@@ -294,7 +297,7 @@ export default function PricingPage() {
       <section className="py-16 bg-gray-50">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-10">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">أسئلة عن الأسعار</h2>
+            <h2 className="text-3xl font-heading font-bold text-gray-900 mb-2">أسئلة عن الأسعار</h2>
           </div>
           <Accordion type="single" collapsible className="space-y-3">
             {FAQS.map((faq, i) => (
@@ -314,7 +317,7 @@ export default function PricingPage() {
           style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "32px 32px" }}>
         </div>
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-4xl font-extrabold text-white mb-4">ابدأ تجربتك المجانية اليوم</h2>
+          <h2 className="text-4xl font-heading font-extrabold text-white mb-4">ابدأ تجربتك المجانية اليوم</h2>
           <p className="text-indigo-200 mb-8 text-lg">14 يوماً مجاناً — بدون بطاقة ائتمانية — إلغاء في أي وقت.</p>
           <Link href="/register">
             <Button size="lg" className="bg-white text-indigo-700 hover:bg-indigo-50 shadow-xl font-bold text-lg px-10" data-testid="button-pricing-cta">

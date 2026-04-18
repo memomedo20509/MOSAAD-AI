@@ -4,8 +4,8 @@
 
 /* ===== Arabic display font — Hacen Maghreb Bold ===== */
 @font-face {
-  font-family: 'HacenMaghreb';
-  src: url('/hacen-maghreb-bold.ttf') format('truetype');
+  font-family: 'Hacen Maghreb';
+  src: url('/fonts/HacenMaghrebBd.ttf') format('truetype');
   font-weight: 700;
   font-style: normal;
   font-display: swap;

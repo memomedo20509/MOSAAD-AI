@@ -47,11 +47,14 @@ export default function ContactPage() {
         <div className="absolute inset-0 opacity-[0.04]"
           style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "32px 32px" }}>
         </div>
+        <div className="absolute inset-x-0 top-0 h-40 pointer-events-none"
+          style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 100%)" }}>
+        </div>
         <div className="absolute top-1/2 right-1/3 h-64 w-64 bg-indigo-500/20 rounded-full blur-3xl"></div>
 
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <Badge className="bg-white/10 text-white border-white/20 mb-6 px-4 py-1.5">تواصل معنا</Badge>
-          <h1 className="text-5xl font-display font-extrabold text-white mb-5" data-testid="text-contact-headline">
+          <h1 className="text-5xl font-heading font-extrabold text-white mb-5" data-testid="text-contact-headline">
             كيف يمكننا{" "}
             <span className="bg-gradient-to-r from-indigo-300 via-purple-300 to-pink-300 bg-clip-text text-transparent">
               مساعدتك؟
