@@ -6,6 +6,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, X, Zap, Shield, Star } from "lucide-react";
 import type { SubscriptionPlan } from "@shared/schema";
+import { AnimateIn } from "@/components/animate-in";
 
 type FeatureRow = {
   label: string;
@@ -220,7 +221,9 @@ export default function PricingPage() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
             {plans.map((plan, i) => (
-              <PlanCard key={plan.id} plan={plan} annual={annual} popular={i === middleIdx} />
+              <AnimateIn key={plan.id} direction="up" delay={i * 100}>
+                <PlanCard plan={plan} annual={annual} popular={i === middleIdx} />
+              </AnimateIn>
             ))}
           </div>
 
@@ -230,16 +233,18 @@ export default function PricingPage() {
               { icon: Shield, title: "مضمون", desc: "14 يوم مجاناً بدون بطاقة ائتمانية" },
               { icon: Zap, title: "إلغاء فوري", desc: "لا رسوم إلغاء، لا التزامات" },
               { icon: Star, title: "دعم متميز", desc: "فريق دعم متخصص على مدار الساعة" },
-            ].map((item) => (
-              <div key={item.title} className="flex items-center gap-4 bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="h-10 w-10 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
-                  <item.icon className="h-5 w-5 text-indigo-600" />
+            ].map((item, i) => (
+              <AnimateIn key={item.title} direction="up" delay={i * 80}>
+                <div className="flex items-center gap-4 bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                  <div className="h-10 w-10 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                    <item.icon className="h-5 w-5 text-indigo-600" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-gray-900 text-sm">{item.title}</div>
+                    <div className="text-xs text-gray-500">{item.desc}</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="font-semibold text-gray-900 text-sm">{item.title}</div>
-                  <div className="text-xs text-gray-500">{item.desc}</div>
-                </div>
-              </div>
+              </AnimateIn>
             ))}
           </div>
         </div>
@@ -248,10 +253,10 @@ export default function PricingPage() {
       {/* Feature comparison table */}
       <section className="py-16 bg-white">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-10">
+          <AnimateIn direction="up" className="text-center mb-10">
             <h2 className="text-3xl font-heading font-bold text-gray-900 mb-2">مقارنة تفصيلية للمميزات</h2>
             <p className="text-gray-500">كل ما تحتاج معرفته للاختيار الصحيح</p>
-          </div>
+          </AnimateIn>
           <div className="overflow-x-auto rounded-2xl border border-gray-100 shadow-sm">
             <table className="w-full border-collapse bg-white overflow-hidden">
               <thead>
@@ -296,15 +301,17 @@ export default function PricingPage() {
       {/* FAQ */}
       <section className="py-16 bg-gray-50">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-10">
+          <AnimateIn direction="up" className="text-center mb-10">
             <h2 className="text-3xl font-heading font-bold text-gray-900 mb-2">أسئلة عن الأسعار</h2>
-          </div>
+          </AnimateIn>
           <Accordion type="single" collapsible className="space-y-3">
             {FAQS.map((faq, i) => (
-              <AccordionItem key={i} value={`faq-${i}`} className="border border-gray-200 rounded-xl px-5 bg-white shadow-sm" data-testid={`faq-pricing-${i}`}>
-                <AccordionTrigger className="text-right font-medium text-gray-900 hover:text-indigo-600 hover:no-underline">{faq.q}</AccordionTrigger>
-                <AccordionContent className="text-gray-600 leading-relaxed">{faq.a}</AccordionContent>
-              </AccordionItem>
+              <AnimateIn key={i} direction="up" delay={i * 60}>
+                <AccordionItem value={`faq-${i}`} className="border border-gray-200 rounded-xl px-5 bg-white shadow-sm" data-testid={`faq-pricing-${i}`}>
+                  <AccordionTrigger className="text-right font-medium text-gray-900 hover:text-indigo-600 hover:no-underline">{faq.q}</AccordionTrigger>
+                  <AccordionContent className="text-gray-600 leading-relaxed">{faq.a}</AccordionContent>
+                </AccordionItem>
+              </AnimateIn>
             ))}
           </Accordion>
         </div>
@@ -316,7 +323,7 @@ export default function PricingPage() {
         <div className="absolute inset-0 opacity-10"
           style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "32px 32px" }}>
         </div>
-        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <AnimateIn direction="up" className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-4xl font-heading font-extrabold text-white mb-4">ابدأ تجربتك المجانية اليوم</h2>
           <p className="text-indigo-200 mb-8 text-lg">14 يوماً مجاناً — بدون بطاقة ائتمانية — إلغاء في أي وقت.</p>
           <Link href="/register">
@@ -324,7 +331,7 @@ export default function PricingPage() {
               ابدأ مجاناً
             </Button>
           </Link>
-        </div>
+        </AnimateIn>
       </section>
     </>
   );

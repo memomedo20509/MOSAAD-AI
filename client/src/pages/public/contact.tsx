@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Mail, Phone, MapPin, Loader2, CheckCircle, Clock, MessageSquare } from "lucide-react";
+import { AnimateIn } from "@/components/animate-in";
 
 export default function ContactPage() {
   const { toast } = useToast();
@@ -70,7 +71,7 @@ export default function ContactPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-12">
             {/* Contact info — 2 columns */}
-            <div className="lg:col-span-2 space-y-6">
+            <AnimateIn direction="right" className="lg:col-span-2 space-y-6">
               <div>
                 <h2 className="text-2xl font-heading font-bold text-gray-900 mb-2">معلومات التواصل</h2>
                 <p className="text-gray-500 text-sm">يسعدنا الاستماع إليك والإجابة على كل تساؤلاتك</p>
@@ -154,10 +155,10 @@ export default function ContactPage() {
                   <div className="text-green-100 text-xs">رد فوري في ثوانٍ</div>
                 </div>
               </a>
-            </div>
+            </AnimateIn>
 
             {/* Contact form — 3 columns */}
-            <div className="lg:col-span-3">
+            <AnimateIn direction="left" delay={120} className="lg:col-span-3">
               {submitted ? (
                 <div className="flex flex-col items-center justify-center h-full text-center py-16 bg-white rounded-2xl border border-gray-100 shadow-sm" data-testid="contact-success">
                   <div className="h-20 w-20 rounded-full bg-green-50 flex items-center justify-center mb-5">
@@ -249,7 +250,7 @@ export default function ContactPage() {
                   </form>
                 </div>
               )}
-            </div>
+            </AnimateIn>
           </div>
         </div>
       </section>
