@@ -93,7 +93,7 @@ export default function AboutPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
             <AnimateIn direction="right">
               <Badge className="bg-indigo-100 text-indigo-700 border-0 mb-4 px-4 py-1">القصة</Badge>
-              <h2 className="text-3xl font-heading font-bold text-gray-900 mb-6">كيف بدأت الرحلة؟</h2>
+              <h2 className="text-3xl font-display font-bold text-gray-900 mb-6">كيف بدأت الرحلة؟</h2>
               <div className="space-y-4 text-gray-600 leading-relaxed">
                 <p>
                   في عام 2021، كنا نعمل مع عشرات الشركات العقارية والتجارية في المنطقة العربية.
@@ -139,7 +139,7 @@ export default function AboutPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <AnimateIn direction="up" className="text-center mb-12">
             <Badge className="bg-indigo-100 text-indigo-700 border-0 mb-4 px-4 py-1">مهمتنا وقيمنا</Badge>
-            <h2 className="text-3xl font-heading font-bold text-gray-900">ما الذي يحرّكنا؟</h2>
+            <h2 className="text-3xl font-display font-bold text-gray-900">ما الذي يحرّكنا؟</h2>
           </AnimateIn>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {VALUES.map((v, i) => (
@@ -167,7 +167,7 @@ export default function AboutPage() {
           style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "32px 32px" }}>
         </div>
         <AnimateIn direction="up" className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-4xl font-heading font-extrabold text-white mb-4">هل أنت مستعد للانضمام؟</h2>
+          <h2 className="text-4xl font-display font-extrabold text-white mb-4">هل أنت مستعد للانضمام؟</h2>
           <p className="text-indigo-200 mb-8 text-lg">ابدأ تجربتك المجانية لمدة 14 يوماً اليوم.</p>
           <Link href="/register">
             <Button size="lg" className="bg-white text-indigo-700 hover:bg-indigo-50 shadow-xl font-bold text-lg px-10" data-testid="button-about-cta">

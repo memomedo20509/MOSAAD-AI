@@ -87,6 +87,7 @@ export default {
         serif: ["var(--font-serif)"],
         mono: ["var(--font-mono)"],
         heading: ["'Hacen Maghreb'", "Tajawal", "sans-serif"],
+        display: ["'Hacen Maghreb'", "Tajawal", "sans-serif"],
       },
       keyframes: {
         "accordion-down": {
