@@ -64,7 +64,7 @@ function PublicHeader() {
                   isTransparent
                     ? location === link.href
                       ? "text-white font-semibold drop-shadow-sm"
-                      : "text-white/80 hover:text-white drop-shadow-sm"
+                      : "text-white hover:text-white drop-shadow-sm"
                     : location === link.href
                       ? "text-indigo-600"
                       : "text-gray-700 hover:text-indigo-600"

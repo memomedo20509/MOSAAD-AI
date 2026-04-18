@@ -329,7 +329,7 @@ export default function HomePage() {
           </div>
           {/* Top scrim for navbar readability */}
           <div className="absolute inset-x-0 top-0 h-40 pointer-events-none"
-            style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 100%)" }}>
+            style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 25%)" }}>
           </div>
         </div>
 

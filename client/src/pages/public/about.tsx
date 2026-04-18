@@ -47,7 +47,7 @@ export default function AboutPage() {
           style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "32px 32px" }}>
         </div>
         <div className="absolute inset-x-0 top-0 h-40 pointer-events-none"
-          style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 100%)" }}>
+          style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 25%)" }}>
         </div>
         <div className="absolute top-1/3 right-1/4 h-80 w-80 bg-indigo-500/20 rounded-full blur-3xl"></div>
         <div className="absolute bottom-1/3 left-1/4 h-64 w-64 bg-purple-500/20 rounded-full blur-3xl"></div>

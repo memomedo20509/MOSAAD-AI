@@ -48,7 +48,7 @@ export default function ContactPage() {
           style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "32px 32px" }}>
         </div>
         <div className="absolute inset-x-0 top-0 h-40 pointer-events-none"
-          style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 100%)" }}>
+          style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 25%)" }}>
         </div>
         <div className="absolute top-1/2 right-1/3 h-64 w-64 bg-indigo-500/20 rounded-full blur-3xl"></div>
 
@@ -72,7 +72,7 @@ export default function ContactPage() {
             {/* Contact info — 2 columns */}
             <div className="lg:col-span-2 space-y-6">
               <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">معلومات التواصل</h2>
+                <h2 className="text-2xl font-heading font-bold text-gray-900 mb-2">معلومات التواصل</h2>
                 <p className="text-gray-500 text-sm">يسعدنا الاستماع إليك والإجابة على كل تساؤلاتك</p>
               </div>
 
