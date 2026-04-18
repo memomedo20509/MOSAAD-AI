@@ -21,7 +21,8 @@ function PublicHeader() {
   const hasDarkHero = DARK_HERO_ROUTES.has(location) || location === "/blog" || location.startsWith("/blog/");
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 80);
+    const onScroll = () => setScrolled(window.scrollY > 60);
+    onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
@@ -35,7 +36,7 @@ function PublicHeader() {
       className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
         isTransparent
           ? "bg-transparent"
-          : "bg-white/98 backdrop-blur-md shadow-sm border-b border-gray-100"
+          : "bg-white shadow-sm border-b border-gray-100"
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
