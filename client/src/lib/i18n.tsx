@@ -63,6 +63,10 @@ export const translations = {
     passwordsMismatch: "كلمات المرور غير متطابقة",
     passwordMinLength: "كلمة المرور يجب أن تكون 6 أحرف على الأقل",
     quickLoginDev: "دخول سريع (للتطوير)",
+    welcomeBack: "مرحباً بعودتك",
+    loginSubtitle: "سجّل دخولك لمتابعة لوحة التحكم",
+    noAccountYet: "ليس لديك حساب بعد؟",
+    registerFree: "سجّل مجاناً",
     
     // Lead States
     newLeads: "ليد جديد",
@@ -944,6 +948,10 @@ export const translations = {
     passwordsMismatch: "Passwords do not match",
     passwordMinLength: "Password must be at least 6 characters",
     quickLoginDev: "Quick Login (Dev)",
+    welcomeBack: "Welcome Back",
+    loginSubtitle: "Sign in to access your dashboard",
+    noAccountYet: "Don't have an account?",
+    registerFree: "Register free",
     
     // Lead States
     newLeads: "New Lead",

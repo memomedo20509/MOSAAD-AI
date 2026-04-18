@@ -296,10 +296,10 @@ function AppContent() {
     return <PlatformLoginPage />;
   }
 
-  // Auth page is always accessible
+  // Auth page is always accessible — wrap in PublicLayout for consistent header/footer
   if (location === "/auth") {
     if (user) return <Redirect to="/" />;
-    return <AuthPage />;
+    return <PublicLayout><AuthPage /></PublicLayout>;
   }
 
   // Register page: only for non-authenticated users
@@ -318,9 +318,9 @@ function AppContent() {
     return <Redirect to="/platform/login" />;
   }
 
-  // Not logged in for app routes → show auth page
+  // Not logged in for app routes → redirect to /auth (shown with PublicLayout)
   if (!user) {
-    return <AuthPage />;
+    return <Redirect to="/auth" />;
   }
 
   // Onboarding wizard: show without sidebar/header for clean UX
