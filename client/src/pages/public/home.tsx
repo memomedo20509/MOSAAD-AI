@@ -1,3 +1,4 @@
+import { useRef, useEffect, useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +12,122 @@ import {
 } from "lucide-react";
 import type { SubscriptionPlan } from "@shared/schema";
 import { WAChatMockup, CRMPipelineMockup, UnifiedInboxMockup, FloatingBadge, GradientText } from "@/components/public-mockups";
+
+/* ===== Scroll animation hook ===== */
+function useInView(threshold = 0.12, rootMargin = "0px 0px -48px 0px") {
+  const ref = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setInView(true);
+          observer.disconnect();
+        }
+      },
+      { threshold, rootMargin }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [threshold, rootMargin]);
+
+  return { ref, inView };
+}
+
+type AnimateDirection = "up" | "left" | "right" | "fade" | "scale";
+
+function AnimateIn({
+  children,
+  className = "",
+  delay = 0,
+  direction = "up",
+}: {
+  children: React.ReactNode;
+  className?: string;
+  delay?: number;
+  direction?: AnimateDirection;
+}) {
+  const { ref, inView } = useInView();
+  const dirClass = {
+    up: "animate-scroll-up",
+    left: "animate-scroll-left",
+    right: "animate-scroll-right",
+    fade: "animate-scroll-fade",
+    scale: "animate-scroll-scale",
+  }[direction];
+
+  return (
+    <div
+      ref={ref}
+      className={`${dirClass} ${inView ? "in-view" : ""} ${className}`}
+      style={delay ? { transitionDelay: `${delay}ms` } : undefined}
+    >
+      {children}
+    </div>
+  );
+}
+
+/* ===== Count-up component for stat numbers ===== */
+function easeOutCubic(t: number) {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+function CountUp({
+  target,
+  suffix = "",
+  prefix = "",
+  duration = 1400,
+}: {
+  target: number;
+  suffix?: string;
+  prefix?: string;
+  duration?: number;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [count, setCount] = useState(0);
+  const [started, setStarted] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setStarted(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.5 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!started) return;
+    const startTime = performance.now();
+    let raf: number;
+    const tick = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      setCount(Math.round(easeOutCubic(progress) * target));
+      if (progress < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [started, target, duration]);
+
+  return (
+    <span ref={ref}>
+      {prefix}
+      {count}
+      {suffix}
+    </span>
+  );
+}
 
 const HOW_IT_WORKS = [
   {
@@ -129,65 +246,66 @@ function PricingPreview() {
   return (
     <section className="py-24 bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-14">
+        <AnimateIn direction="up" className="text-center mb-14">
           <Badge className="bg-indigo-100 text-indigo-700 border-0 mb-4 px-4 py-1">الأسعار</Badge>
           <h2 className="text-4xl font-bold text-gray-900 mb-4">أسعار واضحة وبسيطة</h2>
           <p className="text-lg text-gray-600">ابدأ مجاناً، وسّع عندما تنمو</p>
-        </div>
+        </AnimateIn>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-          {displayPlans.map((plan) => (
-            <div
-              key={plan.id}
-              className={`relative rounded-2xl p-6 flex flex-col ${
-                plan.popular
-                  ? "bg-gradient-to-br from-indigo-600 to-purple-700 text-white shadow-2xl shadow-indigo-500/30 scale-105"
-                  : "bg-white border border-gray-200 shadow-sm"
-              }`}
-              data-testid={`card-pricing-${plan.id}`}
-            >
-              {plan.popular && (
-                <div className="absolute -top-3 right-1/2 translate-x-1/2">
-                  <Badge className="bg-yellow-400 text-yellow-900 border-0 px-4 font-bold shadow-md">⭐ الأكثر شعبية</Badge>
+          {displayPlans.map((plan, i) => (
+            <AnimateIn key={plan.id} direction="up" delay={i * 100}>
+              <div
+                className={`relative rounded-2xl p-6 flex flex-col h-full ${
+                  plan.popular
+                    ? "bg-gradient-to-br from-indigo-600 to-purple-700 text-white shadow-2xl shadow-indigo-500/30 scale-105"
+                    : "bg-white border border-gray-200 shadow-sm"
+                }`}
+                data-testid={`card-pricing-${plan.id}`}
+              >
+                {plan.popular && (
+                  <div className="absolute -top-3 right-1/2 translate-x-1/2">
+                    <Badge className="bg-yellow-400 text-yellow-900 border-0 px-4 font-bold shadow-md">⭐ الأكثر شعبية</Badge>
+                  </div>
+                )}
+                <h3 className={`text-lg font-bold mb-1 ${plan.popular ? "text-white" : "text-gray-900"}`}>{plan.name}</h3>
+                <p className={`text-sm mb-4 ${plan.popular ? "text-indigo-200" : "text-gray-500"}`}>{plan.desc}</p>
+                <div className="flex items-baseline gap-1 mb-5">
+                  <span className={`text-4xl font-extrabold ${plan.popular ? "text-white" : "text-indigo-600"}`}>${plan.price}</span>
+                  <span className={`text-sm ${plan.popular ? "text-indigo-200" : "text-gray-400"}`}>/شهر</span>
                 </div>
-              )}
-              <h3 className={`text-lg font-bold mb-1 ${plan.popular ? "text-white" : "text-gray-900"}`}>{plan.name}</h3>
-              <p className={`text-sm mb-4 ${plan.popular ? "text-indigo-200" : "text-gray-500"}`}>{plan.desc}</p>
-              <div className="flex items-baseline gap-1 mb-5">
-                <span className={`text-4xl font-extrabold ${plan.popular ? "text-white" : "text-indigo-600"}`}>${plan.price}</span>
-                <span className={`text-sm ${plan.popular ? "text-indigo-200" : "text-gray-400"}`}>/شهر</span>
+                {plan.features.length > 0 && (
+                  <ul className="space-y-2 mb-6 flex-1">
+                    {plan.features.map((f) => (
+                      <li key={f} className={`flex items-center gap-2 text-sm ${plan.popular ? "text-indigo-100" : "text-gray-600"}`}>
+                        <CheckCircle2 className={`h-4 w-4 shrink-0 ${plan.popular ? "text-indigo-300" : "text-green-500"}`} />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <Link href="/register">
+                  <Button
+                    className={`w-full mt-auto ${plan.popular ? "bg-white text-indigo-700 hover:bg-indigo-50" : "bg-indigo-600 hover:bg-indigo-700 text-white"}`}
+                    data-testid={`button-plan-cta-${plan.id}`}
+                  >
+                    ابدأ مجاناً
+                  </Button>
+                </Link>
+                <p className={`text-xs text-center mt-3 ${plan.popular ? "text-indigo-300" : "text-gray-400"}`}>14 يوم مجاناً — بدون بطاقة</p>
               </div>
-              {plan.features.length > 0 && (
-                <ul className="space-y-2 mb-6 flex-1">
-                  {plan.features.map((f) => (
-                    <li key={f} className={`flex items-center gap-2 text-sm ${plan.popular ? "text-indigo-100" : "text-gray-600"}`}>
-                      <CheckCircle2 className={`h-4 w-4 shrink-0 ${plan.popular ? "text-indigo-300" : "text-green-500"}`} />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <Link href="/register">
-                <Button
-                  className={`w-full mt-auto ${plan.popular ? "bg-white text-indigo-700 hover:bg-indigo-50" : "bg-indigo-600 hover:bg-indigo-700 text-white"}`}
-                  data-testid={`button-plan-cta-${plan.id}`}
-                >
-                  ابدأ مجاناً
-                </Button>
-              </Link>
-              <p className={`text-xs text-center mt-3 ${plan.popular ? "text-indigo-300" : "text-gray-400"}`}>14 يوم مجاناً — بدون بطاقة</p>
-            </div>
+            </AnimateIn>
           ))}
         </div>
 
-        <div className="text-center">
+        <AnimateIn direction="up" delay={300} className="text-center">
           <Link href="/pricing">
             <Button variant="ghost" className="gap-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50">
               مقارنة تفصيلية للخطط
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
-        </div>
+        </AnimateIn>
       </div>
     </section>
   );
@@ -198,7 +316,7 @@ export default function HomePage() {
     <>
       <title>SalesBot AI - منصة الذكاء الاصطناعي لإدارة المبيعات والمحادثات</title>
 
-      {/* ====== HERO SECTION ====== */}
+      {/* ====== HERO SECTION — no scroll animation, it's the first thing visible ====== */}
       <section className="relative min-h-screen flex items-center overflow-hidden bg-gradient-to-br from-indigo-950 via-purple-900 to-blue-950">
         {/* Mesh/glow orbs */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -282,18 +400,26 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
             {[
-              { value: "+500", label: "شركة تثق بنا", icon: Users },
-              { value: "65%", label: "زيادة التحويل", icon: TrendingUp },
-              { value: "24/7", label: "دعم متواصل", icon: Clock },
-              { value: "4 ساعات", label: "توفير يومي للفريق", icon: Zap },
-            ].map((s) => (
-              <div key={s.label} className="group" data-testid={`stat-${s.label}`}>
-                <div className="inline-flex items-center justify-center h-12 w-12 rounded-xl bg-indigo-500/10 mb-3 mx-auto group-hover:bg-indigo-500/20 transition-colors">
-                  <s.icon className="h-5 w-5 text-indigo-400" />
+              { value: 500, prefix: "+", suffix: "", label: "شركة تثق بنا", icon: Users },
+              { value: 65, prefix: "", suffix: "%", label: "زيادة التحويل", icon: TrendingUp },
+              { value: null, raw: "24/7", label: "دعم متواصل", icon: Clock },
+              { value: 4, prefix: "", suffix: "", labelSuffix: " ساعات", label: "توفير يومي للفريق", icon: Zap },
+            ].map((s, i) => (
+              <AnimateIn key={s.label} direction="up" delay={i * 80}>
+                <div className="group" data-testid={`stat-${s.label}`}>
+                  <div className="inline-flex items-center justify-center h-12 w-12 rounded-xl bg-indigo-500/10 mb-3 mx-auto group-hover:bg-indigo-500/20 transition-colors">
+                    <s.icon className="h-5 w-5 text-indigo-400" />
+                  </div>
+                  <div className="text-3xl font-extrabold text-white mb-1">
+                    {s.value !== null && s.value !== undefined ? (
+                      <CountUp target={s.value} prefix={s.prefix} suffix={(s.suffix || "") + (s.labelSuffix || "")} />
+                    ) : (
+                      s.raw
+                    )}
+                  </div>
+                  <div className="text-sm text-gray-500">{s.label}</div>
                 </div>
-                <div className="text-3xl font-extrabold text-white mb-1">{s.value}</div>
-                <div className="text-sm text-gray-500">{s.label}</div>
-              </div>
+              </AnimateIn>
             ))}
           </div>
         </div>
@@ -302,17 +428,17 @@ export default function HomePage() {
       {/* ====== FEATURES SECTION - ALTERNATING LAYOUT ====== */}
       <section className="py-24 bg-gray-950">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
+          <AnimateIn direction="up" className="text-center mb-16">
             <Badge className="bg-indigo-500/10 text-indigo-400 border-indigo-500/20 mb-4 px-4 py-1">المميزات</Badge>
             <h2 className="text-4xl font-bold text-white mb-4">كل ما تحتاجه في مكان واحد</h2>
             <p className="text-lg text-gray-400 max-w-2xl mx-auto">
               منصة متكاملة تجمع الذكاء الاصطناعي مع إدارة علاقات العملاء
             </p>
-          </div>
+          </AnimateIn>
 
           {/* Feature 1: AI Chatbot */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center mb-24" data-testid="feature-block-chatbot">
-            <div className="lg:order-1">
+            <AnimateIn direction="right" className="lg:order-1">
               <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-gradient-to-br from-green-500 to-teal-500 mb-6 shadow-lg shadow-green-500/30">
                 <Bot className="h-7 w-7 text-white" />
               </div>
@@ -330,20 +456,20 @@ export default function HomePage() {
                   </li>
                 ))}
               </ul>
-            </div>
-            <div className="lg:order-2">
+            </AnimateIn>
+            <AnimateIn direction="left" delay={120} className="lg:order-2">
               <div className="relative">
                 <div className="absolute inset-0 bg-gradient-to-br from-green-500/20 to-teal-500/20 blur-2xl rounded-3xl transform scale-110"></div>
                 <div className="relative">
                   <WAChatMockup />
                 </div>
               </div>
-            </div>
+            </AnimateIn>
           </div>
 
           {/* Feature 2: Unified Inbox */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center mb-24" data-testid="feature-block-inbox">
-            <div className="lg:order-2">
+            <AnimateIn direction="right" className="lg:order-2">
               <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-500 mb-6 shadow-lg shadow-indigo-500/30">
                 <Inbox className="h-7 w-7 text-white" />
               </div>
@@ -361,20 +487,20 @@ export default function HomePage() {
                   </li>
                 ))}
               </ul>
-            </div>
-            <div className="lg:order-1">
+            </AnimateIn>
+            <AnimateIn direction="left" delay={120} className="lg:order-1">
               <div className="relative">
                 <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 blur-2xl rounded-3xl transform scale-110"></div>
                 <div className="relative">
                   <UnifiedInboxMockup />
                 </div>
               </div>
-            </div>
+            </AnimateIn>
           </div>
 
           {/* Feature 3: CRM Pipeline */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center" data-testid="feature-block-crm">
-            <div className="lg:order-1">
+            <AnimateIn direction="right" className="lg:order-1">
               <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-gradient-to-br from-orange-500 to-pink-500 mb-6 shadow-lg shadow-orange-500/30">
                 <Users className="h-7 w-7 text-white" />
               </div>
@@ -392,15 +518,15 @@ export default function HomePage() {
                   </li>
                 ))}
               </ul>
-            </div>
-            <div className="lg:order-2">
+            </AnimateIn>
+            <AnimateIn direction="left" delay={120} className="lg:order-2">
               <div className="relative">
                 <div className="absolute inset-0 bg-gradient-to-br from-orange-500/20 to-pink-500/20 blur-2xl rounded-3xl transform scale-110"></div>
                 <div className="relative">
                   <CRMPipelineMockup />
                 </div>
               </div>
-            </div>
+            </AnimateIn>
           </div>
         </div>
       </section>
@@ -408,25 +534,27 @@ export default function HomePage() {
       {/* ====== HOW IT WORKS ====== */}
       <section className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
+          <AnimateIn direction="up" className="text-center mb-16">
             <Badge className="bg-indigo-100 text-indigo-700 border-0 mb-4 px-4 py-1">كيف يعمل</Badge>
             <h2 className="text-4xl font-bold text-gray-900 mb-4">ثلاث خطوات للنجاح</h2>
             <p className="text-lg text-gray-600">من التسجيل إلى أول صفقة في أقل من يوم</p>
-          </div>
+          </AnimateIn>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
             {/* Connecting lines */}
             <div className="hidden md:block absolute top-16 right-1/3 left-1/3 h-0.5 bg-gradient-to-r from-indigo-300 to-purple-300 z-0"></div>
 
             {HOW_IT_WORKS.map((step, i) => (
-              <div key={step.step} className="text-center relative z-10" data-testid={`step-${i + 1}`}>
-                <div className={`h-16 w-16 rounded-2xl bg-gradient-to-br ${step.color} text-white text-2xl font-extrabold flex items-center justify-center mx-auto mb-5 shadow-lg`}>
-                  <step.icon className="h-7 w-7" />
+              <AnimateIn key={step.step} direction="up" delay={i * 120}>
+                <div className="text-center relative z-10" data-testid={`step-${i + 1}`}>
+                  <div className={`h-16 w-16 rounded-2xl bg-gradient-to-br ${step.color} text-white text-2xl font-extrabold flex items-center justify-center mx-auto mb-5 shadow-lg`}>
+                    <step.icon className="h-7 w-7" />
+                  </div>
+                  <div className="text-5xl font-extrabold text-gray-100 mb-3">{step.step}</div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-3 -mt-8">{step.title}</h3>
+                  <p className="text-gray-600 leading-relaxed">{step.desc}</p>
                 </div>
-                <div className="text-5xl font-extrabold text-gray-100 mb-3">{step.step}</div>
-                <h3 className="text-xl font-bold text-gray-900 mb-3 -mt-8">{step.title}</h3>
-                <p className="text-gray-600 leading-relaxed">{step.desc}</p>
-              </div>
+              </AnimateIn>
             ))}
           </div>
         </div>
@@ -436,45 +564,48 @@ export default function HomePage() {
       <section className="py-24 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Company logos strip */}
-          <div className="text-center mb-10">
+          <AnimateIn direction="up" className="text-center mb-10">
             <p className="text-sm font-medium text-gray-500 uppercase tracking-widest mb-8">شركات رائدة تثق بنا</p>
             <div className="flex flex-wrap items-center justify-center gap-6">
-              {LOGOS.map((logo) => (
-                <div key={logo} className="bg-white rounded-xl px-6 py-3 shadow-sm border border-gray-100 text-sm font-semibold text-gray-600 hover:border-indigo-200 hover:text-indigo-600 transition-colors">
-                  {logo}
-                </div>
+              {LOGOS.map((logo, i) => (
+                <AnimateIn key={logo} direction="scale" delay={i * 60}>
+                  <div className="bg-white rounded-xl px-6 py-3 shadow-sm border border-gray-100 text-sm font-semibold text-gray-600 hover:border-indigo-200 hover:text-indigo-600 transition-colors">
+                    {logo}
+                  </div>
+                </AnimateIn>
               ))}
             </div>
-          </div>
+          </AnimateIn>
 
-          <div className="text-center mb-12 mt-16">
+          <AnimateIn direction="up" className="text-center mb-12 mt-16">
             <Badge className="bg-indigo-100 text-indigo-700 border-0 mb-4 px-4 py-1">شهادات العملاء</Badge>
             <h2 className="text-4xl font-bold text-gray-900">ماذا يقول عملاؤنا؟</h2>
-          </div>
+          </AnimateIn>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {TESTIMONIALS.map((t) => (
-              <div
-                key={t.name}
-                className="bg-white rounded-2xl p-7 shadow-sm border border-gray-100 hover:shadow-md hover:border-indigo-100 transition-all"
-                data-testid={`testimonial-${t.name}`}
-              >
-                <div className="flex gap-1 mb-4">
-                  {Array.from({ length: t.rating }).map((_, i) => (
-                    <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                  ))}
-                </div>
-                <p className="text-gray-700 leading-relaxed mb-6 text-[15px]">"{t.content}"</p>
-                <div className="flex items-center gap-3 pt-4 border-t border-gray-50">
-                  <div className={`h-11 w-11 rounded-full bg-gradient-to-br ${t.color} flex items-center justify-center text-white font-bold text-sm shrink-0`}>
-                    {t.initials}
+            {TESTIMONIALS.map((t, i) => (
+              <AnimateIn key={t.name} direction="up" delay={i * 100}>
+                <div
+                  className="bg-white rounded-2xl p-7 shadow-sm border border-gray-100 hover:shadow-md hover:border-indigo-100 transition-all h-full"
+                  data-testid={`testimonial-${t.name}`}
+                >
+                  <div className="flex gap-1 mb-4">
+                    {Array.from({ length: t.rating }).map((_, idx) => (
+                      <Star key={idx} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                    ))}
                   </div>
-                  <div>
-                    <div className="font-semibold text-gray-900">{t.name}</div>
-                    <div className="text-xs text-gray-500">{t.role} — {t.company}</div>
+                  <p className="text-gray-700 leading-relaxed mb-6 text-[15px]">"{t.content}"</p>
+                  <div className="flex items-center gap-3 pt-4 border-t border-gray-50">
+                    <div className={`h-11 w-11 rounded-full bg-gradient-to-br ${t.color} flex items-center justify-center text-white font-bold text-sm shrink-0`}>
+                      {t.initials}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900">{t.name}</div>
+                      <div className="text-xs text-gray-500">{t.role} — {t.company}</div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </AnimateIn>
             ))}
           </div>
         </div>
@@ -486,21 +617,22 @@ export default function HomePage() {
       {/* ====== FAQ ====== */}
       <section className="py-24 bg-white">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
+          <AnimateIn direction="up" className="text-center mb-12">
             <Badge className="bg-indigo-100 text-indigo-700 border-0 mb-4 px-4 py-1">الأسئلة الشائعة</Badge>
             <h2 className="text-4xl font-bold text-gray-900 mb-4">كل ما تريد معرفته</h2>
-          </div>
+          </AnimateIn>
           <Accordion type="single" collapsible className="space-y-3">
             {FAQS.map((faq, i) => (
-              <AccordionItem
-                key={i}
-                value={`faq-${i}`}
-                className="border border-gray-200 rounded-xl px-5 shadow-sm hover:border-indigo-200 transition-colors"
-                data-testid={`faq-item-${i}`}
-              >
-                <AccordionTrigger className="text-right font-medium text-gray-900 hover:text-indigo-600 hover:no-underline">{faq.q}</AccordionTrigger>
-                <AccordionContent className="text-gray-600 leading-relaxed">{faq.a}</AccordionContent>
-              </AccordionItem>
+              <AnimateIn key={i} direction="up" delay={i * 60}>
+                <AccordionItem
+                  value={`faq-${i}`}
+                  className="border border-gray-200 rounded-xl px-5 shadow-sm hover:border-indigo-200 transition-colors"
+                  data-testid={`faq-item-${i}`}
+                >
+                  <AccordionTrigger className="text-right font-medium text-gray-900 hover:text-indigo-600 hover:no-underline">{faq.q}</AccordionTrigger>
+                  <AccordionContent className="text-gray-600 leading-relaxed">{faq.a}</AccordionContent>
+                </AccordionItem>
+              </AnimateIn>
             ))}
           </Accordion>
         </div>
@@ -518,7 +650,7 @@ export default function HomePage() {
         <div className="absolute top-0 right-1/4 h-64 w-64 bg-white/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-0 left-1/4 h-64 w-64 bg-purple-400/20 rounded-full blur-3xl"></div>
 
-        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <AnimateIn direction="scale" className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-4xl lg:text-5xl font-extrabold text-white mb-5">
             جاهز لمضاعفة مبيعاتك؟
           </h2>
@@ -541,7 +673,7 @@ export default function HomePage() {
           <p className="mt-6 text-sm text-indigo-300">
             ✓ 14 يوم مجاناً &nbsp; ✓ بدون بطاقة ائتمانية &nbsp; ✓ إلغاء في أي وقت
           </p>
-        </div>
+        </AnimateIn>
       </section>
     </>
   );

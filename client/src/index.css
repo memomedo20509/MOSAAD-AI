@@ -328,6 +328,62 @@
   }
 }
 
+/* ===== Scroll-triggered entrance animations ===== */
+.animate-scroll-up {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1), transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.animate-scroll-left {
+  opacity: 0;
+  transform: translateX(-36px);
+  transition: opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1), transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.animate-scroll-right {
+  opacity: 0;
+  transform: translateX(36px);
+  transition: opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1), transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.animate-scroll-fade {
+  opacity: 0;
+  transition: opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity;
+}
+
+.animate-scroll-scale {
+  opacity: 0;
+  transform: scale(0.96);
+  transition: opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1), transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.animate-scroll-up.in-view,
+.animate-scroll-left.in-view,
+.animate-scroll-right.in-view,
+.animate-scroll-fade.in-view,
+.animate-scroll-scale.in-view {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-scroll-up,
+  .animate-scroll-left,
+  .animate-scroll-right,
+  .animate-scroll-fade,
+  .animate-scroll-scale {
+    transition: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* TipTap editor styles */
 .ProseMirror {
   outline: none;
