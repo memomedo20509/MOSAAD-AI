@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
-import { Building2, User, CheckCircle2, Loader2, ChevronRight, ChevronLeft, Zap, Shield, Clock } from "lucide-react";
+import { Building2, User, CheckCircle2, Loader2, ChevronRight, ChevronLeft, Zap, Shield, Clock, Smartphone, SlidersHorizontal, Rocket } from "lucide-react";
 import { WAChatMockup } from "@/components/public-mockups";
 
 const INDUSTRIES = [
@@ -42,6 +42,30 @@ const BENEFITS = [
   { icon: Zap, title: "إعداد في 30 دقيقة", desc: "ابدأ فوراً بدون خبرة تقنية" },
   { icon: Shield, title: "14 يوماً مجاناً", desc: "بدون بطاقة ائتمانية" },
   { icon: Clock, title: "رد فوري 24/7", desc: "البوت يعمل بينما أنت نائم" },
+];
+
+const ONBOARDING_STEPS = [
+  {
+    icon: Smartphone,
+    number: "١",
+    title: "ربط واتساب",
+    desc: "وصّل رقمك في دقيقة واحدة عبر رمز QR",
+    color: "from-indigo-500 to-indigo-400",
+  },
+  {
+    icon: SlidersHorizontal,
+    number: "٢",
+    title: "ضبط البوت",
+    desc: "خصّص الردود والسيناريوهات لتناسب عملك",
+    color: "from-purple-500 to-purple-400",
+  },
+  {
+    icon: Rocket,
+    number: "٣",
+    title: "ابدأ تحويل العملاء",
+    desc: "البوت يتولى المتابعة وإغلاق الصفقات تلقائياً",
+    color: "from-pink-500 to-purple-500",
+  },
 ];
 
 export default function RegisterPage() {
@@ -164,8 +188,39 @@ export default function RegisterPage() {
               ))}
             </div>
 
+            {/* What happens after signup — 3-step visual flow */}
+            <div className="mt-10">
+              <p className="text-indigo-300 text-xs font-semibold uppercase tracking-widest mb-4">
+                ماذا يحدث بعد التسجيل؟
+              </p>
+              <div className="space-y-3" data-testid="onboarding-flow">
+                {ONBOARDING_STEPS.map(({ icon: Icon, number, title, desc, color }, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    {/* Left: icon + connector line */}
+                    <div className="flex flex-col items-center">
+                      <div className={`h-10 w-10 rounded-xl bg-gradient-to-br ${color} flex items-center justify-center shrink-0 shadow-lg`} data-testid={`onboarding-step-icon-${i + 1}`}>
+                        <Icon className="h-5 w-5 text-white" />
+                      </div>
+                      {i < ONBOARDING_STEPS.length - 1 && (
+                        <div className="w-px h-5 bg-white/15 mt-1" />
+                      )}
+                    </div>
+                    {/* Right: text */}
+                    <div className="pb-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-indigo-400 text-xs font-bold">{number}.</span>
+                        <span className="text-white font-semibold text-sm" data-testid={`onboarding-step-title-${i + 1}`}>{title}</span>
+                      </div>
+                      <p className="text-indigo-300 text-xs mt-0.5 leading-relaxed">{desc}</p>
+                    </div>
+                    {/* Arrow connector between steps (horizontal, hidden on small) */}
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Social proof strip */}
-            <div className="mt-10 flex items-center gap-3">
+            <div className="mt-8 flex items-center gap-3">
               <div className="flex -space-x-2 rtl:space-x-reverse">
                 {["أس", "سأ", "مع", "نز"].map((initials, i) => (
                   <div
