@@ -4,127 +4,169 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-interface CompanyProfileData { name?: string; industry?: string; website?: string; }
-interface ChatbotConfigData { personaName?: string; greeting?: string; language?: string; isActive?: boolean; }
+import { Briefcase, ShoppingCart, Building2 } from "lucide-react";
+import type { Company } from "@shared/schema";
+
+const INDUSTRIES = [
+  "عقارات",
+  "سيارات",
+  "تأمين",
+  "تعليم",
+  "رعاية صحية",
+  "تقنية",
+  "تجزئة",
+  "ضيافة",
+  "مالية",
+  "أخرى",
+];
 
 export default function SettingsPage() {
   const { toast } = useToast();
 
-  const { data: profile, isLoading: profileLoading } = useQuery<CompanyProfileData>({ queryKey: ["/api/company-profile"] });
-  const { data: config, isLoading: configLoading } = useQuery<ChatbotConfigData>({ queryKey: ["/api/chatbot-config"] });
+  const { data: company, isLoading } = useQuery<Company>({ queryKey: ["/api/companies/me"] });
 
-  const [profileForm, setProfileForm] = useState({ name: "", industry: "", website: "" });
-  const [configForm, setConfigForm] = useState({ personaName: "", greeting: "", language: "en", isActive: true });
-
-  useEffect(() => {
-    if (profile) {
-      setProfileForm({ name: profile.name ?? "", industry: profile.industry ?? "", website: profile.website ?? "" });
-    }
-  }, [profile]);
-
-  useEffect(() => {
-    if (config) {
-      setConfigForm({ personaName: config.personaName ?? "SalesBot", greeting: config.greeting ?? "", language: config.language ?? "en", isActive: config.isActive ?? true });
-    }
-  }, [config]);
-
-  const updateProfileMutation = useMutation({
-    mutationFn: (data: typeof profileForm) => apiRequest("PUT", "/api/company-profile", data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/company-profile"] });
-      toast({ title: "Company profile updated" });
-    },
-    onError: () => toast({ title: "Failed to update profile", variant: "destructive" }),
+  const [form, setForm] = useState({
+    name: "",
+    industry: "",
+    businessType: "service",
+    workingHours: "",
+    timezone: "",
+    primaryColor: "#6366f1",
   });
 
-  const updateConfigMutation = useMutation({
-    mutationFn: (data: typeof configForm) => apiRequest("PUT", "/api/chatbot-config", data),
+  useEffect(() => {
+    if (company) {
+      setForm({
+        name: company.name ?? "",
+        industry: company.industry ?? "",
+        businessType: company.businessType ?? "service",
+        workingHours: company.workingHours ?? "",
+        timezone: company.timezone ?? "",
+        primaryColor: company.primaryColor ?? "#6366f1",
+      });
+    }
+  }, [company]);
+
+  const updateMutation = useMutation({
+    mutationFn: (data: typeof form) => apiRequest("PATCH", "/api/companies/me", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/chatbot-config"] });
-      toast({ title: "Chatbot config updated" });
+      queryClient.invalidateQueries({ queryKey: ["/api/companies/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/onboarding/status"] });
+      // Invalidate user cache so adaptive labels (business type) update immediately in-session
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      toast({ title: "تم حفظ الإعدادات بنجاح" });
     },
-    onError: () => toast({ title: "Failed to update chatbot config", variant: "destructive" }),
+    onError: () => toast({ title: "فشل حفظ الإعدادات", variant: "destructive" }),
   });
 
   return (
-    <div className="space-y-6 max-w-2xl" data-testid="page-settings">
+    <div className="space-y-6 max-w-2xl" data-testid="page-settings" dir="rtl">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground">Configure your company and chatbot</p>
+        <h1 className="text-2xl font-semibold tracking-tight">إعدادات الشركة</h1>
+        <p className="text-muted-foreground">معلومات وإعدادات حسابك</p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Company Profile</CardTitle>
-          <CardDescription>Basic information about your company</CardDescription>
+          <div className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-muted-foreground" />
+            <CardTitle>ملف الشركة</CardTitle>
+          </div>
+          <CardDescription>المعلومات الأساسية عن شركتك</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {profileLoading ? (
-            <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
+          {isLoading ? (
+            <div className="space-y-3">{[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
           ) : (
             <>
-              <div>
-                <Label>Company Name</Label>
-                <Input data-testid="input-company-name" value={profileForm.name} onChange={e => setProfileForm(f => ({ ...f, name: e.target.value }))} placeholder="My Company" />
+              <div className="space-y-2">
+                <Label>نوع النشاط التجاري</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, businessType: "service" }))}
+                    data-testid="button-business-type-service"
+                    className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all cursor-pointer ${
+                      form.businessType === "service"
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/50"
+                    }`}
+                  >
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${form.businessType === "service" ? "bg-primary/10" : "bg-muted"}`}>
+                      <Briefcase className={`h-5 w-5 ${form.businessType === "service" ? "text-primary" : "text-muted-foreground"}`} />
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-sm">خدمات / مبيعات</p>
+                      <p className="text-xs text-muted-foreground">ليدز ومواعيد</p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, businessType: "ecommerce" }))}
+                    data-testid="button-business-type-ecommerce"
+                    className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all cursor-pointer ${
+                      form.businessType === "ecommerce"
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/50"
+                    }`}
+                  >
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${form.businessType === "ecommerce" ? "bg-primary/10" : "bg-muted"}`}>
+                      <ShoppingCart className={`h-5 w-5 ${form.businessType === "ecommerce" ? "text-primary" : "text-muted-foreground"}`} />
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-sm">متجر إلكتروني</p>
+                      <p className="text-xs text-muted-foreground">منتجات وطلبات</p>
+                    </div>
+                  </button>
+                </div>
               </div>
-              <div>
-                <Label>Industry</Label>
-                <Input data-testid="input-company-industry" value={profileForm.industry} onChange={e => setProfileForm(f => ({ ...f, industry: e.target.value }))} placeholder="e.g. Real Estate, E-commerce" />
-              </div>
-              <div>
-                <Label>Website</Label>
-                <Input data-testid="input-company-website" value={profileForm.website} onChange={e => setProfileForm(f => ({ ...f, website: e.target.value }))} placeholder="https://yourcompany.com" />
-              </div>
-              <Button onClick={() => updateProfileMutation.mutate(profileForm)} disabled={updateProfileMutation.isPending} data-testid="button-save-profile">
-                {updateProfileMutation.isPending ? "Saving..." : "Save Profile"}
-              </Button>
-            </>
-          )}
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Chatbot Configuration</CardTitle>
-          <CardDescription>Customize your AI sales assistant</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {configLoading ? (
-            <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
-          ) : (
-            <>
-              <div>
-                <Label>Bot Name</Label>
-                <Input data-testid="input-bot-name" value={configForm.personaName} onChange={e => setConfigForm(f => ({ ...f, personaName: e.target.value }))} placeholder="SalesBot" />
+              <div className="space-y-1">
+                <Label htmlFor="settings-company-name">اسم الشركة</Label>
+                <Input
+                  id="settings-company-name"
+                  data-testid="input-company-name"
+                  value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="شركتي"
+                />
               </div>
-              <div>
-                <Label>Greeting Message</Label>
-                <Textarea data-testid="input-bot-greeting" value={configForm.greeting} onChange={e => setConfigForm(f => ({ ...f, greeting: e.target.value }))} placeholder="Hello! How can I help you today?" rows={3} />
-              </div>
-              <div>
-                <Label>Language</Label>
-                <Select value={configForm.language} onValueChange={v => setConfigForm(f => ({ ...f, language: v }))}>
-                  <SelectTrigger data-testid="select-bot-language"><SelectValue /></SelectTrigger>
+
+              <div className="space-y-1">
+                <Label htmlFor="settings-industry">المجال</Label>
+                <Select value={form.industry} onValueChange={v => setForm(f => ({ ...f, industry: v }))}>
+                  <SelectTrigger id="settings-industry" data-testid="select-industry">
+                    <SelectValue placeholder="اختر المجال" />
+                  </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="en">English</SelectItem>
-                    <SelectItem value="ar">Arabic</SelectItem>
-                    <SelectItem value="fr">French</SelectItem>
-                    <SelectItem value="es">Spanish</SelectItem>
+                    {INDUSTRIES.map(i => (
+                      <SelectItem key={i} value={i}>{i}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center gap-3">
-                <Switch checked={configForm.isActive} onCheckedChange={v => setConfigForm(f => ({ ...f, isActive: v }))} data-testid="switch-bot-active" />
-                <Label>Bot Active</Label>
+
+              <div className="space-y-1">
+                <Label htmlFor="settings-working-hours">ساعات العمل</Label>
+                <Input
+                  id="settings-working-hours"
+                  data-testid="input-working-hours"
+                  value={form.workingHours}
+                  onChange={e => setForm(f => ({ ...f, workingHours: e.target.value }))}
+                  placeholder="مثال: 9 ص – 5 م"
+                />
               </div>
-              <Button onClick={() => updateConfigMutation.mutate(configForm)} disabled={updateConfigMutation.isPending} data-testid="button-save-config">
-                {updateConfigMutation.isPending ? "Saving..." : "Save Configuration"}
+
+              <Button
+                onClick={() => updateMutation.mutate(form)}
+                disabled={updateMutation.isPending}
+                data-testid="button-save-settings"
+              >
+                {updateMutation.isPending ? "جاري الحفظ..." : "حفظ التغييرات"}
               </Button>
             </>
           )}

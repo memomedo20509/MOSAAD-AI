@@ -21,7 +21,7 @@ type RegisterData = {
   lastName?: string;
 };
 
-type UserWithPermissions = User & { permissions?: RolePermissions };
+type UserWithPermissions = User & { permissions?: RolePermissions; companyBusinessType?: string | null };
 
 type AuthContextType = {
   user: UserWithPermissions | null;

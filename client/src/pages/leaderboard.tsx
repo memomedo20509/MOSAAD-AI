@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Trophy, Medal, Award, TrendingUp, Users, Clock } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 
 type LeaderboardEntry = {
   userId: string;
@@ -51,6 +52,8 @@ function formatResponseTime(minutes: number | null): string {
 }
 
 export default function LeaderboardPage() {
+  const { user } = useAuth();
+  const isEcommerce = user?.companyBusinessType === "ecommerce";
   const periodOptions = getPeriodOptions();
   const [period, setPeriod] = useState(periodOptions[0].value);
 
@@ -109,7 +112,7 @@ export default function LeaderboardPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">إجمالي الليدز</CardTitle>
+            <CardTitle className="text-sm font-medium">{isEcommerce ? "إجمالي الطلبات" : "إجمالي الليدز"}</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -161,7 +164,7 @@ export default function LeaderboardPage() {
                     <th className="text-start py-3 px-4 font-medium">السيلز</th>
                     <th className="text-start py-3 px-4 font-medium">الفريق</th>
                     <th className="text-center py-3 px-4 font-medium">الصفقات</th>
-                    <th className="text-center py-3 px-4 font-medium">الليدز</th>
+                    <th className="text-center py-3 px-4 font-medium">{isEcommerce ? "الطلبات" : "الليدز"}</th>
                     <th className="text-center py-3 px-4 font-medium">نسبة التحويل</th>
                     <th className="text-center py-3 px-4 font-medium">وقت الاستجابة</th>
                     <th className="text-center py-3 px-4 font-medium">تم التواصل اليوم</th>

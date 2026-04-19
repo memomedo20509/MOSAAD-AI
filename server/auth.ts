@@ -185,7 +185,20 @@ export function registerAuthRoutes(app: Express) {
     } catch {
       effectivePermissions = DEFAULT_ROLE_PERMISSIONS[role] ?? DEFAULT_ROLE_PERMISSIONS["sales_agent"];
     }
-    res.json({ ...userWithoutPassword, permissions: effectivePermissions });
+    // Enrich with company businessType for frontend adaptive UI
+    let companyBusinessType: string | null = null;
+    try {
+      if (userWithoutPassword.companyId) {
+        const result = await pool.query(
+          `SELECT business_type FROM companies WHERE id = $1 LIMIT 1`,
+          [userWithoutPassword.companyId]
+        );
+        companyBusinessType = result.rows[0]?.business_type ?? "service";
+      }
+    } catch (err) {
+      console.warn("[api/user] Failed to fetch companyBusinessType:", (err as Error)?.message ?? err);
+    }
+    res.json({ ...userWithoutPassword, permissions: effectivePermissions, companyBusinessType });
   });
 }
 

@@ -18,6 +18,7 @@ export const companies = pgTable("companies", {
   primaryColor: text("primary_color").default("#6366f1"),
   workingHours: text("working_hours"),
   timezone: text("timezone"),
+  businessType: text("business_type").default("service"), // service | ecommerce
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -506,12 +507,33 @@ export type InsertMonthlyTarget = z.infer<typeof insertMonthlyTargetSchema>;
 export type UpdateMonthlyTarget = z.infer<typeof updateMonthlyTargetSchema>;
 export type MonthlyTarget = typeof monthlyTargets.$inferSelect;
 
+// Chat Goal constants
+export const CHAT_GOALS = ["appointment_booking", "call_booking", "lead_qualified", "order_placement", "custom"] as const;
+export type ChatGoal = typeof CHAT_GOALS[number];
+
+export const CHAT_GOAL_LABELS: Record<ChatGoal, string> = {
+  appointment_booking: "حجز موعد",
+  call_booking: "حجز مكالمة",
+  lead_qualified: "تأهيل الليد",
+  order_placement: "إتمام الطلب",
+  custom: "مخصص",
+};
+
+export const CHAT_GOAL_DESCRIPTIONS: Record<ChatGoal, string> = {
+  appointment_booking: "البوت يحجز مواعيد مع العملاء المهتمين",
+  call_booking: "البوت يرتب مكالمات مع فريق المبيعات",
+  lead_qualified: "البوت يجمع بيانات العميل ويؤهله للمندوب",
+  order_placement: "البوت يساعد العميل في إتمام الطلب مباشرة",
+  custom: "أخبر البوت بمهمته بنفسك",
+};
+
 // Chatbot Settings (per user/manager)
 export const chatbotSettings = pgTable("chatbot_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   companyId: varchar("company_id"),
   userId: varchar("user_id").notNull().unique(),
   isActive: boolean("is_active").default(false),
+  chatGoal: text("chat_goal").default("lead_qualified"), // appointment_booking | call_booking | lead_qualified | order_placement | custom
   workingHoursStart: integer("working_hours_start").default(9),
   workingHoursEnd: integer("working_hours_end").default(18),
   welcomeMessage: text("welcome_message").default("أهلاً! 👋 أنا المساعد الذكي لشركتنا العقارية. يسعدني مساعدتك. ممكن تعرفني باسمك الكريم؟"),

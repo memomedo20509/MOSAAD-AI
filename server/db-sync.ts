@@ -31,6 +31,7 @@ export async function syncDatabaseSchema(): Promise<void> {
     await client.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS primary_color TEXT DEFAULT '#6366f1'`);
     await client.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS working_hours TEXT`);
     await client.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS timezone TEXT`);
+    await client.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS business_type TEXT DEFAULT 'service'`);
 
     // Add company_id to users table (users table exists before db-sync runs)
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
@@ -505,6 +506,7 @@ export async function syncDatabaseSchema(): Promise<void> {
     await client.query(`ALTER TABLE whatsapp_campaigns ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
     await client.query(`ALTER TABLE whatsapp_followup_rules ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
     await client.query(`ALTER TABLE chatbot_settings ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
+    await client.query(`ALTER TABLE chatbot_settings ADD COLUMN IF NOT EXISTS chat_goal TEXT DEFAULT 'lead_qualified'`);
     await client.query(`ALTER TABLE monthly_targets ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
     await client.query(`ALTER TABLE email_report_settings ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
     await client.query(`ALTER TABLE social_messages_log ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);

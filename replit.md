@@ -93,7 +93,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Onboarding & Guided Tour
 - `/onboarding` → 5-step wizard for new company owners (shown without sidebar)
-  - Step 1: Company Profile (name, industry, working hours, timezone)
+  - Step 1: Business type selector (service vs e-commerce cards) + Company Profile (name, industry, working hours, timezone)
   - Step 2: Add Team Members (create users with role selection)
   - Step 3: Knowledge Base Setup (add products/services for AI bot)
   - Step 4: WhatsApp Connection (info screen with QR placeholder)
@@ -123,6 +123,15 @@ Preferred communication style: Simple, everyday language.
 - `/settings` → Company profile settings
 - `/settings/users` → User management (admin only)
 - `/settings/teams` → Team management (admin only)
+
+### Business Type Foundation (Task #1)
+- Companies have a `business_type` column (default `service`, options: `service` | `ecommerce`).
+- Chatbot settings have a `chat_goal` column (default `lead_qualified`) with 5 options.
+- All Arabic UI labels adapt based on business type: service uses "ليدز" terminology, ecommerce uses "طلبات".
+- `GET /api/user` includes `companyBusinessType` for immediate UI label adaptation.
+- `GET /api/companies/me` — Returns current company profile including `businessType` (any authenticated user).
+- `PATCH /api/companies/me` — Updates editable company fields including `businessType` (admin/owner roles only).
+- **Note on API contract**: Task spec referenced `/api/auth/me` and `/api/companies/:id`; this app uses `/api/user` as the auth endpoint and `/api/companies/me` for tenant-scoped company access. Platform admin access to individual companies uses `/api/platform/companies/:id`.
 
 ### Key API Endpoints
 - `GET /api/blog/articles` — Public published articles (filter: category, search, page, limit)

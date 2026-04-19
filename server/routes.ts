@@ -3793,6 +3793,7 @@ ${pages.map(p => `  <url>
       res.json(settings ?? {
         userId,
         isActive: false,
+        chatGoal: "lead_qualified",
         workingHoursStart: 9,
         workingHoursEnd: 18,
         welcomeMessage: "أهلاً! 👋 أنا المساعد الذكي لشركتنا العقارية. يسعدني مساعدتك. ممكن تعرفني باسمك الكريم؟",
@@ -3807,34 +3808,39 @@ ${pages.map(p => `  <url>
   app.put("/api/chatbot/settings", isAuthenticated, async (req, res) => {
     try {
       const userId = req.user!.id;
-      const {
-        isActive,
-        workingHoursStart,
-        workingHoursEnd,
-        welcomeMessage,
-        botName,
-        companyName,
-        botRole,
-        botPersonality,
-        botMission,
-        companyKnowledge,
-        respondAlways,
-        enabledProjectIds,
-      } = req.body;
+      const { z } = await import("zod");
+      const { CHAT_GOALS } = await import("@shared/schema");
+      const chatbotBodySchema = z.object({
+        isActive: z.boolean().optional(),
+        chatGoal: z.enum(CHAT_GOALS).optional(),
+        workingHoursStart: z.number().int().min(0).max(23).optional(),
+        workingHoursEnd: z.number().int().min(0).max(23).optional(),
+        welcomeMessage: z.string().optional(),
+        botName: z.string().optional(),
+        companyName: z.string().optional(),
+        botRole: z.string().optional(),
+        botPersonality: z.string().optional(),
+        botMission: z.string().optional(),
+        companyKnowledge: z.string().optional(),
+        respondAlways: z.boolean().optional(),
+        enabledProjectIds: z.array(z.string()).nullable().optional(),
+      });
+      const body = chatbotBodySchema.parse(req.body);
       const settings = await storage.upsertChatbotSettings({
         userId,
-        isActive: isActive ?? false,
-        workingHoursStart: workingHoursStart ?? 9,
-        workingHoursEnd: workingHoursEnd ?? 18,
-        welcomeMessage: welcomeMessage ?? "أهلاً! 👋 أنا المساعد الذكي لشركتنا العقارية.",
-        botName: botName ?? undefined,
-        companyName: companyName ?? undefined,
-        botRole: botRole ?? undefined,
-        botPersonality: botPersonality ?? undefined,
-        botMission: botMission ?? undefined,
-        companyKnowledge: companyKnowledge ?? undefined,
-        respondAlways: respondAlways ?? false,
-        enabledProjectIds: Array.isArray(enabledProjectIds) ? (enabledProjectIds as string[]) : null,
+        isActive: body.isActive ?? false,
+        chatGoal: body.chatGoal ?? "lead_qualified",
+        workingHoursStart: body.workingHoursStart ?? 9,
+        workingHoursEnd: body.workingHoursEnd ?? 18,
+        welcomeMessage: body.welcomeMessage ?? "أهلاً! 👋 أنا المساعد الذكي لشركتنا العقارية.",
+        botName: body.botName ?? undefined,
+        companyName: body.companyName ?? undefined,
+        botRole: body.botRole ?? undefined,
+        botPersonality: body.botPersonality ?? undefined,
+        botMission: body.botMission ?? undefined,
+        companyKnowledge: body.companyKnowledge ?? undefined,
+        respondAlways: body.respondAlways ?? false,
+        enabledProjectIds: Array.isArray(body.enabledProjectIds) ? body.enabledProjectIds : null,
       });
       res.json(settings);
     } catch (error) {
@@ -5928,7 +5934,7 @@ ${pages.map(p => `  <url>
         onboardingStep: company?.onboardingStep ?? 0,
         hasCompletedOnboarding: company?.hasCompletedOnboarding ?? user.hasCompletedOnboarding ?? false,
         hasSeenTour: user.hasSeenTour ?? false,
-        company: company ? { name: company.name, industry: company.industry, logoUrl: company.logoUrl, workingHours: company.workingHours, timezone: company.timezone } : null,
+        company: company ? { name: company.name, industry: company.industry, logoUrl: company.logoUrl, workingHours: company.workingHours, timezone: company.timezone, businessType: company.businessType ?? "service" } : null,
       });
     } catch (err) {
       console.error("Error fetching onboarding status:", err);
@@ -5943,7 +5949,23 @@ ${pages.map(p => `  <url>
       const { companies } = await import("@shared/schema");
       const { users: usersTable } = await import("@shared/models/auth");
       const { eq } = await import("drizzle-orm");
-      const { step, completed, companyData, markTourSeen } = req.body;
+      const { z } = await import("zod");
+      // Validate and parse request body
+      const bodySchema = z.object({
+        step: z.number().int().min(0).max(10).optional(),
+        completed: z.boolean().optional(),
+        markTourSeen: z.boolean().optional(),
+        companyData: z.object({
+          name: z.string().min(1).optional(),
+          industry: z.string().optional(),
+          logoUrl: z.string().optional(),
+          workingHours: z.string().optional(),
+          timezone: z.string().optional(),
+          businessType: z.enum(["service", "ecommerce"]).optional(),
+        }).optional(),
+      });
+      const body = bodySchema.parse(req.body);
+      const { step, completed, companyData, markTourSeen } = body;
 
       if (markTourSeen) {
         await drizzleDb.update(usersTable).set({ hasSeenTour: true } as any).where(eq(usersTable.id, user.id));
@@ -5951,27 +5973,30 @@ ${pages.map(p => `  <url>
       }
 
       if (user.companyId && companyData) {
-        const updateData: Record<string, unknown> = {};
-        if (companyData.name !== undefined) updateData.name = companyData.name;
-        if (companyData.industry !== undefined) updateData.industry = companyData.industry;
-        if (companyData.logoUrl !== undefined) updateData.logoUrl = companyData.logoUrl;
-        if (companyData.workingHours !== undefined) updateData.workingHours = companyData.workingHours;
-        if (companyData.timezone !== undefined) updateData.timezone = companyData.timezone;
-        if (step !== undefined) updateData.onboardingStep = step;
+        type CompanyUpdate = typeof companies.$inferInsert;
+        const updateObj: Partial<CompanyUpdate> = {};
+        if (companyData.name !== undefined) updateObj.name = companyData.name;
+        if (companyData.industry !== undefined) updateObj.industry = companyData.industry;
+        if (companyData.logoUrl !== undefined) updateObj.logoUrl = companyData.logoUrl;
+        if (companyData.workingHours !== undefined) updateObj.workingHours = companyData.workingHours;
+        if (companyData.timezone !== undefined) updateObj.timezone = companyData.timezone;
+        if (companyData.businessType !== undefined) updateObj.businessType = companyData.businessType;
+        if (step !== undefined) updateObj.onboardingStep = step;
         if (completed) {
-          updateData.hasCompletedOnboarding = true;
-          updateData.onboardingStep = 5;
+          updateObj.hasCompletedOnboarding = true;
+          updateObj.onboardingStep = 5;
         }
-        if (Object.keys(updateData).length > 0) {
-          await drizzleDb.update(companies).set(updateData as any).where(eq(companies.id, user.companyId));
+        if (Object.keys(updateObj).length > 0) {
+          await drizzleDb.update(companies).set(updateObj).where(eq(companies.id, user.companyId));
         }
       } else if (user.companyId && step !== undefined) {
-        const updateData: Record<string, unknown> = { onboardingStep: step };
+        type CompanyUpdate = typeof companies.$inferInsert;
+        const updateObj: Partial<CompanyUpdate> = { onboardingStep: step };
         if (completed) {
-          updateData.hasCompletedOnboarding = true;
-          updateData.onboardingStep = 5;
+          updateObj.hasCompletedOnboarding = true;
+          updateObj.onboardingStep = 5;
         }
-        await drizzleDb.update(companies).set(updateData as any).where(eq(companies.id, user.companyId));
+        await drizzleDb.update(companies).set(updateObj).where(eq(companies.id, user.companyId));
       }
 
       if (completed) {
@@ -5982,6 +6007,64 @@ ${pages.map(p => `  <url>
     } catch (err) {
       console.error("Error updating onboarding step:", err);
       res.status(500).json({ error: "Failed to update onboarding step" });
+    }
+  });
+
+  // ─── Company Settings (for current company) ──────────────────────────────────
+  // GET is available to any authenticated company member (read-only)
+  app.get("/api/companies/me", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user!;
+      if (!user.companyId) return res.status(404).json({ error: "No company" });
+      const { db: drizzleDb } = await import("./db");
+      const { companies } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const rows = await drizzleDb.select().from(companies).where(eq(companies.id, user.companyId));
+      const company = rows[0] ?? null;
+      if (!company) return res.status(404).json({ error: "Company not found" });
+      res.json(company);
+    } catch (err) {
+      console.error("Error fetching company:", err);
+      res.status(500).json({ error: "Failed to fetch company" });
+    }
+  });
+
+  // PATCH restricted to admins and owners — prevents sales agents from changing company-wide settings
+  app.patch("/api/companies/me", isAuthenticated, requireRole("super_admin", "admin", "sales_admin", "company_owner"), async (req, res) => {
+    try {
+      const user = req.user!;
+      if (!user.companyId) return res.status(404).json({ error: "No company" });
+      const { db: drizzleDb } = await import("./db");
+      const { companies } = await import("@shared/schema");
+      const { z } = await import("zod");
+      const { eq } = await import("drizzle-orm");
+      // Strict allowlist — only safe editable fields, never status/planId/slug/onboarding flags
+      const allowedSchema = z.object({
+        name: z.string().min(1).optional(),
+        industry: z.string().optional(),
+        businessType: z.enum(["service", "ecommerce"]).optional(),
+        workingHours: z.string().optional(),
+        timezone: z.string().optional(),
+        primaryColor: z.string().optional(),
+        logoUrl: z.string().optional(),
+      });
+      const data = allowedSchema.parse(req.body);
+      // Build a strongly-typed partial update — only include fields explicitly provided
+      type CompanyUpdate = typeof companies.$inferInsert;
+      const updateObj: Partial<CompanyUpdate> = {};
+      if (data.name !== undefined) updateObj.name = data.name;
+      if (data.industry !== undefined) updateObj.industry = data.industry;
+      if (data.businessType !== undefined) updateObj.businessType = data.businessType;
+      if (data.workingHours !== undefined) updateObj.workingHours = data.workingHours;
+      if (data.timezone !== undefined) updateObj.timezone = data.timezone;
+      if (data.primaryColor !== undefined) updateObj.primaryColor = data.primaryColor;
+      if (data.logoUrl !== undefined) updateObj.logoUrl = data.logoUrl;
+      const [updated] = await drizzleDb.update(companies).set(updateObj).where(eq(companies.id, user.companyId!)).returning();
+      if (!updated) return res.status(404).json({ error: "Company not found" });
+      res.json(updated);
+    } catch (err) {
+      console.error("Error updating company:", err);
+      res.status(400).json({ error: "Failed to update company" });
     }
   });
 

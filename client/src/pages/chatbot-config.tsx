@@ -9,10 +9,12 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Bot, MessageSquare, Save, Clock } from "lucide-react";
+import { Bot, MessageSquare, Save, Clock, Target } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ChatbotSettings, Project } from "@shared/schema";
+import { CHAT_GOALS, CHAT_GOAL_LABELS, CHAT_GOAL_DESCRIPTIONS } from "@shared/schema";
 import { cn } from "@/lib/utils";
 
 export default function ChatbotConfigPage() {
@@ -22,6 +24,7 @@ export default function ChatbotConfigPage() {
 
   const [form, setForm] = useState({
     isActive: false,
+    chatGoal: "lead_qualified" as string,
     botName: "المساعد الذكي",
     companyName: "شركتنا العقارية",
     botRole: "مستشار عقاري",
@@ -39,6 +42,7 @@ export default function ChatbotConfigPage() {
     if (settings) {
       setForm({
         isActive: settings.isActive ?? false,
+        chatGoal: settings.chatGoal ?? "lead_qualified",
         botName: settings.botName ?? "المساعد الذكي",
         companyName: settings.companyName ?? "شركتنا العقارية",
         botRole: settings.botRole ?? "مستشار عقاري",
@@ -125,6 +129,27 @@ export default function ChatbotConfigPage() {
                     }>
                       {form.isActive ? "مفعّل" : "معطّل"}
                     </Badge>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Target className="h-4 w-4 text-muted-foreground" />
+                      <Label htmlFor="chat-goal">هدف المحادثة</Label>
+                    </div>
+                    <Select value={form.chatGoal} onValueChange={v => setForm(f => ({ ...f, chatGoal: v }))}>
+                      <SelectTrigger id="chat-goal" data-testid="select-chat-goal">
+                        <SelectValue placeholder="اختر هدف البوت" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CHAT_GOALS.map(goal => (
+                          <SelectItem key={goal} value={goal}>
+                            <div>
+                              <p className="font-medium">{CHAT_GOAL_LABELS[goal]}</p>
+                              <p className="text-xs text-muted-foreground">{CHAT_GOAL_DESCRIPTIONS[goal]}</p>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <Label htmlFor="bot-name">اسم البوت</Label>

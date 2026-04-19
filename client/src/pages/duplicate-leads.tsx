@@ -9,11 +9,14 @@ import { Copy, Trash2, Phone, Search, Merge } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import type { Lead } from "@shared/schema";
 import { format } from "date-fns";
 
 export default function DuplicateLeadsPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isEcommerce = user?.companyBusinessType === "ecommerce";
   const [search, setSearch] = useState("");
   const [mergeGroup, setMergeGroup] = useState<{ phone: string; leads: Lead[] } | null>(null);
   const [keepLeadId, setKeepLeadId] = useState<string | null>(null);
@@ -61,9 +64,9 @@ export default function DuplicateLeadsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
       setMergeGroup(null);
       setKeepLeadId(null);
-      toast({ title: "تم دمج الليدز المكررة" });
+      toast({ title: isEcommerce ? "تم دمج الطلبات المكررة" : "تم دمج الليدز المكررة" });
     },
-    onError: () => toast({ title: "فشل في دمج الليدز", variant: "destructive" }),
+    onError: () => toast({ title: isEcommerce ? "فشل في دمج الطلبات" : "فشل في دمج الليدز", variant: "destructive" }),
   });
 
   const handleMerge = () => {
@@ -77,8 +80,8 @@ export default function DuplicateLeadsPage() {
   return (
     <div className="space-y-6" data-testid="page-duplicate-leads">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">الليدز المكررة</h1>
-        <p className="text-muted-foreground">إدارة الليدز المكررة بناءً على رقم الهاتف</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{isEcommerce ? "الطلبات المكررة" : "الليدز المكررة"}</h1>
+        <p className="text-muted-foreground">{isEcommerce ? "إدارة الطلبات المكررة بناءً على رقم الهاتف" : "إدارة الليدز المكررة بناءً على رقم الهاتف"}</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -105,7 +108,7 @@ export default function DuplicateLeadsPage() {
           <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
             <Copy className="h-12 w-12 text-muted-foreground" />
             <div className="text-center">
-              <p className="font-medium">لا يوجد ليدز مكررة</p>
+              <p className="font-medium">{isEcommerce ? "لا يوجد طلبات مكررة" : "لا يوجد ليدز مكررة"}</p>
               <p className="text-sm text-muted-foreground">جميع أرقام الهواتف فريدة</p>
             </div>
           </CardContent>
@@ -185,7 +188,7 @@ export default function DuplicateLeadsPage() {
       <Dialog open={!!mergeGroup} onOpenChange={(open) => { if (!open) { setMergeGroup(null); setKeepLeadId(null); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>دمج الليدز المكررة</DialogTitle>
+            <DialogTitle>{isEcommerce ? "دمج الطلبات المكررة" : "دمج الليدز المكررة"}</DialogTitle>
           </DialogHeader>
           {mergeGroup && (
             <div className="space-y-4">

@@ -26,6 +26,8 @@ import {
   PartyPopper,
   QrCode,
   UserPlus,
+  Briefcase,
+  ShoppingCart,
 } from "lucide-react";
 
 const TOTAL_STEPS = 5;
@@ -57,7 +59,7 @@ type OnboardingStatus = {
   onboardingStep: number;
   hasCompletedOnboarding: boolean;
   hasSeenTour: boolean;
-  company: { name: string; industry: string | null; logoUrl: string | null; workingHours: string | null; timezone: string | null } | null;
+  company: { name: string; industry: string | null; logoUrl: string | null; workingHours: string | null; timezone: string | null; businessType: string | null } | null;
 };
 
 function StepIndicator({ current, total }: { current: number; total: number }) {
@@ -88,12 +90,53 @@ function StepCard({ icon: Icon, title, children }: { icon: typeof Building2; tit
 }
 
 function Step1({ data, onChange }: {
-  data: { name: string; industry: string; workingHours: string; timezone: string };
+  data: { name: string; industry: string; workingHours: string; timezone: string; businessType: string };
   onChange: (d: Partial<typeof data>) => void;
 }) {
   return (
     <StepCard icon={Building2} title="ملف الشركة">
       <div className="space-y-4">
+        <div className="space-y-2">
+          <Label>نوع النشاط التجاري *</Label>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => onChange({ businessType: "service" })}
+              data-testid="button-business-type-service"
+              className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all cursor-pointer ${
+                data.businessType === "service"
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:border-primary/50"
+              }`}
+            >
+              <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${data.businessType === "service" ? "bg-primary/10" : "bg-muted"}`}>
+                <Briefcase className={`h-5 w-5 ${data.businessType === "service" ? "text-primary" : "text-muted-foreground"}`} />
+              </div>
+              <div className="text-center">
+                <p className="font-semibold text-sm">خدمات / مبيعات</p>
+                <p className="text-xs text-muted-foreground">ليدز ومواعيد</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange({ businessType: "ecommerce" })}
+              data-testid="button-business-type-ecommerce"
+              className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all cursor-pointer ${
+                data.businessType === "ecommerce"
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:border-primary/50"
+              }`}
+            >
+              <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${data.businessType === "ecommerce" ? "bg-primary/10" : "bg-muted"}`}>
+                <ShoppingCart className={`h-5 w-5 ${data.businessType === "ecommerce" ? "text-primary" : "text-muted-foreground"}`} />
+              </div>
+              <div className="text-center">
+                <p className="font-semibold text-sm">متجر إلكتروني</p>
+                <p className="text-xs text-muted-foreground">منتجات وطلبات</p>
+              </div>
+            </button>
+          </div>
+        </div>
         <div className="space-y-2">
           <Label htmlFor="company-name">اسم الشركة *</Label>
           <Input
@@ -282,6 +325,8 @@ function Step4({ onSkip }: { onSkip: () => void }) {
 }
 
 function Step5({ onGoToDashboard }: { onGoToDashboard: () => void }) {
+  const { user } = useAuth();
+  const isEcommerce = user?.companyBusinessType === "ecommerce";
   return (
     <div className="flex flex-col items-center gap-6 py-4 text-center" dir="rtl">
       <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
@@ -302,7 +347,7 @@ function Step5({ onGoToDashboard }: { onGoToDashboard: () => void }) {
         >
           <UserPlus className="h-5 w-5 text-primary flex-shrink-0" />
           <div>
-            <p className="font-medium text-sm">أضف أول ليد</p>
+            <p className="font-medium text-sm">{isEcommerce ? "أضف أول طلب" : "أضف أول ليد"}</p>
             <p className="text-xs text-muted-foreground">ابدأ ببناء قاعدة بيانات عملائك</p>
           </div>
         </a>
@@ -324,7 +369,7 @@ function Step5({ onGoToDashboard }: { onGoToDashboard: () => void }) {
         >
           <BookOpen className="h-5 w-5 text-primary flex-shrink-0" />
           <div>
-            <p className="font-medium text-sm">استورد الليدز</p>
+            <p className="font-medium text-sm">{isEcommerce ? "استورد الطلبات" : "استورد الليدز"}</p>
             <p className="text-xs text-muted-foreground">رفع ملف Excel بقائمة عملائك</p>
           </div>
         </a>
@@ -356,6 +401,7 @@ export default function OnboardingPage() {
     industry: status?.company?.industry ?? "",
     workingHours: status?.company?.workingHours ?? "",
     timezone: status?.company?.timezone ?? "Africa/Cairo",
+    businessType: status?.company?.businessType ?? "service",
   });
 
   const [members, setMembers] = useState<{ name: string; email: string; role: string }[]>([]);
@@ -369,6 +415,7 @@ export default function OnboardingPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/onboarding/status"] });
+      qc.invalidateQueries({ queryKey: ["/api/user"] });
     },
   });
 

@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CheckCircle, Clock, AlertTriangle, Bell, Phone, ClipboardList } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { Lead, Reminder, Task } from "@shared/schema";
@@ -22,6 +23,8 @@ type MyDayData = {
 
 export default function FollowUpsPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isEcommerce = user?.companyBusinessType === "ecommerce";
 
   const { data, isLoading } = useQuery<MyDayData>({
     queryKey: ["/api/my-day"],
@@ -113,7 +116,7 @@ export default function FollowUpsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">ليدز جديدة</CardTitle>
+            <CardTitle className="text-sm font-medium">{isEcommerce ? "طلبات جديدة" : "ليدز جديدة"}</CardTitle>
             <Bell className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>

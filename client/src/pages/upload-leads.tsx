@@ -6,6 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Download, RotateCcw, Loader2 } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 
 type ImportResult = {
   imported: number;
@@ -15,6 +16,8 @@ type ImportResult = {
 
 export default function UploadLeadsPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isEcommerce = user?.companyBusinessType === "ecommerce";
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -109,8 +112,8 @@ export default function UploadLeadsPage() {
     <div className="space-y-6" data-testid="page-upload-leads">
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">رفع الليدز</h1>
-          <p className="text-muted-foreground">رفع ملف Excel أو CSV يحتوي على بيانات الليدز</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{isEcommerce ? "رفع الطلبات" : "رفع الليدز"}</h1>
+          <p className="text-muted-foreground">{isEcommerce ? "رفع ملف Excel أو CSV يحتوي على بيانات الطلبات" : "رفع ملف Excel أو CSV يحتوي على بيانات الليدز"}</p>
         </div>
         <Button variant="outline" onClick={downloadTemplate} data-testid="button-download-template">
           <Download className="h-4 w-4 mr-2" />

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { History, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/use-auth";
 import type { LeadHistory } from "@shared/schema";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -34,6 +35,8 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 export default function ActivityLogPage() {
+  const { user } = useAuth();
+  const isEcommerce = user?.companyBusinessType === "ecommerce";
   const [search, setSearch] = useState("");
   const [filterAction, setFilterAction] = useState("all");
   const [filterUser, setFilterUser] = useState("all");
@@ -86,7 +89,7 @@ export default function ActivityLogPage() {
     <div className="space-y-6" data-testid="page-activity-log">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">سجل الإجراءات</h1>
-        <p className="text-muted-foreground">تتبع جميع الإجراءات على الليدز</p>
+        <p className="text-muted-foreground">{isEcommerce ? "تتبع جميع الإجراءات على الطلبات" : "تتبع جميع الإجراءات على الليدز"}</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

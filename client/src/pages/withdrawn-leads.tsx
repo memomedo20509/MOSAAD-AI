@@ -8,11 +8,14 @@ import { Input } from "@/components/ui/input";
 import { ArchiveRestore, Search, UserX } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import type { Lead, LeadState } from "@shared/schema";
 import { format } from "date-fns";
 
 export default function WithdrawnLeadsPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isEcommerce = user?.companyBusinessType === "ecommerce";
   const [search, setSearch] = useState("");
 
   const { data: leads = [], isLoading: leadsLoading } = useQuery<Lead[]>({ queryKey: ["/api/leads"] });
@@ -61,8 +64,8 @@ export default function WithdrawnLeadsPage() {
   return (
     <div className="space-y-6" data-testid="page-withdrawn-leads">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">الليدز المنسحبة</h1>
-        <p className="text-muted-foreground">الليدز في حالات الخسارة أو الإلغاء</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{isEcommerce ? "الطلبات المنسحبة" : "الليدز المنسحبة"}</h1>
+        <p className="text-muted-foreground">{isEcommerce ? "الطلبات في حالات الإلغاء أو الرفض" : "الليدز في حالات الخسارة أو الإلغاء"}</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -86,11 +89,11 @@ export default function WithdrawnLeadsPage() {
           <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
             <UserX className="h-12 w-12 text-muted-foreground" />
             <div className="text-center">
-              <p className="font-medium">لا يوجد ليدز منسحبة</p>
+              <p className="font-medium">{isEcommerce ? "لا يوجد طلبات منسحبة" : "لا يوجد ليدز منسحبة"}</p>
               <p className="text-sm text-muted-foreground">
                 {lostStates.length === 0
                   ? "لا توجد حالات من فئة 'خسارة' في النظام"
-                  : "لا يوجد ليدز في حالات الخسارة حالياً"}
+                  : (isEcommerce ? "لا يوجد طلبات في حالات الإلغاء حالياً" : "لا يوجد ليدز في حالات الخسارة حالياً")}
               </p>
             </div>
           </CardContent>

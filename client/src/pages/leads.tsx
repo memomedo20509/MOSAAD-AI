@@ -14,6 +14,7 @@ import { Plus, Users, Pencil, Download, X } from "lucide-react";
 import { SiFacebook, SiWhatsapp } from "react-icons/si";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import type { Lead } from "@shared/schema";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -130,6 +131,8 @@ function exportCSV(leads: Lead[]) {
 
 export default function LeadsPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isEcommerce = user?.companyBusinessType === "ecommerce";
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editLead, setEditLead] = useState<Lead | null>(null);
   const [drawerLead, setDrawerLead] = useState<Lead | null>(null);
@@ -183,8 +186,8 @@ export default function LeadsPage() {
     <div className="space-y-6" data-testid="page-leads">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Leads</h1>
-          <p className="text-muted-foreground">Contacts captured by your chatbot</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{isEcommerce ? "جميع الطلبات" : "جميع الليدز"}</h1>
+          <p className="text-muted-foreground">{isEcommerce ? "الطلبات المستلمة من الشات بوت" : "الليدز المستلمة من الشات بوت"}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => exportCSV(filtered)} data-testid="button-export-csv">

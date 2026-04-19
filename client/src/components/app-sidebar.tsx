@@ -63,6 +63,18 @@ export function AppSidebar() {
   const { t, isRTL } = useLanguage();
   const userRole = user?.role ? normalizeRole(user.role) : undefined;
   const { openTour } = useTour();
+  const isEcommerce = user?.companyBusinessType === "ecommerce";
+  // Adaptive Arabic labels: ecommerce uses order terminology, service uses lead terminology
+  const lbl = {
+    group: isEcommerce ? "الطلبات" : "الليدز",
+    pipeline: isEcommerce ? "خط سير الطلبات" : "خط سير الليدز",
+    all: isEcommerce ? "جميع الطلبات" : "جميع الليدز",
+    mgmt: isEcommerce ? "إدارة الطلبات" : "إدارة الليدز",
+    upload: isEcommerce ? "رفع الطلبات" : "رفع الليدز",
+    add: isEcommerce ? "إضافة طلب" : "إضافة ليد",
+    duplicates: isEcommerce ? "الطلبات المكررة" : "الليدز المكررة",
+    withdrawn: isEcommerce ? "الطلبات المنسحبة" : "الليدز المنسحبة",
+  };
 
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ["/api/manager-comments/unread-count"],
@@ -122,7 +134,7 @@ export function AppSidebar() {
           <Collapsible defaultOpen className="group/collapsible">
             <SidebarGroupLabel asChild>
               <CollapsibleTrigger className="flex w-full items-center justify-between">
-                الليدز
+                {lbl.group}
                 <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
               </CollapsibleTrigger>
             </SidebarGroupLabel>
@@ -133,7 +145,7 @@ export function AppSidebar() {
                     <SidebarMenuButton asChild isActive={isActive("/leads/pipeline")}>
                       <Link href="/leads/pipeline" data-testid="link-nav-pipeline">
                         <Kanban className="h-4 w-4" />
-                        <span>خط سير الليدز</span>
+                        <span>{lbl.pipeline}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -141,7 +153,7 @@ export function AppSidebar() {
                     <SidebarMenuButton asChild isActive={location === "/leads"}>
                       <Link href="/leads" data-testid="link-nav-leads">
                         <Users className="h-4 w-4" />
-                        <span>جميع الليدز</span>
+                        <span>{lbl.all}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -163,7 +175,7 @@ export function AppSidebar() {
           <Collapsible className="group/collapsible">
             <SidebarGroupLabel asChild>
               <CollapsibleTrigger className="flex w-full items-center justify-between">
-                إدارة الليدز
+                {lbl.mgmt}
                 <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
               </CollapsibleTrigger>
             </SidebarGroupLabel>
@@ -175,7 +187,7 @@ export function AppSidebar() {
                       <SidebarMenuButton asChild isActive={isActive("/leads/upload")}>
                         <Link href="/leads/upload" data-testid="link-nav-upload-leads">
                           <Upload className="h-4 w-4" />
-                          <span>رفع الليدز</span>
+                          <span>{lbl.upload}</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -184,7 +196,7 @@ export function AppSidebar() {
                     <SidebarMenuButton asChild isActive={isActive("/leads?action=add")}>
                       <Link href="/leads?action=add" data-testid="link-nav-add-lead">
                         <UserPlus className="h-4 w-4" />
-                        <span>إضافة ليد</span>
+                        <span>{lbl.add}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -192,7 +204,7 @@ export function AppSidebar() {
                     <SidebarMenuButton asChild isActive={isActive("/leads/duplicates")}>
                       <Link href="/leads/duplicates" data-testid="link-nav-duplicates">
                         <Copy className="h-4 w-4" />
-                        <span>الليدز المكررة</span>
+                        <span>{lbl.duplicates}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -200,7 +212,7 @@ export function AppSidebar() {
                     <SidebarMenuButton asChild isActive={isActive("/leads/withdrawn")}>
                       <Link href="/leads/withdrawn" data-testid="link-nav-withdrawn">
                         <UserX className="h-4 w-4" />
-                        <span>الليدز المنسحبة</span>
+                        <span>{lbl.withdrawn}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

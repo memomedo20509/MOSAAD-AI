@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Phone, User, GripVertical } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import type { Lead, LeadState } from "@shared/schema";
 
 const SCORE_COLORS: Record<string, string> = {
@@ -53,6 +54,8 @@ function LeadCard({ lead, onDragStart }: { lead: Lead; onDragStart: (e: React.Dr
 
 export default function LeadPipelinePage() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isEcommerce = user?.companyBusinessType === "ecommerce";
   const [search, setSearch] = useState("");
   const [filterChannel, setFilterChannel] = useState("all");
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
@@ -114,8 +117,8 @@ export default function LeadPipelinePage() {
   return (
     <div className="space-y-4" data-testid="page-lead-pipeline">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">خط سير الليدز</h1>
-        <p className="text-muted-foreground">إدارة الليدز بالسحب والإفلات</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{isEcommerce ? "خط سير الطلبات" : "خط سير الليدز"}</h1>
+        <p className="text-muted-foreground">{isEcommerce ? "إدارة الطلبات بالسحب والإفلات" : "إدارة الليدز بالسحب والإفلات"}</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -140,7 +143,7 @@ export default function LeadPipelinePage() {
             <SelectItem value="other">أخرى</SelectItem>
           </SelectContent>
         </Select>
-        <span className="text-sm text-muted-foreground ml-auto">{filteredLeads.length} ليد</span>
+        <span className="text-sm text-muted-foreground ml-auto">{filteredLeads.length} {isEcommerce ? "طلب" : "ليد"}</span>
       </div>
 
       {isLoading ? (
@@ -198,7 +201,7 @@ export default function LeadPipelinePage() {
                   data-testid={`column-state-${state.id}`}
                 >
                   {stateLeads.length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center py-8">لا يوجد ليدز</p>
+                    <p className="text-xs text-muted-foreground text-center py-8">{isEcommerce ? "لا يوجد طلبات" : "لا يوجد ليدز"}</p>
                   ) : (
                     stateLeads.map((lead) => (
                       <LeadCard key={lead.id} lead={lead} onDragStart={handleDragStart} />
