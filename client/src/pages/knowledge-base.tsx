@@ -9,10 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, BookOpen } from "lucide-react";
+import { Plus, Pencil, Trash2, BookOpen, Package, Link as LinkIcon } from "lucide-react";
+import { Link } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { KnowledgeBaseItem } from "@shared/schema";
+import { useAuth } from "@/hooks/use-auth";
+import type { KnowledgeBaseItem, Product } from "@shared/schema";
 import { cn } from "@/lib/utils";
 
 const CATEGORIES = ["all", "product", "service", "faq", "pricing"] as const;
@@ -86,11 +88,17 @@ function ItemForm({ initial, onSave, onCancel, isPending }: {
 
 export default function KnowledgeBasePage() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isEcommerce = user?.companyBusinessType === "ecommerce";
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editItem, setEditItem] = useState<KnowledgeBaseItem | null>(null);
   const [activeCategory, setActiveCategory] = useState<Category>("all");
 
   const { data: items = [], isLoading } = useQuery<KnowledgeBaseItem[]>({ queryKey: ["/api/knowledge-base"] });
+  const { data: productList = [], isLoading: productsLoading } = useQuery<Product[]>({
+    queryKey: ["/api/products"],
+    enabled: isEcommerce,
+  });
 
   const createMutation = useMutation({
     mutationFn: (data: Partial<KnowledgeBaseItem>) => apiRequest("POST", "/api/knowledge-base", data),
@@ -123,16 +131,91 @@ export default function KnowledgeBasePage() {
 
   const filtered = activeCategory === "all" ? items : items.filter(item => item.category === activeCategory);
 
+  if (isEcommerce) {
+    const activeProducts = productList.filter(p => p.isActive);
+    return (
+      <div className="space-y-6" data-testid="page-knowledge-base">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">قاعدة المعرفة</h1>
+            <p className="text-muted-foreground">منتجاتك النشطة التي يستخدمها الشات بوت</p>
+          </div>
+          <Link href="/products" data-testid="link-manage-products">
+            <Button variant="outline">
+              <LinkIcon className="h-4 w-4 mr-2" />
+              إدارة المنتجات
+            </Button>
+          </Link>
+        </div>
+
+        {productsLoading ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-32 w-full" />)}
+          </div>
+        ) : activeProducts.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
+              <Package className="h-12 w-12 text-muted-foreground" />
+              <div className="text-center">
+                <p className="font-medium">لا توجد منتجات نشطة</p>
+                <p className="text-sm text-muted-foreground">أضف منتجاتك لكي يتعرف عليها الشات بوت</p>
+                <Link href="/products">
+                  <Button className="mt-4" data-testid="button-add-first-product">
+                    <Plus className="h-4 w-4 mr-2" />
+                    إضافة منتج
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {activeProducts.map(product => (
+              <Card key={product.id} data-testid={`card-product-kb-${product.id}`}>
+                <CardHeader className="flex flex-row items-start gap-3 pb-2">
+                  {product.imageUrl ? (
+                    <img src={product.imageUrl} alt={product.name} className="h-12 w-12 rounded-md object-cover shrink-0" />
+                  ) : (
+                    <div className="h-12 w-12 rounded-md bg-muted flex items-center justify-center shrink-0">
+                      <Package className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <CardTitle className="text-sm truncate">{product.name}</CardTitle>
+                    {product.category && (
+                      <Badge className="mt-1 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs">
+                        {product.category}
+                      </Badge>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {product.description && (
+                    <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{product.description}</p>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold">{Number(product.price).toLocaleString("ar-EG")} ر.س</span>
+                    <span className="text-xs text-muted-foreground">مخزون: {product.stock}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6" data-testid="page-knowledge-base">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Knowledge Base</h1>
-          <p className="text-muted-foreground">Products, services, and FAQs your chatbot knows about</p>
+          <h1 className="text-2xl font-semibold tracking-tight">قاعدة المعرفة</h1>
+          <p className="text-muted-foreground">المنتجات، الخدمات، والأسئلة الشائعة التي يعرفها الشات بوت</p>
         </div>
         <Button onClick={() => setDialogOpen(true)} data-testid="button-add-item">
           <Plus className="h-4 w-4 mr-2" />
-          Add Item
+          إضافة عنصر
         </Button>
       </div>
 

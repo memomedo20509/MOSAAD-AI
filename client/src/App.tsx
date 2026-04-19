@@ -68,6 +68,8 @@ import BlogArticlePage from "@/pages/blog/article";
 import OnboardingPage from "@/pages/onboarding";
 import SupportTicketsPage from "@/pages/support/tickets";
 import SupportTicketDetailPage from "@/pages/support/ticket-detail";
+import ProductsPage from "@/pages/products";
+import OrdersPage from "@/pages/orders";
 
 // Public-only paths — always shown with PublicLayout, no auth required
 const ALWAYS_PUBLIC_PATHS = ["/pricing", "/about", "/contact", "/privacy-policy", "/terms-of-service"];
@@ -91,6 +93,13 @@ function LogoutButton() {
 
 const ADMIN_ONLY_ROLES = ["super_admin", "admin", "sales_admin"] as const;
 
+function EcommerceRoute({ children }: { children: JSX.Element | null }) {
+  const { user } = useAuth();
+  if (!user) return null;
+  if (user.companyBusinessType !== "ecommerce") return <Redirect to="/" />;
+  return <>{children}</>;
+}
+
 function AppRouter() {
   return (
     <Switch>
@@ -111,6 +120,8 @@ function AppRouter() {
       <Route path="/settings" component={SettingsPage} />
       <Route path="/settings/users">{() => <ProtectedRoute permission="canAccessSettings" roles={[...ADMIN_ONLY_ROLES]}><UsersPage /></ProtectedRoute>}</Route>
       <Route path="/settings/teams">{() => <ProtectedRoute permission="canAccessSettings" roles={[...ADMIN_ONLY_ROLES]}><TeamsPage /></ProtectedRoute>}</Route>
+      <Route path="/products">{() => <EcommerceRoute><ProductsPage /></EcommerceRoute>}</Route>
+      <Route path="/orders">{() => <EcommerceRoute><OrdersPage /></EcommerceRoute>}</Route>
       <Route path="/support/tickets" component={SupportTicketsPage} />
       <Route path="/support/tickets/:id" component={SupportTicketDetailPage} />
       <Route component={NotFound} />

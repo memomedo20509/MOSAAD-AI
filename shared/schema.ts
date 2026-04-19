@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, numeric, timestamp, boolean, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, numeric, timestamp, boolean, uniqueIndex, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { users } from "./models/auth";
@@ -999,6 +999,80 @@ export const updateArticleSchema = insertArticleSchema.partial().extend({
 export type InsertArticle = z.infer<typeof insertArticleSchema>;
 export type UpdateArticle = z.infer<typeof updateArticleSchema>;
 export type Article = typeof articles.$inferSelect;
+
+// ─── Products (E-commerce) ────────────────────────────────────────────────────
+export const products = pgTable("products", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category"),
+  price: numeric("price", { mode: "number" }).notNull().default(0),
+  stock: integer("stock").notNull().default(0),
+  imageUrl: text("image_url"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertProductSchema = createInsertSchema(products).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  name: z.string().min(1, "Product name is required"),
+  price: z.number().min(0).default(0),
+  stock: z.number().int().min(0).default(0),
+});
+export const updateProductSchema = insertProductSchema.partial();
+export type InsertProduct = z.infer<typeof insertProductSchema>;
+export type UpdateProduct = z.infer<typeof updateProductSchema>;
+export type Product = typeof products.$inferSelect;
+
+// ─── Orders (E-commerce) ──────────────────────────────────────────────────────
+export const ORDER_STATUSES = ["new", "confirmed", "in_delivery", "completed", "cancelled"] as const;
+export type OrderStatus = typeof ORDER_STATUSES[number];
+
+export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  new: "جديد",
+  confirmed: "مؤكد",
+  in_delivery: "قيد التوصيل",
+  completed: "مكتمل",
+  cancelled: "ملغي",
+};
+
+export interface OrderItem {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+export const orders = pgTable("orders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id"),
+  leadId: varchar("lead_id").references(() => leads.id),
+  customerName: text("customer_name"),
+  customerPhone: text("customer_phone"),
+  items: jsonb("items").$type<OrderItem[]>().default([]),
+  totalAmount: numeric("total_amount", { mode: "number" }).notNull().default(0),
+  status: text("status").notNull().default("new"),
+  deliveryAddress: text("delivery_address"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  status: z.enum(ORDER_STATUSES).default("new"),
+  items: z.array(z.object({
+    productId: z.string(),
+    productName: z.string(),
+    quantity: z.number().int().min(1),
+    unitPrice: z.number().min(0),
+  })).default([]),
+  totalAmount: z.number().min(0).default(0),
+});
+export const updateOrderSchema = insertOrderSchema.partial();
+export type InsertOrder = z.infer<typeof insertOrderSchema>;
+export type UpdateOrder = z.infer<typeof updateOrderSchema>;
+export type Order = typeof orders.$inferSelect;
 
 // TypeScript interfaces for WhatsApp conversation inbox (mapped from whatsapp_messages_log)
 export interface Conversation {

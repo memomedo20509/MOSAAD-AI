@@ -21,6 +21,23 @@ function getCompanyId(req: Request): string | null {
   if (isPlatformAdmin(user.role)) return null;
   return user.companyId ?? null;
 }
+
+// Helper: enforce that the requesting company has businessType === "ecommerce"
+// Returns true if allowed, false if a 403 response was already sent
+async function requireEcommerceCompany(req: Request, res: any): Promise<boolean> {
+  const user = req.user!;
+  if (isPlatformAdmin(user.role)) return true;
+  if (!user.companyId) { res.status(403).json({ error: "No company associated" }); return false; }
+  const { db: drizzleDb } = await import("./db");
+  const { companies } = await import("@shared/schema");
+  const { eq } = await import("drizzle-orm");
+  const rows = await drizzleDb.select({ businessType: companies.businessType }).from(companies).where(eq(companies.id, user.companyId));
+  if (!rows[0] || rows[0].businessType !== "ecommerce") {
+    res.status(403).json({ error: "This feature is only available for e-commerce companies" });
+    return false;
+  }
+  return true;
+}
 import { updateScoringConfig } from "./scoring";
 import {
   startConnection,
@@ -76,6 +93,10 @@ import {
   updateArticleSchema,
   insertArticleCategorySchema,
   updateArticleCategorySchema,
+  insertProductSchema,
+  updateProductSchema,
+  insertOrderSchema,
+  updateOrderSchema,
   type Lead,
   type InsertLead,
 } from "@shared/schema";
@@ -6565,6 +6586,120 @@ ${pages.map(p => `  <url>
     } catch (err) {
       console.error("Error generating sitemap:", err);
       res.status(500).send("Failed to generate sitemap");
+    }
+  });
+
+  // ─── Products (E-commerce) ───────────────────────────────────────────────────
+  app.get("/api/products", isAuthenticated, async (req, res) => {
+    try {
+      if (!await requireEcommerceCompany(req, res)) return;
+      const products = await storage.getAllProducts(getCompanyId(req));
+      res.json(products);
+    } catch (error) {
+      console.error("Error fetching products:", error);
+      res.status(500).json({ error: "Failed to fetch products" });
+    }
+  });
+
+  app.get("/api/products/:id", isAuthenticated, async (req, res) => {
+    try {
+      if (!await requireEcommerceCompany(req, res)) return;
+      const product = await storage.getProduct(req.params.id);
+      if (!product) return res.status(404).json({ error: "Product not found" });
+      const companyId = getCompanyId(req);
+      if (companyId && product.companyId !== companyId) return res.status(403).json({ error: "Access denied" });
+      res.json(product);
+    } catch (error) {
+      console.error("Error fetching product:", error);
+      res.status(500).json({ error: "Failed to fetch product" });
+    }
+  });
+
+  app.post("/api/products", isAuthenticated, async (req, res) => {
+    try {
+      if (!await requireEcommerceCompany(req, res)) return;
+      const data = insertProductSchema.parse(req.body);
+      const product = await storage.createProduct(data, getCompanyId(req));
+      res.status(201).json(product);
+    } catch (error) {
+      console.error("Error creating product:", error);
+      res.status(400).json({ error: "Failed to create product" });
+    }
+  });
+
+  app.patch("/api/products/:id", isAuthenticated, async (req, res) => {
+    try {
+      if (!await requireEcommerceCompany(req, res)) return;
+      const data = updateProductSchema.parse(req.body);
+      const product = await storage.updateProduct(req.params.id, data, getCompanyId(req));
+      if (!product) return res.status(404).json({ error: "Product not found" });
+      res.json(product);
+    } catch (error) {
+      console.error("Error updating product:", error);
+      res.status(400).json({ error: "Failed to update product" });
+    }
+  });
+
+  app.delete("/api/products/:id", isAuthenticated, async (req, res) => {
+    try {
+      if (!await requireEcommerceCompany(req, res)) return;
+      const deleted = await storage.deleteProduct(req.params.id, getCompanyId(req));
+      if (!deleted) return res.status(404).json({ error: "Product not found" });
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting product:", error);
+      res.status(500).json({ error: "Failed to delete product" });
+    }
+  });
+
+  // ─── Orders (E-commerce) ─────────────────────────────────────────────────────
+  app.get("/api/orders", isAuthenticated, async (req, res) => {
+    try {
+      if (!await requireEcommerceCompany(req, res)) return;
+      const orders = await storage.getAllOrders(getCompanyId(req));
+      res.json(orders);
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      res.status(500).json({ error: "Failed to fetch orders" });
+    }
+  });
+
+  app.get("/api/orders/:id", isAuthenticated, async (req, res) => {
+    try {
+      if (!await requireEcommerceCompany(req, res)) return;
+      const order = await storage.getOrder(req.params.id);
+      if (!order) return res.status(404).json({ error: "Order not found" });
+      const companyId = getCompanyId(req);
+      if (companyId && order.companyId !== companyId) return res.status(403).json({ error: "Access denied" });
+      res.json(order);
+    } catch (error) {
+      console.error("Error fetching order:", error);
+      res.status(500).json({ error: "Failed to fetch order" });
+    }
+  });
+
+  app.post("/api/orders", isAuthenticated, async (req, res) => {
+    try {
+      if (!await requireEcommerceCompany(req, res)) return;
+      const data = insertOrderSchema.parse(req.body);
+      const order = await storage.createOrder(data, getCompanyId(req));
+      res.status(201).json(order);
+    } catch (error) {
+      console.error("Error creating order:", error);
+      res.status(400).json({ error: "Failed to create order" });
+    }
+  });
+
+  app.patch("/api/orders/:id", isAuthenticated, async (req, res) => {
+    try {
+      if (!await requireEcommerceCompany(req, res)) return;
+      const data = updateOrderSchema.parse(req.body);
+      const order = await storage.updateOrder(req.params.id, data, getCompanyId(req));
+      if (!order) return res.status(404).json({ error: "Order not found" });
+      res.json(order);
+    } catch (error) {
+      console.error("Error updating order:", error);
+      res.status(400).json({ error: "Failed to update order" });
     }
   });
 

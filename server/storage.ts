@@ -149,6 +149,14 @@ import {
   type Article,
   type InsertArticle,
   type UpdateArticle,
+  products,
+  orders,
+  type Product,
+  type InsertProduct,
+  type UpdateProduct,
+  type Order,
+  type InsertOrder,
+  type UpdateOrder,
 } from "@shared/schema";
 import {
   customRoles,
@@ -693,6 +701,19 @@ export interface IStorage {
   deleteArticle(id: string): Promise<boolean>;
   getPublishedArticles(filters?: { categorySlug?: string; search?: string; page?: number; limit?: number }): Promise<{ articles: (Article & { category: ArticleCategory | null })[]; total: number }>;
   getRelatedArticles(articleId: string, categoryId?: string | null, limit?: number): Promise<Article[]>;
+
+  // Products (E-commerce)
+  getAllProducts(companyId?: string | null): Promise<Product[]>;
+  getProduct(id: string): Promise<Product | undefined>;
+  createProduct(data: InsertProduct, companyId?: string | null): Promise<Product>;
+  updateProduct(id: string, data: UpdateProduct, companyId?: string | null): Promise<Product | undefined>;
+  deleteProduct(id: string, companyId?: string | null): Promise<boolean>;
+
+  // Orders (E-commerce)
+  getAllOrders(companyId?: string | null): Promise<Order[]>;
+  getOrder(id: string): Promise<Order | undefined>;
+  createOrder(data: InsertOrder, companyId?: string | null): Promise<Order>;
+  updateOrder(id: string, data: UpdateOrder, companyId?: string | null): Promise<Order | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3829,6 +3850,63 @@ export class DatabaseStorage implements IStorage {
     const conditions = [eq(articles.status, "published"), ne(articles.id, articleId)];
     if (categoryId) conditions.push(eq(articles.categoryId, categoryId));
     return db.select().from(articles).where(and(...conditions)).orderBy(desc(articles.publishedAt)).limit(limit);
+  }
+
+  // Products (E-commerce)
+  async getAllProducts(companyId?: string | null): Promise<Product[]> {
+    if (companyId) {
+      return db.select().from(products).where(eq(products.companyId, companyId)).orderBy(desc(products.createdAt));
+    }
+    return db.select().from(products).orderBy(desc(products.createdAt));
+  }
+
+  async getProduct(id: string): Promise<Product | undefined> {
+    const [product] = await db.select().from(products).where(eq(products.id, id));
+    return product;
+  }
+
+  async createProduct(data: InsertProduct, companyId?: string | null): Promise<Product> {
+    const [product] = await db.insert(products).values({ ...data, companyId: companyId ?? data.companyId ?? null }).returning();
+    return product;
+  }
+
+  async updateProduct(id: string, data: UpdateProduct, companyId?: string | null): Promise<Product | undefined> {
+    const conditions = [eq(products.id, id)];
+    if (companyId) conditions.push(eq(products.companyId, companyId));
+    const [product] = await db.update(products).set({ ...data, updatedAt: new Date() }).where(and(...conditions)).returning();
+    return product;
+  }
+
+  async deleteProduct(id: string, companyId?: string | null): Promise<boolean> {
+    const conditions = [eq(products.id, id)];
+    if (companyId) conditions.push(eq(products.companyId, companyId));
+    const result = await db.delete(products).where(and(...conditions)).returning();
+    return result.length > 0;
+  }
+
+  // Orders (E-commerce)
+  async getAllOrders(companyId?: string | null): Promise<Order[]> {
+    if (companyId) {
+      return db.select().from(orders).where(eq(orders.companyId, companyId)).orderBy(desc(orders.createdAt));
+    }
+    return db.select().from(orders).orderBy(desc(orders.createdAt));
+  }
+
+  async getOrder(id: string): Promise<Order | undefined> {
+    const [order] = await db.select().from(orders).where(eq(orders.id, id));
+    return order;
+  }
+
+  async createOrder(data: InsertOrder, companyId?: string | null): Promise<Order> {
+    const [order] = await db.insert(orders).values({ ...data, companyId: companyId ?? data.companyId ?? null }).returning();
+    return order;
+  }
+
+  async updateOrder(id: string, data: UpdateOrder, companyId?: string | null): Promise<Order | undefined> {
+    const conditions = [eq(orders.id, id)];
+    if (companyId) conditions.push(eq(orders.companyId, companyId));
+    const [order] = await db.update(orders).set({ ...data, updatedAt: new Date() }).where(and(...conditions)).returning();
+    return order;
   }
 }
 

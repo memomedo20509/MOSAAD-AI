@@ -655,6 +655,41 @@ export async function syncDatabaseSchema(): Promise<void> {
       )
     `);
 
+    // Products (E-commerce)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS products (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id VARCHAR,
+        name TEXT NOT NULL,
+        description TEXT,
+        category TEXT,
+        price NUMERIC DEFAULT 0 NOT NULL,
+        stock INTEGER DEFAULT 0 NOT NULL,
+        image_url TEXT,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    // Orders (E-commerce)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS orders (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id VARCHAR,
+        lead_id VARCHAR REFERENCES leads(id),
+        customer_name TEXT,
+        customer_phone TEXT,
+        items JSONB DEFAULT '[]',
+        total_amount NUMERIC DEFAULT 0 NOT NULL,
+        status TEXT NOT NULL DEFAULT 'new',
+        delivery_address TEXT,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
     await client.query("COMMIT");
     console.log("[db-sync] All tables verified/created successfully");
   } catch (error) {

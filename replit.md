@@ -51,6 +51,8 @@ Preferred communication style: Simple, everyday language.
 - **whatsapp_messages_log** — All WhatsApp messages (inbound/outbound)
 - **chatbot_settings** — Per-user bot config (personality, mission, working hours, enabled projects)
 - **knowledge_base_items** — Products, services, FAQs for AI chatbot context
+- **products** — E-commerce product catalog (name, description, category, price, stock, imageUrl, isActive) — visible only for ecommerce companies
+- **orders** — E-commerce orders from chatbot (customerName, customerPhone, items JSONB, totalAmount, status, deliveryAddress, notes) — visible only for ecommerce companies
 - **projects** / **units** — Real estate inventory the bot recommends
 - **lead_states** — Pipeline stages for leads
 - **reminders** / **notifications** — CRM action items

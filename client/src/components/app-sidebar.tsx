@@ -24,6 +24,8 @@ import {
   Building2,
   PlayCircle,
   LifeBuoy,
+  Package,
+  ShoppingBag,
 } from "lucide-react";
 import { useTour } from "@/hooks/use-tour";
 import { Badge } from "@/components/ui/badge";
@@ -130,89 +132,24 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <Collapsible defaultOpen className="group/collapsible">
-            <SidebarGroupLabel asChild>
-              <CollapsibleTrigger className="flex w-full items-center justify-between">
-                {lbl.group}
-                <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
-              </CollapsibleTrigger>
-            </SidebarGroupLabel>
-            <CollapsibleContent>
+        {isEcommerce ? (
+          <>
+            <SidebarGroup>
               <SidebarGroupContent>
                 <SidebarMenu>
                   <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={isActive("/leads/pipeline")}>
-                      <Link href="/leads/pipeline" data-testid="link-nav-pipeline">
-                        <Kanban className="h-4 w-4" />
-                        <span>{lbl.pipeline}</span>
+                    <SidebarMenuButton asChild isActive={isActive("/products")}>
+                      <Link href="/products" data-testid="link-nav-products">
+                        <Package className="h-4 w-4" />
+                        <span>المنتجات</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                   <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={location === "/leads"}>
-                      <Link href="/leads" data-testid="link-nav-leads">
-                        <Users className="h-4 w-4" />
-                        <span>{lbl.all}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={isActive("/follow-ups")}>
-                      <Link href="/follow-ups" data-testid="link-nav-follow-ups">
-                        <CalendarCheck className="h-4 w-4" />
-                        <span>متابعات اليوم</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </CollapsibleContent>
-          </Collapsible>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <Collapsible className="group/collapsible">
-            <SidebarGroupLabel asChild>
-              <CollapsibleTrigger className="flex w-full items-center justify-between">
-                {lbl.mgmt}
-                <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
-              </CollapsibleTrigger>
-            </SidebarGroupLabel>
-            <CollapsibleContent>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {isManager(userRole) && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton asChild isActive={isActive("/leads/upload")}>
-                        <Link href="/leads/upload" data-testid="link-nav-upload-leads">
-                          <Upload className="h-4 w-4" />
-                          <span>{lbl.upload}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  )}
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={isActive("/leads?action=add")}>
-                      <Link href="/leads?action=add" data-testid="link-nav-add-lead">
-                        <UserPlus className="h-4 w-4" />
-                        <span>{lbl.add}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={isActive("/leads/duplicates")}>
-                      <Link href="/leads/duplicates" data-testid="link-nav-duplicates">
-                        <Copy className="h-4 w-4" />
-                        <span>{lbl.duplicates}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={isActive("/leads/withdrawn")}>
-                      <Link href="/leads/withdrawn" data-testid="link-nav-withdrawn">
-                        <UserX className="h-4 w-4" />
-                        <span>{lbl.withdrawn}</span>
+                    <SidebarMenuButton asChild isActive={isActive("/orders")}>
+                      <Link href="/orders" data-testid="link-nav-orders">
+                        <ShoppingBag className="h-4 w-4" />
+                        <span>الطلبات</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -226,9 +163,111 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 </SidebarMenu>
               </SidebarGroupContent>
-            </CollapsibleContent>
-          </Collapsible>
-        </SidebarGroup>
+            </SidebarGroup>
+          </>
+        ) : (
+          <>
+            <SidebarGroup>
+              <Collapsible defaultOpen className="group/collapsible">
+                <SidebarGroupLabel asChild>
+                  <CollapsibleTrigger className="flex w-full items-center justify-between">
+                    {lbl.group}
+                    <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                  </CollapsibleTrigger>
+                </SidebarGroupLabel>
+                <CollapsibleContent>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton asChild isActive={isActive("/leads/pipeline")}>
+                          <Link href="/leads/pipeline" data-testid="link-nav-pipeline">
+                            <Kanban className="h-4 w-4" />
+                            <span>{lbl.pipeline}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton asChild isActive={location === "/leads"}>
+                          <Link href="/leads" data-testid="link-nav-leads">
+                            <Users className="h-4 w-4" />
+                            <span>{lbl.all}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton asChild isActive={isActive("/follow-ups")}>
+                          <Link href="/follow-ups" data-testid="link-nav-follow-ups">
+                            <CalendarCheck className="h-4 w-4" />
+                            <span>متابعات اليوم</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </CollapsibleContent>
+              </Collapsible>
+            </SidebarGroup>
+
+            <SidebarGroup>
+              <Collapsible className="group/collapsible">
+                <SidebarGroupLabel asChild>
+                  <CollapsibleTrigger className="flex w-full items-center justify-between">
+                    {lbl.mgmt}
+                    <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                  </CollapsibleTrigger>
+                </SidebarGroupLabel>
+                <CollapsibleContent>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {isManager(userRole) && (
+                        <SidebarMenuItem>
+                          <SidebarMenuButton asChild isActive={isActive("/leads/upload")}>
+                            <Link href="/leads/upload" data-testid="link-nav-upload-leads">
+                              <Upload className="h-4 w-4" />
+                              <span>{lbl.upload}</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      )}
+                      <SidebarMenuItem>
+                        <SidebarMenuButton asChild isActive={isActive("/leads?action=add")}>
+                          <Link href="/leads?action=add" data-testid="link-nav-add-lead">
+                            <UserPlus className="h-4 w-4" />
+                            <span>{lbl.add}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton asChild isActive={isActive("/leads/duplicates")}>
+                          <Link href="/leads/duplicates" data-testid="link-nav-duplicates">
+                            <Copy className="h-4 w-4" />
+                            <span>{lbl.duplicates}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton asChild isActive={isActive("/leads/withdrawn")}>
+                          <Link href="/leads/withdrawn" data-testid="link-nav-withdrawn">
+                            <UserX className="h-4 w-4" />
+                            <span>{lbl.withdrawn}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton asChild isActive={isActive("/activity-log")}>
+                          <Link href="/activity-log" data-testid="link-nav-activity-log">
+                            <History className="h-4 w-4" />
+                            <span>سجل الإجراءات</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </CollapsibleContent>
+              </Collapsible>
+            </SidebarGroup>
+          </>
+        )}
 
         <SidebarGroup>
           <SidebarGroupContent>
