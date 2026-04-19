@@ -104,6 +104,159 @@ export async function sendMetaMessage(
   }
 }
 
+export interface ParsedMetaComment {
+  platform: "messenger" | "instagram";
+  entryId: string;
+  commentId: string;
+  postId: string;
+  commenterId: string;
+  commentText: string;
+  timestamp: Date;
+}
+
+export function parseMetaCommentPayload(
+  body: Record<string, unknown>
+): ParsedMetaComment[] {
+  const comments: ParsedMetaComment[] = [];
+  const object = body.object as string | undefined;
+
+  if (object !== "page" && object !== "instagram") return comments;
+
+  const entries = body.entry as
+    | { id?: string; time?: number; changes?: { field?: string; value?: Record<string, unknown> }[] }[]
+    | undefined;
+  if (!Array.isArray(entries)) return comments;
+
+  for (const entry of entries) {
+    const entryId = entry.id ?? "";
+    if (!Array.isArray(entry.changes)) continue;
+    for (const change of entry.changes) {
+      if (change.field !== "feed" && change.field !== "comments") continue;
+      const val = change.value;
+      if (!val) continue;
+
+      const platform: "messenger" | "instagram" = object === "instagram" ? "instagram" : "messenger";
+
+      // ── Instagram `comments` webhook format ──────────────────────────────────
+      // field === "comments", value has: id, text, from.id, media.id
+      if (change.field === "comments" && object === "instagram") {
+        const commentId = val.id as string | undefined;
+        const fromObj = val.from as Record<string, unknown> | undefined;
+        const senderId = fromObj?.id as string | undefined;
+        const mediaObj = val.media as Record<string, unknown> | undefined;
+        const postId = (mediaObj?.id as string | undefined) ?? commentId ?? "";
+        const commentText = val.text as string | undefined;
+
+        if (!commentId || !senderId) continue;
+
+        comments.push({
+          platform: "instagram",
+          entryId,
+          commentId,
+          postId,
+          commenterId: senderId,
+          commentText: commentText ?? "",
+          timestamp: new Date(),
+        });
+        continue;
+      }
+
+      // ── Facebook `feed` webhook format ───────────────────────────────────────
+      // field === "feed", value has: item, verb, comment_id, post_id, sender_id, message, created_time
+      const item = val.item as string | undefined;
+      const verb = val.verb as string | undefined;
+      if (item !== "comment" || verb !== "add") continue;
+
+      const commentId = val.comment_id as string | undefined;
+      const postId = (val.post_id as string | undefined) ?? (val.parent_id as string | undefined);
+      const senderId = (val.sender_id as string | undefined) ?? ((val.from as Record<string, unknown> | undefined)?.id as string | undefined);
+      const commentText = val.message as string | undefined;
+      const timestamp = val.created_time as number | undefined;
+
+      if (!commentId || !postId || !senderId) continue;
+
+      comments.push({
+        platform,
+        entryId,
+        commentId,
+        postId,
+        commenterId: senderId,
+        commentText: commentText ?? "",
+        timestamp: timestamp ? new Date(timestamp * 1000) : new Date(),
+      });
+    }
+  }
+
+  return comments;
+}
+
+export async function replyToComment(
+  commentId: string,
+  replyText: string,
+  pageAccessToken: string,
+  platform: "messenger" | "instagram" = "messenger"
+): Promise<{ success: boolean; commentId?: string; error?: string }> {
+  try {
+    // Facebook: POST /{comment-id}/comments
+    // Instagram: POST /{ig-comment-id}/replies
+    const endpoint = platform === "instagram" ? "replies" : "comments";
+    const url = `${META_GRAPH_BASE}/${commentId}/${endpoint}`;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${pageAccessToken}`,
+      },
+      body: JSON.stringify({ message: replyText }),
+    });
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      console.error(`[Meta] replyToComment (${platform}) failed ${response.status}:`, errBody);
+      return { success: false, error: errBody };
+    }
+
+    const data = (await response.json()) as { id?: string };
+    return { success: true, commentId: data.id };
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error(`[Meta] replyToComment error:`, errMsg);
+    return { success: false, error: errMsg };
+  }
+}
+
+export async function subscribePageToWebhook(
+  pageId: string,
+  pageAccessToken: string,
+  extraFields: string[] = []
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const baseFields = ["messages", "messaging_postbacks", "feed"];
+    const fields = Array.from(new Set([...baseFields, ...extraFields])).join(",");
+    const url = `${META_GRAPH_BASE}/${pageId}/subscribed_apps?subscribed_fields=${fields}&access_token=${pageAccessToken}`;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      console.warn(`[Meta] subscribePageToWebhook for page ${pageId} failed ${response.status}:`, errBody);
+      return { success: false, error: errBody };
+    }
+
+    const data = (await response.json()) as { success?: boolean };
+    console.log(`[Meta] Subscribed page ${pageId} to webhook fields: ${fields}`);
+    return { success: data.success ?? true };
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.warn(`[Meta] subscribePageToWebhook error for page ${pageId}:`, errMsg);
+    return { success: false, error: errMsg };
+  }
+}
+
 export interface PageDetails {
   pageId: string;
   pageName: string;

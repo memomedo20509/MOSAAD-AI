@@ -4712,7 +4712,105 @@ ${pages.map(p => `  <url>
 
     res.status(200).send("EVENT_RECEIVED");
     try {
-      const { parseMetaWebhookPayload, sendMetaMessage } = await import("./meta");
+      const { parseMetaWebhookPayload, parseMetaCommentPayload, replyToComment, sendMetaMessage } = await import("./meta");
+
+      // ── Handle comment events ──────────────────────────────────────────────
+      const commentEvents = parseMetaCommentPayload(req.body as Record<string, unknown>);
+      if (commentEvents.length > 0) {
+        const commentPageConn = await storage.getMetaPageConnection();
+        if (commentPageConn && commentPageConn.commentBotEnabled) {
+          const commentPageConnUser = commentPageConn.connectedBy ? await storage.getUser(commentPageConn.connectedBy) : null;
+          const commentCompanyId = commentPageConnUser?.companyId ?? null;
+          const autoReplyText = commentPageConn.commentAutoReply ?? "شكراً على تعليقك! راسلتك على الخاص 📩";
+
+          for (const comment of commentEvents) {
+            try {
+              // Ownership guard: only process events that belong to the connected page/IG account
+              const ownedByPage = comment.entryId === commentPageConn.pageId;
+              const ownedByIg = comment.platform === "instagram" && comment.entryId === commentPageConn.instagramAccountId;
+              if (!ownedByPage && !ownedByIg) {
+                console.log(`[Meta] Comment event entryId ${comment.entryId} does not match connected page ${commentPageConn.pageId} — skipping`);
+                continue;
+              }
+
+              // Skip comments from the page itself
+              if (comment.commenterId === commentPageConn.pageId) continue;
+              if (comment.platform === "instagram" && comment.commenterId === commentPageConn.instagramAccountId) continue;
+
+              // Idempotency: skip if we've already processed this commentId
+              const alreadyProcessed = await storage.findSocialMessageById(comment.commentId);
+              if (alreadyProcessed) {
+                console.log(`[Meta] Comment ${comment.commentId} already processed — skipping`);
+                continue;
+              }
+
+              // 1. Post public reply to the comment (FB: /comments, IG: /replies)
+              const replyResult = await replyToComment(comment.commentId, autoReplyText, commentPageConn.pageAccessToken, comment.platform);
+              if (replyResult.success) {
+                console.log(`[Meta] Replied to ${comment.platform} comment ${comment.commentId} from ${comment.commenterId}`);
+              } else {
+                console.warn(`[Meta] Comment reply failed for ${comment.commentId}:`, replyResult.error);
+              }
+
+              // 2. Find or create lead
+              const channelLabel = comment.platform === "instagram" ? "إنستجرام" : "ماسنجر";
+              let commentLead = await storage.findLeadBySenderId(comment.commenterId, comment.platform, commentCompanyId);
+              if (!commentLead) {
+                const allStates = await storage.getAllStates(commentCompanyId);
+                const newLeadState = allStates.find((s) => s.name === "ليد جديد" || s.order === 0);
+                commentLead = await storage.createLead({
+                  name: `${channelLabel} - ${comment.commenterId}`,
+                  phone: comment.commenterId,
+                  channel: channelLabel,
+                  stateId: newLeadState?.id ?? null,
+                  companyId: commentCompanyId,
+                });
+                console.log(`[Meta] Auto-created lead ${commentLead.id} for commenter ${comment.commenterId}`);
+              }
+
+              // 3. Log the public comment reply — use commentId as messageId for idempotency
+              await storage.logSocialMessage({
+                companyId: commentCompanyId,
+                leadId: commentLead.id,
+                platform: comment.platform,
+                senderId: comment.commenterId,
+                direction: "comment_reply",
+                messageText: autoReplyText,
+                messageId: comment.commentId,
+                agentName: "البوت",
+                isRead: false,
+                botActionsSummary: `رد تلقائي على تعليق: "${comment.commentText.substring(0, 100)}"`,
+              });
+
+              // 4. Send DM greeting to start chatbot flow
+              const greetingText = `مرحباً! شكراً على تعليقك على منشورنا 😊 كيف يمكننا مساعدتك؟`;
+              const dmResult = await sendMetaMessage(comment.platform, comment.commenterId, greetingText, commentPageConn.pageAccessToken);
+              if (dmResult.success) {
+                console.log(`[Meta] Sent DM to commenter ${comment.commenterId}`);
+                // 5. Log the outbound DM greeting only when delivery was confirmed
+                await storage.logSocialMessage({
+                  companyId: commentCompanyId,
+                  leadId: commentLead.id,
+                  platform: comment.platform,
+                  senderId: comment.commenterId,
+                  direction: "outbound",
+                  messageText: greetingText,
+                  messageId: dmResult.messageId,
+                  agentName: "البوت",
+                  isRead: true,
+                  botActionsSummary: "رسالة ترحيب بعد تعليق على منشور",
+                });
+              } else {
+                console.warn(`[Meta] DM to commenter ${comment.commenterId} failed:`, dmResult.error);
+              }
+            } catch (commentErr) {
+              console.error(`[Meta] Comment handler error for ${comment.commentId}:`, commentErr);
+            }
+          }
+        }
+      }
+
+      // ── Handle direct messages ─────────────────────────────────────────────
       const messages = parseMetaWebhookPayload(req.body as Record<string, unknown>);
       if (messages.length === 0) return;
 
@@ -5076,7 +5174,7 @@ ${pages.map(p => `  <url>
       if (!userAccessToken || !pageId) {
         return res.status(400).json({ error: "userAccessToken and pageId are required" });
       }
-      const { fetchPageDetails } = await import("./meta");
+      const { fetchPageDetails, subscribePageToWebhook } = await import("./meta");
       const details = await fetchPageDetails(userAccessToken, pageId);
       if (!details) {
         return res.status(400).json({ error: "لم يتم العثور على الصفحة أو لا يوجد صلاحية" });
@@ -5089,6 +5187,10 @@ ${pages.map(p => `  <url>
         connectedBy: req.user!.id,
         isActive: true,
       });
+      // Subscribe page to required webhook fields (feed covers comment events on both FB and IG via page token)
+      await subscribePageToWebhook(details.pageId, details.pageAccessToken).catch(err =>
+        console.warn("[Meta] Webhook subscription update failed (non-fatal):", err)
+      );
       const { pageAccessToken: _t, ...safeConn } = conn;
       res.json({ connected: true, ...safeConn });
     } catch (err) {
@@ -5120,11 +5222,54 @@ ${pages.map(p => `  <url>
         connectedBy: req.user!.id,
         isActive: true,
       });
+      // Subscribe page to required webhook fields (feed covers comment events)
+      const { subscribePageToWebhook } = await import("./meta");
+      await subscribePageToWebhook(pageId, pageAccessToken).catch(err =>
+        console.warn("[Meta] Webhook subscription update failed (non-fatal):", err)
+      );
       const { pageAccessToken: _t, ...safeConn } = conn;
       res.json({ connected: true, ...safeConn });
     } catch (err) {
       console.error("[Meta] Manual connect error:", err);
       res.status(500).json({ error: "Failed to save connection" });
+    }
+  });
+
+  // PATCH /api/meta/connection — update comment bot settings
+  app.patch("/api/meta/connection", isAuthenticated, async (req, res) => {
+    try {
+      if (!canManageMeta(req.user?.role)) {
+        return res.status(403).json({ error: "Only admins can manage page connections" });
+      }
+      const conn = await storage.getMetaPageConnection();
+      if (!conn) return res.status(404).json({ error: "No active page connection" });
+
+      const { commentBotEnabled, commentAutoReply } = req.body as {
+        commentBotEnabled?: boolean;
+        commentAutoReply?: string;
+      };
+
+      // Validate commentAutoReply if provided
+      if (commentAutoReply !== undefined) {
+        const trimmed = commentAutoReply.trim();
+        if (trimmed.length === 0) {
+          return res.status(400).json({ error: "نص الرد التلقائي لا يمكن أن يكون فارغاً" });
+        }
+        if (trimmed.length > 500) {
+          return res.status(400).json({ error: "نص الرد التلقائي يجب أن يكون أقل من 500 حرف" });
+        }
+      }
+
+      const updated = await storage.updateMetaPageConnectionSettings(conn.pageId, {
+        commentBotEnabled,
+        commentAutoReply: commentAutoReply?.trim(),
+      });
+      if (!updated) return res.status(404).json({ error: "Connection not found" });
+      const { pageAccessToken: _t, ...safeConn } = updated;
+      res.json({ connected: true, ...safeConn });
+    } catch (err) {
+      console.error("[Meta] Patch connection error:", err);
+      res.status(500).json({ error: "Failed to update connection settings" });
     }
   });
 

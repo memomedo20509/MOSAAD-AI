@@ -618,6 +618,8 @@ export const metaPageConnections = pgTable("meta_page_connections", {
   instagramAccountId: text("instagram_account_id"),
   connectedBy: varchar("connected_by"),
   isActive: boolean("is_active").default(true),
+  commentBotEnabled: boolean("comment_bot_enabled").default(false),
+  commentAutoReply: text("comment_auto_reply").default("شكراً على تعليقك! راسلتك على الخاص 📩"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

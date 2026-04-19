@@ -437,6 +437,7 @@ export interface IStorage {
   // Meta Page Connections
   getMetaPageConnection(): Promise<MetaPageConnection | undefined>;
   upsertMetaPageConnection(data: InsertMetaPageConnection): Promise<MetaPageConnection>;
+  updateMetaPageConnectionSettings(pageId: string, data: { commentBotEnabled?: boolean; commentAutoReply?: string }): Promise<MetaPageConnection | undefined>;
   deleteMetaPageConnection(pageId: string): Promise<boolean>;
 
   // Social Messages Log
@@ -2541,6 +2542,15 @@ export class DatabaseStorage implements IStorage {
     }
     const [created] = await db.insert(metaPageConnections).values(data).returning();
     return created;
+  }
+
+  async updateMetaPageConnectionSettings(pageId: string, data: { commentBotEnabled?: boolean; commentAutoReply?: string }): Promise<MetaPageConnection | undefined> {
+    const [updated] = await db
+      .update(metaPageConnections)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(metaPageConnections.pageId, pageId))
+      .returning();
+    return updated;
   }
 
   async deleteMetaPageConnection(pageId: string): Promise<boolean> {

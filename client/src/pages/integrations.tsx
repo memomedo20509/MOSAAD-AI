@@ -5,7 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Eye, EyeOff, CheckCircle2, XCircle, RefreshCw, Smartphone, Wifi, WifiOff, Copy, ExternalLink, AlertCircle, Trash2, Bot } from "lucide-react";
+import { Eye, EyeOff, CheckCircle2, XCircle, RefreshCw, Smartphone, Wifi, WifiOff, Copy, ExternalLink, AlertCircle, Trash2, Bot, MessageSquareReply, Save } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { SiFacebook, SiInstagram, SiWhatsapp } from "react-icons/si";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -222,6 +224,8 @@ interface MetaConnection {
   instagramAccountId?: string | null;
   connectedBy?: string;
   isActive?: boolean;
+  commentBotEnabled?: boolean;
+  commentAutoReply?: string | null;
   createdAt?: string;
 }
 
@@ -238,9 +242,33 @@ function MetaSettingsTab() {
   const [manualForm, setManualForm] = useState({ pageId: "", pageName: "", pageAccessToken: "", instagramAccountId: "" });
   const [oauthLoading, setOauthLoading] = useState(false);
   const [selectedPages, setSelectedPages] = useState<MetaPage[]>([]);
+  const [commentBotEnabled, setCommentBotEnabled] = useState(false);
+  const [commentAutoReply, setCommentAutoReply] = useState("شكراً على تعليقك! راسلتك على الخاص 📩");
+  const [commentSettingsLoaded, setCommentSettingsLoaded] = useState(false);
 
   const { data: connection } = useQuery<MetaConnection>({
     queryKey: ["/api/meta/connection"],
+  });
+
+  useEffect(() => {
+    if (connection?.connected && !commentSettingsLoaded) {
+      setCommentBotEnabled(connection.commentBotEnabled ?? false);
+      setCommentAutoReply(connection.commentAutoReply ?? "شكراً على تعليقك! راسلتك على الخاص 📩");
+      setCommentSettingsLoaded(true);
+    }
+    if (!connection?.connected) {
+      setCommentSettingsLoaded(false);
+    }
+  }, [connection, commentSettingsLoaded]);
+
+  const updateCommentSettingsMutation = useMutation({
+    mutationFn: (data: { commentBotEnabled: boolean; commentAutoReply: string }) =>
+      apiRequest("PATCH", "/api/meta/connection", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/meta/connection"] });
+      toast({ title: "تم حفظ إعدادات ردود التعليقات" });
+    },
+    onError: () => toast({ title: "فشل حفظ الإعدادات", variant: "destructive" }),
   });
 
   const { data: verifyTokenData } = useQuery<{ verifyToken: string }>({
@@ -381,7 +409,7 @@ function MetaSettingsTab() {
       </div>
 
       {isConnected && (
-        <div className="rounded-lg border bg-green-50 dark:bg-green-900/10 p-4 space-y-2">
+        <div className="rounded-lg border bg-green-50 dark:bg-green-900/10 p-4 space-y-3">
           <div className="flex items-center gap-2">
             <SiFacebook className="h-5 w-5 text-[#1877F2]" />
             <span className="font-semibold">{connection.pageName}</span>
@@ -395,6 +423,53 @@ function MetaSettingsTab() {
           )}
           <Button variant="destructive" size="sm" onClick={() => disconnectMutation.mutate()} disabled={disconnectMutation.isPending} data-testid="button-disconnect-meta">
             <Trash2 className="h-4 w-4 mr-2" /> فصل الصفحة
+          </Button>
+        </div>
+      )}
+
+      {isConnected && (
+        <div className="rounded-lg border p-4 space-y-4" dir="rtl">
+          <div className="flex items-center gap-2">
+            <MessageSquareReply className="h-4 w-4 text-blue-600" />
+            <span className="font-semibold text-sm">ردود التعليقات التلقائية</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">تفعيل ردود التعليقات</p>
+              <p className="text-xs text-muted-foreground">عند التفعيل، سيرد البوت تلقائياً على تعليقات منشورات الصفحة ويرسل رسالة خاصة للمعلق</p>
+            </div>
+            <Switch
+              checked={commentBotEnabled}
+              onCheckedChange={setCommentBotEnabled}
+              data-testid="toggle-comment-bot-enabled"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm">نص الرد التلقائي على التعليق (عام)</Label>
+            <Textarea
+              value={commentAutoReply}
+              onChange={e => setCommentAutoReply(e.target.value)}
+              placeholder="شكراً على تعليقك! راسلتك على الخاص 📩"
+              rows={2}
+              data-testid="input-comment-auto-reply"
+            />
+            <p className="text-xs text-muted-foreground">هذا النص سيظهر كرد عام على التعليق على المنشور</p>
+          </div>
+          {commentBotEnabled && (
+            <div className="rounded-md bg-blue-50 dark:bg-blue-900/10 border border-blue-200 p-3 text-xs text-blue-700 dark:text-blue-400 space-y-1">
+              <p className="font-medium">معاينة الرد التلقائي:</p>
+              <p className="italic">"{commentAutoReply || "شكراً على تعليقك! راسلتك على الخاص 📩"}"</p>
+              <p className="text-muted-foreground mt-1">سيتلقى المعلق أيضاً رسالة خاصة على الماسنجر/إنستجرام لبدء محادثة مع البوت</p>
+            </div>
+          )}
+          <Button
+            size="sm"
+            onClick={() => updateCommentSettingsMutation.mutate({ commentBotEnabled, commentAutoReply })}
+            disabled={updateCommentSettingsMutation.isPending}
+            data-testid="button-save-comment-settings"
+          >
+            {updateCommentSettingsMutation.isPending ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+            حفظ إعدادات التعليقات
           </Button>
         </div>
       )}
@@ -524,8 +599,9 @@ function MetaSettingsTab() {
             <li>اختر التطبيق ← Webhooks</li>
             <li>اختر "Page" واضغط Subscribe</li>
             <li>الصق Callback URL و Verify Token أعلاه</li>
-            <li>اشترك في: messages, messaging_postbacks</li>
-            <li>لإنستجرام: اشترك أيضاً في Instagram ← messages</li>
+            <li>اشترك في: messages, messaging_postbacks, feed</li>
+            <li>لإنستجرام: اشترك أيضاً في Instagram ← messages, comments</li>
+            <li>لردود التعليقات: تأكد من الاشتراك في <strong>feed</strong> (أو comments لإنستجرام)</li>
           </ol>
         </div>
       </div>

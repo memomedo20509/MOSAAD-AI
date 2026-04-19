@@ -358,6 +358,8 @@ export async function syncDatabaseSchema(): Promise<void> {
         created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW()
       )
     `);
+    await client.query(`ALTER TABLE meta_page_connections ADD COLUMN IF NOT EXISTS comment_bot_enabled BOOLEAN DEFAULT false`);
+    await client.query(`ALTER TABLE meta_page_connections ADD COLUMN IF NOT EXISTS comment_auto_reply TEXT DEFAULT 'شكراً على تعليقك! راسلتك على الخاص 📩'`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS social_messages_log (
