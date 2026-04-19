@@ -4890,6 +4890,10 @@ ${pages.map(p => `  <url>
               leadId: lead.id,
               isRead: false,
             });
+            // Broadcast real-time SSE event for new social message
+            const socialSsePayload = { leadId: lead.id, platform, isNewLead };
+            broadcastToUser(notifUserId, { type: "new_social_message", payload: socialSsePayload });
+            broadcastToUser(notifUserId, { type: "new_notification", payload: {} });
           }
 
           // ── Bot Logic ──────────────────────────────────────────────────
@@ -5395,6 +5399,36 @@ ${pages.map(p => `  <url>
     } catch (error) {
       console.error("Social inbox error:", error);
       res.status(500).json({ error: "Failed to fetch social inbox" });
+    }
+  });
+
+  // GET /api/conversations — unified inbox (WhatsApp + Social merged, grouped by lead)
+  app.get("/api/conversations", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const userRole = (req.user as any)?.role ?? "sales_agent";
+      const teamId = (req.user as any)?.teamId ?? null;
+      const companyId = getCompanyId(req);
+      const conversations = await storage.getUnifiedConversations(userId, userRole, teamId, companyId);
+      res.json(conversations);
+    } catch (error) {
+      console.error("Unified conversations error:", error);
+      res.status(500).json({ error: "Failed to fetch conversations" });
+    }
+  });
+
+  // GET /api/conversations/:leadId/messages — all messages for a lead across all channels
+  app.get("/api/conversations/:leadId/messages", isAuthenticated, async (req, res) => {
+    try {
+      const leadId = req.params.leadId as string;
+      if (!(await canAccessLead(req.user, leadId))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const messages = await storage.getUnifiedThreadMessages(leadId);
+      res.json(messages);
+    } catch (error) {
+      console.error("Unified thread messages error:", error);
+      res.status(500).json({ error: "Failed to fetch messages" });
     }
   });
 

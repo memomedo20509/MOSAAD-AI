@@ -458,6 +458,30 @@ export interface IStorage {
     totalCount: number;
   }[]>;
 
+  // Unified Conversations (merged WA + Social)
+  getUnifiedConversations(userId: string, userRole: string, teamId?: string | null, companyId?: string | null): Promise<{
+    leadId: string;
+    leadName: string | null;
+    assignedTo: string | null;
+    score: string | null;
+    platforms: string[];
+    lastMessage: string | null;
+    lastMessageAt: Date | null;
+    unreadCount: number;
+    totalCount: number;
+    unreadByPlatform: Record<string, number>;
+  }[]>;
+  getUnifiedThreadMessages(leadId: string): Promise<{
+    id: string;
+    platform: string;
+    direction: string;
+    messageText: string | null;
+    agentName: string | null;
+    createdAt: Date | null;
+    botActionsSummary: string | null;
+    isRead: boolean | null;
+  }[]>;
+
   // Sales Performance Reports
   getSalesActivityReport(from?: Date, to?: Date, companyId?: string | null): Promise<{
     agentId: string;
@@ -2622,7 +2646,10 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(socialMessagesLog.leadId, leadId),
           eq(socialMessagesLog.platform, platform),
-          eq(socialMessagesLog.direction, "inbound"),
+          or(
+            eq(socialMessagesLog.direction, "inbound"),
+            eq(socialMessagesLog.direction, "comment_reply")
+          ),
           eq(socialMessagesLog.isRead, false)
         )
       );
@@ -2711,6 +2738,135 @@ export class DatabaseStorage implements IStorage {
       lastMessageAt: row.lastMessageAt ? new Date(row.lastMessageAt) : null,
       unreadCount: row.unreadCount ?? 0,
       totalCount: row.totalCount ?? 0,
+    }));
+  }
+
+  async getUnifiedConversations(userId: string, userRole: string, teamId?: string | null, companyId?: string | null): Promise<{
+    leadId: string;
+    leadName: string | null;
+    assignedTo: string | null;
+    score: string | null;
+    platforms: string[];
+    lastMessage: string | null;
+    lastMessageAt: Date | null;
+    unreadCount: number;
+    totalCount: number;
+    unreadByPlatform: Record<string, number>;
+  }[]> {
+    const accessibleLeads = await this.getLeadsByRole(userId, userRole, teamId ?? null, null, companyId);
+    if (accessibleLeads.length === 0) return [];
+
+    const accessibleLeadIds = accessibleLeads.map(l => l.id);
+    const leadMap = new Map(accessibleLeads.map(l => [l.id, l]));
+    const placeholders = accessibleLeadIds.map((_, i) => `$${i + 1}`).join(", ");
+
+    const { rows } = await pool.query(`
+      WITH combined AS (
+        SELECT
+          lead_id,
+          'whatsapp' AS platform,
+          message_text,
+          created_at,
+          direction,
+          is_read
+        FROM whatsapp_messages_log
+        WHERE lead_id = ANY(ARRAY[${placeholders}]) AND lead_id IS NOT NULL
+        UNION ALL
+        SELECT
+          lead_id,
+          CASE WHEN direction = 'comment_reply' THEN 'facebook_comment' ELSE platform END AS platform,
+          message_text,
+          created_at,
+          direction,
+          is_read
+        FROM social_messages_log
+        WHERE lead_id = ANY(ARRAY[${placeholders}]) AND lead_id IS NOT NULL
+      )
+      SELECT
+        lead_id AS "leadId",
+        MAX(created_at) AS "lastMessageAt",
+        (ARRAY_AGG(message_text ORDER BY created_at DESC))[1] AS "lastMessage",
+        COUNT(*)::int AS "totalCount",
+        COUNT(*) FILTER (WHERE direction IN ('inbound','comment_reply') AND is_read = false)::int AS "unreadCount",
+        ARRAY_AGG(DISTINCT platform) AS platforms,
+        COUNT(*) FILTER (WHERE platform = 'whatsapp' AND direction = 'inbound' AND is_read = false)::int AS "unreadWhatsapp",
+        COUNT(*) FILTER (WHERE platform = 'messenger' AND direction = 'inbound' AND is_read = false)::int AS "unreadMessenger",
+        COUNT(*) FILTER (WHERE platform = 'instagram' AND direction = 'inbound' AND is_read = false)::int AS "unreadInstagram",
+        COUNT(*) FILTER (WHERE platform = 'facebook_comment' AND is_read = false)::int AS "unreadFbComment"
+      FROM combined
+      GROUP BY lead_id
+      ORDER BY MAX(created_at) DESC
+    `, accessibleLeadIds);
+
+    return rows.map((row: any) => {
+      const lead = leadMap.get(row.leadId);
+      const unreadByPlatform: Record<string, number> = {
+        whatsapp: row.unreadWhatsapp ?? 0,
+        messenger: row.unreadMessenger ?? 0,
+        instagram: row.unreadInstagram ?? 0,
+        facebook_comment: row.unreadFbComment ?? 0,
+      };
+      return {
+        leadId: row.leadId,
+        leadName: lead?.name ?? null,
+        assignedTo: lead?.assignedTo ?? null,
+        score: lead?.score ?? null,
+        platforms: (row.platforms ?? []).filter(Boolean),
+        lastMessage: row.lastMessage ?? null,
+        lastMessageAt: row.lastMessageAt ? new Date(row.lastMessageAt) : null,
+        unreadCount: row.unreadCount ?? 0,
+        totalCount: row.totalCount ?? 0,
+        unreadByPlatform,
+      };
+    });
+  }
+
+  async getUnifiedThreadMessages(leadId: string): Promise<{
+    id: string;
+    platform: string;
+    direction: string;
+    messageText: string | null;
+    agentName: string | null;
+    createdAt: Date | null;
+    botActionsSummary: string | null;
+    isRead: boolean | null;
+  }[]> {
+    const { rows } = await pool.query(`
+      SELECT
+        id,
+        'whatsapp' AS platform,
+        direction,
+        message_text AS "messageText",
+        agent_name AS "agentName",
+        created_at AS "createdAt",
+        bot_actions_summary AS "botActionsSummary",
+        is_read AS "isRead"
+      FROM whatsapp_messages_log
+      WHERE lead_id = $1
+      UNION ALL
+      SELECT
+        id,
+        CASE WHEN direction = 'comment_reply' THEN 'facebook_comment' ELSE platform END AS platform,
+        direction,
+        message_text AS "messageText",
+        agent_name AS "agentName",
+        created_at AS "createdAt",
+        bot_actions_summary AS "botActionsSummary",
+        is_read AS "isRead"
+      FROM social_messages_log
+      WHERE lead_id = $1
+      ORDER BY "createdAt" ASC NULLS LAST
+    `, [leadId]);
+
+    return rows.map((row: any) => ({
+      id: row.id,
+      platform: row.platform,
+      direction: row.direction,
+      messageText: row.messageText ?? null,
+      agentName: row.agentName ?? null,
+      createdAt: row.createdAt ? new Date(row.createdAt) : null,
+      botActionsSummary: row.botActionsSummary ?? null,
+      isRead: row.isRead ?? null,
     }));
   }
 
