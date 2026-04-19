@@ -1,4 +1,4 @@
-import type { Lead, WhatsappMessagesLog, Project, Unit, KnowledgeBaseItem, IntegrationSettings } from "@shared/schema";
+import type { Lead, WhatsappMessagesLog, Project, Unit, KnowledgeBaseItem, IntegrationSettings, Product } from "@shared/schema";
 import { storage } from "./storage";
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
@@ -265,12 +265,23 @@ export type BotStage =
   | "recommending_units"
   | "collecting_details"
   | "qualified"
-  | "handed_off";
+  | "handed_off"
+  | "show_products"
+  | "collecting_order"
+  | "collecting_address"
+  | "order_confirmed";
 
-export type BotActionType = "change_state" | "create_reminder" | "update_score" | "update_lead";
+export type BotActionType = "change_state" | "create_reminder" | "update_score" | "update_lead" | "create_order";
 
 const ALLOWED_LEAD_FIELDS = ["name", "budget", "unitType", "bedrooms", "bathrooms", "location", "area", "paymentType", "downPayment", "email", "notes"] as const;
 type AllowedLeadField = typeof ALLOWED_LEAD_FIELDS[number];
+
+export interface OrderItem {
+  productId?: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+}
 
 export interface BotAction {
   type: BotActionType;
@@ -280,6 +291,11 @@ export interface BotAction {
   score?: "hot" | "warm" | "cold";
   field?: AllowedLeadField;
   value?: string | number | null;
+  orderItems?: OrderItem[];
+  deliveryAddress?: string;
+  customerName?: string;
+  customerPhone?: string;
+  totalAmount?: number;
 }
 
 export interface BotReplyResult {
@@ -297,6 +313,7 @@ export interface BotReplyResult {
   extractedProject?: string | null;
   extractedTimeline?: string | null;
   extractedPhone?: string | null;
+  extractedDeliveryAddress?: string | null;
   shouldHandoff: boolean;
   botActions: BotAction[];
 }
@@ -316,6 +333,7 @@ interface ParsedBotReply {
   extractedProject?: unknown;
   extractedTimeline?: unknown;
   extractedPhone?: unknown;
+  extractedDeliveryAddress?: unknown;
   shouldHandoff?: unknown;
   botActions?: unknown;
 }
@@ -331,6 +349,8 @@ export interface BotConfig {
   enabledProjectIds?: string[] | null;
   openAiApiKey?: string | null;
   openAiModel?: string | null;
+  businessType?: string;
+  chatGoal?: string;
 }
 
 function buildKnowledgeBaseContext(items: KnowledgeBaseItem[]): string {
@@ -345,6 +365,25 @@ function buildKnowledgeBaseContext(items: KnowledgeBaseItem[]): string {
     lines.push(line);
   }
   return `📦 منتجات وخدمات الشركة:\n${lines.join("\n")}`;
+}
+
+function buildProductContext(products: Product[]): string {
+  const activeProducts = products.filter(p => p.isActive !== false && p.stock > 0);
+  if (activeProducts.length === 0) {
+    const outOfStock = products.filter(p => p.isActive !== false && p.stock <= 0);
+    if (outOfStock.length > 0) return "⚠️ جميع المنتجات غير متوفرة حالياً في المخزون.";
+    return "لا توجد منتجات متاحة حالياً.";
+  }
+  const lines: string[] = [];
+  for (const product of activeProducts) {
+    let line = `• ${product.name}`;
+    if (product.category) line += ` [${product.category}]`;
+    if (product.description) line += ` — ${product.description}`;
+    line += ` | السعر: ${Number(product.price).toLocaleString()} جنيه`;
+    line += ` | المخزون: ${product.stock} قطعة`;
+    lines.push(line);
+  }
+  return `🛍️ المنتجات المتاحة:\n${lines.join("\n")}`;
 }
 
 function buildInventoryContext(projects: Project[], units: Unit[]): string {
@@ -400,8 +439,47 @@ export async function generateBotReply(
   config: BotConfig,
   isFirstInteraction?: boolean,
   knowledgeBaseItems?: KnowledgeBaseItem[],
+  products?: Product[],
 ): Promise<BotReplyResult> {
-  // Filter projects by enabledProjectIds if set (non-empty array = whitelist)
+  const isEcommerce = config.businessType === "ecommerce";
+
+  if (isEcommerce) {
+    return generateEcommerceBotReply(
+      currentMessage,
+      currentStage,
+      lead,
+      recentMessages,
+      config,
+      isFirstInteraction,
+      knowledgeBaseItems,
+      products ?? [],
+    );
+  }
+
+  return generateServiceBotReply(
+    currentMessage,
+    currentStage,
+    lead,
+    recentMessages,
+    projects,
+    units,
+    config,
+    isFirstInteraction,
+    knowledgeBaseItems,
+  );
+}
+
+async function generateServiceBotReply(
+  currentMessage: string,
+  currentStage: BotStage,
+  lead: Lead,
+  recentMessages: WhatsappMessagesLog[],
+  projects: Project[],
+  units: Unit[],
+  config: BotConfig,
+  isFirstInteraction?: boolean,
+  knowledgeBaseItems?: KnowledgeBaseItem[],
+): Promise<BotReplyResult> {
   const filteredProjects = (config.enabledProjectIds && config.enabledProjectIds.length > 0)
     ? projects.filter(p => config.enabledProjectIds!.includes(p.id))
     : projects;
@@ -421,43 +499,54 @@ export async function generateBotReply(
     : "ابدأ بتحية ودية واسأل عن الاسم";
 
   const resolvedName = config.botName ?? "المساعد الذكي";
-  const resolvedCompany = config.companyName ?? "شركتنا العقارية";
-  const resolvedRole = config.botRole ?? "مستشار عقاري";
-  const resolvedPersonality = config.botPersonality ?? "أنت مستشار عقاري مصري محترف وودود. بتتكلم بالمصري بشكل طبيعي. بتساعد العملاء يلاقوا الوحدة المناسبة ليهم وبتجمع بياناتهم بطريقة محترمة.";
-  const resolvedMission = config.botMission ?? "جمع بيانات العميل الكاملة وترشيح وحدات مناسبة من المشاريع المتاحة قبل تحويله للمندوب.";
+  const resolvedCompany = config.companyName ?? "شركتنا";
+  const resolvedRole = config.botRole ?? "مستشار مبيعات";
+  const resolvedPersonality = config.botPersonality ?? "أنت مستشار مبيعات مصري محترف وودود. بتتكلم بالمصري بشكل طبيعي. بتساعد العملاء وبتجمع بياناتهم بطريقة محترمة.";
+  const resolvedMission = config.botMission ?? "جمع بيانات العميل الكاملة وترشيح الخدمات المناسبة قبل تحويله للمندوب.";
   const resolvedKnowledge = config.companyKnowledge ?? "";
   const nowISO = new Date().toISOString();
 
+  const chatGoal = config.chatGoal ?? "lead_qualified";
+  const goalInstructions: Record<string, string> = {
+    appointment_booking: "هدفك حجز موعد مع العميل. بعد ما تجمع بياناته الأساسية، اطلب منه تحديد موعد للزيارة أو اللقاء.",
+    call_booking: "هدفك ترتيب مكالمة مع فريق المبيعات. بعد ما تجمع بياناته، اقترح عليه موعد مكالمة مناسب.",
+    lead_qualified: "هدفك تأهيل الليد وجمع بياناته الكاملة قبل تحويله للمندوب.",
+    custom: resolvedMission,
+  };
+  const goalInstruction = goalInstructions[chatGoal] ?? goalInstructions["lead_qualified"];
+
+  const hasProjects = filteredProjects.length > 0;
+
   const systemPrompt = `أنت "${resolvedName}" — ${resolvedRole} في شركة "${resolvedCompany}".
 ${resolvedPersonality}
+
+🎯 هدف المحادثة:
+${goalInstruction}
 
 🎯 مهمتك:
 ${resolvedMission}
 
 ${resolvedKnowledge ? `📋 معلومات إضافية عن الشركة:\n${resolvedKnowledge}\n` : ""}
 ${kbContext ? `${kbContext}\n` : ""}
-🏗️ المشاريع والوحدات المتاحة:
-${inventoryContext}
-
+${hasProjects ? `🏗️ المشاريع والوحدات المتاحة:\n${inventoryContext}\n` : ""}
 📊 البيانات المجمّعة للعميل حتى الآن:
 ${leadInfo}
 
 📋 مراحل المحادثة:
 1. greeting: ${greetingInstruction}
 2. collecting_name: بعد التحية، اعرف اسم العميل. لو قال اسمه في أول رسالة، انتقل لـ collecting_needs على طول.
-3. collecting_needs: اسأل عن احتياجاته — الميزانية، نوع الوحدة (شقة/فيلا/دوبلكس/توين هاوس/تاون هاوس/بنتهاوس/ستوديو/محل/مكتب)، عدد الغرف، المنطقة المفضلة. ممكن تجمع أكتر من معلومة في رسالة واحدة. لو العميل ذكر معلومات كتير مرة واحدة، استخرجها كلها.
-4. recommending_units: بناءً على اللي العميل قاله، رشّحله وحدات محددة من القائمة أعلاه. اذكر اسم المشروع، رقم الوحدة، المساحة، السعر، والمميزات. لو مافيش وحدات تناسبه، قوله واقترح بدائل قريبة.
-5. collecting_details: بعد ما يبدي اهتمام بوحدة أو مشروع، اسأل عن تفاصيل إضافية: طريقة الدفع (كاش/تقسيط)، المقدم المتاح، الجدول الزمني.
-6. qualified: البيانات الأساسية اكتملت (اسم + ميزانية أو اهتمام بمشروع + نوع وحدة). جهّز للتحويل للمندوب.
+3. collecting_needs: اسأل عن احتياجاته ومتطلباته. ممكن تجمع أكتر من معلومة في رسالة واحدة.
+4. recommending_units: بناءً على اللي العميل قاله، رشّحله خدمات أو منتجات مناسبة من القائمة أعلاه. لو مافيش معروض، قوله واقترح بدائل.
+5. collecting_details: بعد ما يبدي اهتمام، اسأل عن تفاصيل إضافية تساعد في إتمام الخدمة.
+6. qualified: البيانات الأساسية اكتملت. جهّز للتحويل للمندوب.
 
 ⚡ قواعد مهمة:
-- اتكلم بالمصري العامي الطبيعي مش الفصحى (يعني "إيه" مش "ماذا"، "عايز" مش "أريد"، "كويس" مش "جيد")
+- اتكلم بالمصري العامي الطبيعي مش الفصحى
 - ردود قصيرة ومركزة (2-4 جمل) — ده واتساب مش إيميل
-- لو العميل سأل عن مشروع أو سعر أو وحدة، رد بمعلومات حقيقية من القائمة أعلاه — ماتأخترعش أرقام
-- لو العميل اعترض على السعر أو قال غالي، حاول تعرض بدائل أرخص أو اتكلم عن التقسيط
+- لو العميل سأل عن خدمة أو منتج أو سعر، رد بمعلومات حقيقية من القائمة أعلاه — ماتأخترعش أرقام
 - لو العميل مش عايز يكمل أو قال "لا شكراً"، احترم قراره بلباقة
 - استخرج أي بيانات ذكرها العميل في رسالته حتى لو ماطلبتهاش
-- shouldHandoff = true بس لما يبقى عندك على الأقل: الاسم + (الميزانية أو اهتمام واضح بمشروع) + نوع الوحدة
+- shouldHandoff = true بس لما يبقى عندك على الأقل: الاسم + اهتمام واضح بخدمة أو منتج
 - لو العميل طلب يتكلم مع حد أو طلب مندوب، حط shouldHandoff = true على طول
 
 🤖 إجراءات CRM تلقائية (botActions):
@@ -478,7 +567,7 @@ ${leadInfo}
    - أرجع: { "type": "create_reminder", "isoDate": "ISO datetime string", "note": "سبب التذكير" }
 
 3. update_score — حدّث تقييم الاهتمام لو:
-   - اهتمام عالي: طلب زيارة، سأل عن التعاقد، جاهز للشراء → score: "hot"
+   - اهتمام عالي: طلب موعد، جاهز للشراء → score: "hot"
    - اهتمام متوسط: استفسار جدي، أسئلة تفصيلية → score: "warm"
 
 4. update_lead — حدّث بيانات الليد مباشرة لو العميل ذكر بيانات واضحة:
@@ -486,8 +575,7 @@ ${leadInfo}
    - أمثلة:
      * العميل قال "أنا أحمد" → { "type": "update_lead", "field": "name", "value": "أحمد" }
      * العميل قال "ميزانيتي 2 مليون" → { "type": "update_lead", "field": "budget", "value": "2,000,000" }
-     * العميل قال "عايز شقة 3 غرف" → [{ "type": "update_lead", "field": "unitType", "value": "شقة" }, { "type": "update_lead", "field": "bedrooms", "value": 3 }]
-   - ملحوظة: لا تكرر بيانات مستخرجة بالفعل في حقول extracted... — استخدم update_lead فقط لتحديث قاعدة البيانات
+   - ملحوظة: لا تكرر بيانات مستخرجة بالفعل في حقول extracted...
 
 لو مافيش إجراءات مطلوبة، ارجع مصفوفة فارغة: "botActions": []
 
@@ -497,16 +585,17 @@ ${leadInfo}
   "nextStage": "اسم المرحلة التالية",
   "extractedName": "الاسم أو null",
   "extractedBudget": "الميزانية أو null",
-  "extractedUnitType": "نوع الوحدة أو null",
+  "extractedUnitType": "نوع الخدمة/المنتج أو null",
   "extractedBedrooms": عدد الغرف كرقم أو null,
   "extractedBathrooms": عدد الحمامات كرقم أو null,
   "extractedLocation": "المنطقة/الموقع المفضل أو null",
   "extractedArea": "المساحة المطلوبة أو null",
-  "extractedPaymentType": "كاش أو تقسيط أو null",
+  "extractedPaymentType": "طريقة الدفع أو null",
   "extractedDownPayment": "مبلغ المقدم أو null",
-  "extractedProject": "اسم المشروع اللي العميل مهتم بيه أو null",
-  "extractedTimeline": "الجدول الزمني للشراء (مثال: خلال شهر، 3 أشهر، نهاية السنة) أو null",
-  "extractedPhone": "رقم الموبايل المصري إذا ذكره العميل (مثال: 01020076679) أو null",
+  "extractedProject": "اسم الخدمة/المشروع اللي العميل مهتم بيه أو null",
+  "extractedTimeline": "الجدول الزمني أو null",
+  "extractedPhone": "رقم الموبايل المصري إذا ذكره العميل أو null",
+  "extractedDeliveryAddress": null,
   "shouldHandoff": true أو false,
   "botActions": []
 }`;
@@ -517,7 +606,7 @@ ${conversationHistory}
 
 آخر رسالة من العميل: ${currentMessage}
 
-رد على العميل بصفتك بروكر عقاري مصري محترف وانتقل للمرحلة المناسبة.`;
+رد على العميل بصفتك مستشار مبيعات محترف وانتقل للمرحلة المناسبة.`;
 
   const raw = await callAI(systemPrompt, userPrompt, config.openAiApiKey, config.openAiModel);
 
@@ -552,7 +641,160 @@ ${conversationHistory}
     extractedProject: typeof parsed.extractedProject === "string" ? parsed.extractedProject : null,
     extractedTimeline: typeof parsed.extractedTimeline === "string" ? parsed.extractedTimeline : null,
     extractedPhone: typeof parsed.extractedPhone === "string" ? parsed.extractedPhone : null,
+    extractedDeliveryAddress: null,
     shouldHandoff: parsed.shouldHandoff === true,
+    botActions: parseBotActions(parsed.botActions),
+  };
+}
+
+async function generateEcommerceBotReply(
+  currentMessage: string,
+  currentStage: BotStage,
+  lead: Lead,
+  recentMessages: WhatsappMessagesLog[],
+  config: BotConfig,
+  isFirstInteraction?: boolean,
+  knowledgeBaseItems?: KnowledgeBaseItem[],
+  products: Product[] = [],
+): Promise<BotReplyResult> {
+  const productContext = buildProductContext(products);
+  const kbContext = knowledgeBaseItems ? buildKnowledgeBaseContext(knowledgeBaseItems) : "";
+
+  const conversationHistory = recentMessages
+    .slice(-10)
+    .map(m => `${m.direction === "inbound" ? "العميل" : "البوت"}: ${m.messageText}`)
+    .join("\n");
+
+  const leadInfo = buildLeadContext(lead);
+
+  const greetingInstruction = (isFirstInteraction && config.welcomeMessage && currentStage === "greeting")
+    ? `للتحية الأولى استخدم هذه الرسالة تحديداً: "${config.welcomeMessage}"`
+    : "ابدأ بتحية ودية واعرض خدماتك";
+
+  const resolvedName = config.botName ?? "مساعد المتجر";
+  const resolvedCompany = config.companyName ?? "متجرنا";
+  const resolvedRole = config.botRole ?? "مساعد متجر";
+  const resolvedPersonality = config.botPersonality ?? "أنت مساعد متجر إلكتروني مصري محترف وودود. بتتكلم بالمصري بشكل طبيعي. بتساعد العملاء يلاقوا المنتجات المناسبة وبتخلصهم طلباتهم بسهولة وسرعة.";
+  const resolvedMission = config.botMission ?? "مساعدة العميل في تصفح المنتجات المتاحة وإتمام طلبه بالكامل بما يشمل: المنتجات، الكميات، وعنوان التوصيل.";
+  const resolvedKnowledge = config.companyKnowledge ?? "";
+  const nowISO = new Date().toISOString();
+
+  const systemPrompt = `أنت "${resolvedName}" — ${resolvedRole} في "${resolvedCompany}".
+${resolvedPersonality}
+
+🎯 مهمتك:
+${resolvedMission}
+
+${resolvedKnowledge ? `📋 معلومات إضافية عن المتجر:\n${resolvedKnowledge}\n` : ""}
+${kbContext ? `${kbContext}\n` : ""}
+${productContext}
+
+📊 بيانات العميل الحالية:
+${leadInfo}
+
+📋 مراحل المحادثة:
+1. greeting: ${greetingInstruction}. رحّب بالعميل واسأله إيه اللي يدور عليه.
+2. show_products: اعرض المنتجات المتاحة بشكل منظم وجذاب. ساعد العميل يختار المنتج المناسب.
+3. collecting_order: بعد اختيار العميل، اتأكد من المنتج والكمية المطلوبة. لو اختار أكتر من منتج، اتأكد من كلهم.
+4. collecting_address: اطلب عنوان التوصيل بالتفصيل (الشارع، المنطقة، المحافظة).
+5. order_confirmed: لخّص الطلب الكامل (المنتجات + الكميات + الأسعار + الإجمالي + عنوان التوصيل) واطلب تأكيد العميل. لما يأكد، أنشئ الطلب.
+
+⚡ قواعد مهمة:
+- اتكلم بالمصري العامي الطبيعي مش الفصحى
+- ردود قصيرة ومركزة (2-4 جمل)
+- اذكر دايماً الأسعار والكميات المتاحة بدقة من القائمة أعلاه
+- ماتبيعش منتجات مش في القائمة أو منتهية المخزون
+- لو العميل سأل عن منتج مش موجود، قوله بلطف واعرض بديل
+- استخرج اسم العميل ورقمه لو ذكرهم في الرسالة
+
+🤖 إجراءات CRM تلقائية (botActions):
+الوقت الحالي هو: ${nowISO}
+
+1. create_order — أنشئ الطلب لما العميل يؤكد طلبه بشكل كامل (بعد جمع المنتجات والكميات والعنوان):
+   - أرجع: {
+       "type": "create_order",
+       "orderItems": [{ "productName": "اسم المنتج كما في القائمة", "quantity": الكمية, "unitPrice": سعر_الوحدة_كرقم }],
+       "deliveryAddress": "عنوان التوصيل",
+       "customerName": "اسم العميل أو null",
+       "customerPhone": "رقم العميل أو null",
+       "totalAmount": المبلغ_الإجمالي_كرقم
+     }
+   - فقط عند وجود تأكيد صريح من العميل ("أيوه"، "تمام"، "اطلب"، "كمّل")
+   - تأكد أن unitPrice هو السعر الفعلي من القائمة كرقم (مثال: 150 مش "150 جنيه")
+
+2. update_lead — حدّث بيانات العميل:
+   - الحقول المسموحة: name, email, notes
+   - مثال: العميل قال "أنا مريم" → { "type": "update_lead", "field": "name", "value": "مريم" }
+
+3. change_state — غيّر الحالة لو:
+   - العميل رفض أو غير مهتم → stateName: "غير مهتم"
+
+لو مافيش إجراءات، ارجع: "botActions": []
+
+🔄 أرجع JSON فقط بهذا الشكل:
+{
+  "reply": "نص الرد بالمصري",
+  "nextStage": "greeting | show_products | collecting_order | collecting_address | order_confirmed",
+  "extractedName": "الاسم أو null",
+  "extractedPhone": "رقم الموبايل المصري إذا ذكره أو null",
+  "extractedDeliveryAddress": "عنوان التوصيل إذا ذكره العميل أو null",
+  "extractedBudget": null,
+  "extractedUnitType": null,
+  "extractedBedrooms": null,
+  "extractedBathrooms": null,
+  "extractedLocation": null,
+  "extractedArea": null,
+  "extractedPaymentType": null,
+  "extractedDownPayment": null,
+  "extractedProject": null,
+  "extractedTimeline": null,
+  "shouldHandoff": false,
+  "botActions": []
+}`;
+
+  const userPrompt = `المرحلة الحالية: ${currentStage}
+سجل المحادثة:
+${conversationHistory}
+
+آخر رسالة من العميل: ${currentMessage}
+
+رد على العميل وأكمل مسار الطلب.`;
+
+  const raw = await callAI(systemPrompt, userPrompt, config.openAiApiKey, config.openAiModel);
+
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    return {
+      reply: "شكراً! سيتواصل معك فريقنا قريباً.",
+      nextStage: currentStage,
+      shouldHandoff: false,
+      botActions: [],
+    };
+  }
+
+  const parsed = JSON.parse(jsonMatch[0]) as ParsedBotReply;
+  const validEcommerceStages: BotStage[] = ["greeting", "show_products", "collecting_order", "collecting_address", "order_confirmed", "handed_off"];
+  const nextStage = validEcommerceStages.includes(parsed.nextStage as BotStage)
+    ? (parsed.nextStage as BotStage)
+    : currentStage;
+
+  return {
+    reply: typeof parsed.reply === "string" ? parsed.reply : "شكراً على تواصلك!",
+    nextStage,
+    extractedName: typeof parsed.extractedName === "string" ? parsed.extractedName : null,
+    extractedBudget: null,
+    extractedUnitType: null,
+    extractedBedrooms: null,
+    extractedBathrooms: null,
+    extractedLocation: null,
+    extractedArea: null,
+    extractedPaymentType: null,
+    extractedDownPayment: null,
+    extractedProject: null,
+    extractedTimeline: null,
+    extractedPhone: typeof parsed.extractedPhone === "string" ? parsed.extractedPhone : null,
+    extractedDeliveryAddress: typeof parsed.extractedDeliveryAddress === "string" ? parsed.extractedDeliveryAddress : null,
+    shouldHandoff: false,
     botActions: parseBotActions(parsed.botActions),
   };
 }
@@ -581,6 +823,24 @@ function parseBotActions(raw: unknown): BotAction[] {
       if (typeof field === "string" && (ALLOWED_LEAD_FIELDS as readonly string[]).includes(field)) {
         result.push({ type: "update_lead", field: field as AllowedLeadField, value: value as string | number | null });
       }
+    } else if (type === "create_order") {
+      const rawItems = Array.isArray(obj["orderItems"]) ? obj["orderItems"] : [];
+      const orderItems: OrderItem[] = rawItems
+        .filter((i): i is Record<string, unknown> => i !== null && typeof i === "object")
+        .map(i => ({
+          productId: typeof i["productId"] === "string" ? i["productId"] : undefined,
+          productName: typeof i["productName"] === "string" ? i["productName"] : (typeof i["name"] === "string" ? i["name"] : "منتج"),
+          quantity: typeof i["quantity"] === "number" && i["quantity"] > 0 ? Math.round(i["quantity"]) : 1,
+          unitPrice: typeof i["unitPrice"] === "number" && i["unitPrice"] >= 0 ? i["unitPrice"] : (typeof i["price"] === "number" ? i["price"] : 0),
+        }))
+        .filter(i => i.productName && i.quantity > 0);
+      if (orderItems.length === 0) continue;
+      const deliveryAddress = typeof obj["deliveryAddress"] === "string" ? obj["deliveryAddress"] : undefined;
+      const customerName = typeof obj["customerName"] === "string" ? obj["customerName"] : undefined;
+      const customerPhone = typeof obj["customerPhone"] === "string" ? obj["customerPhone"] : undefined;
+      const totalAmount = typeof obj["totalAmount"] === "number" ? obj["totalAmount"] :
+        orderItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+      result.push({ type: "create_order", orderItems, deliveryAddress, customerName, customerPhone, totalAmount });
     }
   }
   return result;

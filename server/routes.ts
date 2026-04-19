@@ -3811,13 +3811,40 @@ ${pages.map(p => `  <url>
     try {
       const userId = req.user!.id;
       const settings = await storage.getChatbotSettings(userId);
-      res.json(settings ?? {
+      if (settings) {
+        res.json(settings);
+        return;
+      }
+      // No settings row yet — return business-type-aware defaults
+      const companyId = req.user!.companyId;
+      let businessType = "service";
+      if (companyId) {
+        try {
+          const { db: _csDb } = await import("./db");
+          const { companies: _csCompanies } = await import("@shared/schema");
+          const { eq: _csEq } = await import("drizzle-orm");
+          const _csRows = await _csDb.select({ businessType: _csCompanies.businessType }).from(_csCompanies).where(_csEq(_csCompanies.id, companyId));
+          if (_csRows[0]?.businessType) businessType = _csRows[0].businessType;
+        } catch { /* ignore */ }
+      }
+      const isEcommerce = businessType === "ecommerce";
+      res.json({
         userId,
         isActive: false,
-        chatGoal: "lead_qualified",
+        chatGoal: isEcommerce ? "order_placement" : "lead_qualified",
+        botName: isEcommerce ? "مساعد المتجر" : "المساعد الذكي",
+        companyName: isEcommerce ? "متجرنا" : "شركتنا",
+        botRole: isEcommerce ? "مساعد متجر" : "مستشار مبيعات",
+        botPersonality: "",
+        botMission: "",
+        companyKnowledge: "",
+        welcomeMessage: isEcommerce
+          ? "أهلاً! 👋 أنا مساعد متجرنا الذكي. يسعدني أساعدك تلاقي اللي تدور عليه. ممكن تعرفني باسمك الكريم؟"
+          : "أهلاً! 👋 أنا المساعد الذكي لشركتنا. يسعدني مساعدتك. ممكن تعرفني باسمك الكريم؟",
         workingHoursStart: 9,
         workingHoursEnd: 18,
-        welcomeMessage: "أهلاً! 👋 أنا المساعد الذكي لشركتنا العقارية. يسعدني مساعدتك. ممكن تعرفني باسمك الكريم؟",
+        respondAlways: false,
+        enabledProjectIds: null,
       });
     } catch (error) {
       console.error("Error fetching chatbot settings:", error);
@@ -4051,6 +4078,22 @@ ${pages.map(p => `  <url>
               const allUnits = await storage.getAllUnits(handlerCompanyId);
               const kbItems = await storage.getAllKnowledgeBaseItems(handlerCompanyId);
 
+              // Fetch company businessType for mode-aware bot
+              let waCompanyBusinessType = "service";
+              let waCompanyProducts: import("@shared/schema").Product[] = [];
+              if (handlerCompanyId) {
+                try {
+                  const { db: _waDb } = await import("./db");
+                  const { companies: _waCompanies } = await import("@shared/schema");
+                  const { eq: _waEq } = await import("drizzle-orm");
+                  const _waRows = await _waDb.select({ businessType: _waCompanies.businessType }).from(_waCompanies).where(_waEq(_waCompanies.id, handlerCompanyId));
+                  if (_waRows[0]?.businessType) waCompanyBusinessType = _waRows[0].businessType;
+                  if (waCompanyBusinessType === "ecommerce") {
+                    waCompanyProducts = await storage.getAllProducts(handlerCompanyId);
+                  }
+                } catch (_e) { /* ignore */ }
+              }
+
               const botResult = await generateBotReply(
                 msg.messageText,
                 currentStage,
@@ -4067,9 +4110,12 @@ ${pages.map(p => `  <url>
                   companyKnowledge: (botSettings as Record<string, unknown>)?.companyKnowledge as string | undefined,
                   welcomeMessage: botSettings?.welcomeMessage ?? undefined,
                   enabledProjectIds: (botSettings as Record<string, unknown>)?.enabledProjectIds as string[] | null | undefined,
+                  businessType: waCompanyBusinessType,
+                  chatGoal: (botSettings as Record<string, unknown>)?.chatGoal as string | undefined,
                 },
                 isFirstBotInteraction,
                 kbItems,
+                waCompanyProducts,
               );
 
               const leadUpdates: Partial<Lead> = {
@@ -4221,6 +4267,26 @@ ${pages.map(p => `  <url>
                           (leadUpdates as Record<string, unknown>)[dbField] = action.value;
                           botActionsSummaryParts.push(`تحديث ${action.field}: ${action.value}`);
                           console.log(`[BotAction] update_lead: ${action.field}=${action.value} for lead ${lead.id}`);
+                        }
+                      } else if (action.type === "create_order" && action.orderItems && action.orderItems.length > 0) {
+                        try {
+                          const orderData = {
+                            companyId: handlerCompanyId,
+                            leadId: lead.id,
+                            customerName: action.customerName || leadUpdates.name || lead.name || null,
+                            customerPhone: action.customerPhone || lead.phone || null,
+                            items: action.orderItems,
+                            totalAmount: action.totalAmount ?? action.orderItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0),
+                            status: "new" as const,
+                            deliveryAddress: action.deliveryAddress || botResult.extractedDeliveryAddress || null,
+                            notes: null,
+                          };
+                          const createdOrder = await storage.createOrder(orderData, handlerCompanyId);
+                          botActionsSummaryParts.push(`طلب جديد #${createdOrder.id.substring(0, 8)} — ${action.totalAmount} جنيه`);
+                          await storage.createNotification({ userId: notifTargetForActions, type: "bot_action", message: `🛒 البوت أنشأ طلب جديد — ${leadDisplayNameForActions}`, leadId: lead.id, isRead: false });
+                          console.log(`[BotAction] create_order: order ${createdOrder.id} for lead ${lead.id}`);
+                        } catch (orderErr) {
+                          console.error(`[BotAction] create_order error:`, orderErr);
                         }
                       }
                     } catch (actionErr) {
@@ -4770,6 +4836,24 @@ ${pages.map(p => `  <url>
                 })) as unknown as import("@shared/schema").WhatsappMessagesLog[];
 
                 const integSettings = await storage.getIntegrationSettings(metaCompanyId).catch(() => null);
+
+                // Fetch company businessType for mode-aware bot
+                let metaBotBusinessType = "service";
+                let metaBotProducts: import("@shared/schema").Product[] = [];
+                if (metaCompanyId) {
+                  try {
+                    const { db: _metaDb } = await import("./db");
+                    const { companies: _metaCompanies } = await import("@shared/schema");
+                    const { eq: _metaEq } = await import("drizzle-orm");
+                    const _metaRows = await _metaDb.select({ businessType: _metaCompanies.businessType }).from(_metaCompanies).where(_metaEq(_metaCompanies.id, metaCompanyId));
+                    if (_metaRows[0]?.businessType) metaBotBusinessType = _metaRows[0].businessType;
+                    if (metaBotBusinessType === "ecommerce") {
+                      metaBotProducts = await storage.getAllProducts(metaCompanyId);
+                    }
+                  } catch (_e) { /* ignore */ }
+                }
+                const metaKbItems = await storage.getAllKnowledgeBaseItems(metaCompanyId).catch(() => []);
+
                 const botResult = await generateBotReply(
                   msg.messageText,
                   currentStage,
@@ -4788,8 +4872,12 @@ ${pages.map(p => `  <url>
                     enabledProjectIds: botSettings?.enabledProjectIds ?? undefined,
                     openAiApiKey: integSettings?.openAiApiKey ?? undefined,
                     openAiModel: integSettings?.openAiModel ?? undefined,
+                    businessType: metaBotBusinessType,
+                    chatGoal: botSettings?.chatGoal ?? undefined,
                   },
-                  isFirstBotInteraction
+                  isFirstBotInteraction,
+                  metaKbItems,
+                  metaBotProducts,
                 );
 
                 const leadUpdates: Partial<Lead> = { botStage: botResult.nextStage };
@@ -4850,6 +4938,28 @@ ${pages.map(p => `  <url>
                           (leadUpdates as Record<string, unknown>)[dbField] = action.value;
                           botActionsSummaryParts.push(`تحديث ${action.field}: ${action.value}`);
                           console.log(`[MetaBot] update_lead: ${action.field}=${action.value} for lead ${lead.id}`);
+                        }
+                      } else if (action.type === "create_order" && action.orderItems && action.orderItems.length > 0) {
+                        try {
+                          const orderData = {
+                            companyId: metaCompanyId,
+                            leadId: lead.id,
+                            customerName: action.customerName || leadUpdates.name || lead.name || null,
+                            customerPhone: action.customerPhone || lead.phone || null,
+                            items: action.orderItems,
+                            totalAmount: action.totalAmount ?? action.orderItems.reduce((s: number, i: { unitPrice: number; quantity: number }) => s + i.unitPrice * i.quantity, 0),
+                            status: "new" as const,
+                            deliveryAddress: action.deliveryAddress || botResult.extractedDeliveryAddress || null,
+                            notes: null,
+                          };
+                          const createdOrder = await storage.createOrder(orderData, metaCompanyId);
+                          const notifTarget = lead.assignedTo || assignedUserId;
+                          const leadDisplayName = leadUpdates.name || lead.name || msg.senderId;
+                          botActionsSummaryParts.push(`طلب جديد #${createdOrder.id.substring(0, 8)} — ${action.totalAmount} جنيه`);
+                          await storage.createNotification({ userId: notifTarget, type: "bot_action", message: `🛒 البوت أنشأ طلب جديد — ${leadDisplayName}`, leadId: lead.id, isRead: false });
+                          console.log(`[MetaBot] create_order: order ${createdOrder.id} for lead ${lead.id}`);
+                        } catch (orderErr) {
+                          console.error(`[MetaBot] create_order error:`, orderErr);
                         }
                       }
                     } catch (actionErr) {
@@ -5534,6 +5644,23 @@ ${pages.map(p => `  <url>
           const allUnits = await storage.getAllUnits(cloudCompanyId);
           const priorMessages = await storage.getWhatsappConversation(lead.id);
           const isFirstBotInteraction = priorMessages.filter(m => m.direction === "outbound" && m.agentName === "البوت").length === 0;
+          const cloudKbItems = await storage.getAllKnowledgeBaseItems(cloudCompanyId).catch(() => []);
+
+          // Fetch company businessType for mode-aware bot
+          let cloudBotBusinessType = "service";
+          let cloudBotProducts: import("@shared/schema").Product[] = [];
+          if (cloudCompanyId) {
+            try {
+              const { db: _cloudDb } = await import("./db");
+              const { companies: _cloudCompanies } = await import("@shared/schema");
+              const { eq: _cloudEq } = await import("drizzle-orm");
+              const _cloudRows = await _cloudDb.select({ businessType: _cloudCompanies.businessType }).from(_cloudCompanies).where(_cloudEq(_cloudCompanies.id, cloudCompanyId));
+              if (_cloudRows[0]?.businessType) cloudBotBusinessType = _cloudRows[0].businessType;
+              if (cloudBotBusinessType === "ecommerce") {
+                cloudBotProducts = await storage.getAllProducts(cloudCompanyId);
+              }
+            } catch (_e) { /* ignore */ }
+          }
 
           const botResult = await generateBotReply(
             msg.messageText,
@@ -5553,8 +5680,12 @@ ${pages.map(p => `  <url>
               enabledProjectIds: botSettings?.enabledProjectIds ?? undefined,
               openAiApiKey: settings.openAiApiKey ?? undefined,
               openAiModel: settings.openAiModel ?? undefined,
+              businessType: cloudBotBusinessType,
+              chatGoal: botSettings?.chatGoal ?? undefined,
             },
-            isFirstBotInteraction
+            isFirstBotInteraction,
+            cloudKbItems,
+            cloudBotProducts,
           );
 
           const leadUpdates: Partial<Lead> = { botStage: botResult.nextStage };
@@ -5612,6 +5743,28 @@ ${pages.map(p => `  <url>
                     (leadUpdates as Record<string, unknown>)[dbField] = action.value;
                     botActionsSummaryParts.push(`تحديث ${action.field}: ${action.value}`);
                     console.log(`[WhatsAppCloudBot] update_lead: ${action.field}=${action.value} for lead ${lead.id}`);
+                  }
+                } else if (action.type === "create_order" && action.orderItems && action.orderItems.length > 0) {
+                  try {
+                    const orderData = {
+                      companyId: cloudCompanyId,
+                      leadId: lead.id,
+                      customerName: action.customerName || leadUpdates.name || lead.name || null,
+                      customerPhone: action.customerPhone || lead.phone || msg.phone || null,
+                      items: action.orderItems,
+                      totalAmount: action.totalAmount ?? action.orderItems.reduce((s: number, i: { unitPrice: number; quantity: number }) => s + i.unitPrice * i.quantity, 0),
+                      status: "new" as const,
+                      deliveryAddress: action.deliveryAddress || botResult.extractedDeliveryAddress || null,
+                      notes: null,
+                    };
+                    const createdOrder = await storage.createOrder(orderData, cloudCompanyId);
+                    const notifTarget = lead.assignedTo || settingsUserId;
+                    const leadDisplayName = leadUpdates.name || lead.name || msg.phone;
+                    botActionsSummaryParts.push(`طلب جديد #${createdOrder.id.substring(0, 8)} — ${action.totalAmount} جنيه`);
+                    await storage.createNotification({ userId: notifTarget, type: "bot_action", message: `🛒 البوت أنشأ طلب جديد — ${leadDisplayName}`, leadId: lead.id, isRead: false });
+                    console.log(`[WhatsAppCloudBot] create_order: order ${createdOrder.id} for lead ${lead.id}`);
+                  } catch (orderErr) {
+                    console.error(`[WhatsAppCloudBot] create_order error:`, orderErr);
                   }
                 }
               } catch (actionErr) {
