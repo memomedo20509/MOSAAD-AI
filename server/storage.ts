@@ -2640,20 +2640,33 @@ export class DatabaseStorage implements IStorage {
   }
 
   async markSocialMessagesRead(leadId: string, platform: string): Promise<void> {
-    await db
-      .update(socialMessagesLog)
-      .set({ isRead: true })
-      .where(
-        and(
-          eq(socialMessagesLog.leadId, leadId),
-          eq(socialMessagesLog.platform, platform),
-          or(
-            eq(socialMessagesLog.direction, "inbound"),
-            eq(socialMessagesLog.direction, "comment_reply")
-          ),
-          eq(socialMessagesLog.isRead, false)
-        )
-      );
+    if (platform === "facebook_comment") {
+      await db
+        .update(socialMessagesLog)
+        .set({ isRead: true })
+        .where(
+          and(
+            eq(socialMessagesLog.leadId, leadId),
+            eq(socialMessagesLog.direction, "comment_reply"),
+            eq(socialMessagesLog.isRead, false)
+          )
+        );
+    } else {
+      await db
+        .update(socialMessagesLog)
+        .set({ isRead: true })
+        .where(
+          and(
+            eq(socialMessagesLog.leadId, leadId),
+            eq(socialMessagesLog.platform, platform),
+            or(
+              eq(socialMessagesLog.direction, "inbound"),
+              eq(socialMessagesLog.direction, "comment_reply")
+            ),
+            eq(socialMessagesLog.isRead, false)
+          )
+        );
+    }
   }
 
   async getUnreadSocialCount(userId: string, userRole: string, teamId?: string | null, companyId?: string | null): Promise<number> {

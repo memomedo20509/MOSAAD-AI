@@ -279,11 +279,7 @@ export default function ConversationsPage() {
     }
     const socialPlatforms = new Set<string>();
     for (const p of conv.platforms) {
-      if (p === "messenger" || p === "instagram") socialPlatforms.add(p);
-      if (p === "facebook_comment") {
-        socialPlatforms.add("messenger");
-        socialPlatforms.add("instagram");
-      }
+      if (p === "messenger" || p === "instagram" || p === "facebook_comment") socialPlatforms.add(p);
     }
     for (const p of socialPlatforms) {
       apiRequest("POST", `/api/leads/${conv.leadId}/social-messages/read`, { platform: p }).catch(() => {});
