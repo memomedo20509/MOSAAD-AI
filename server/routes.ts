@@ -5409,7 +5409,8 @@ ${pages.map(p => `  <url>
       const userRole = (req.user as any)?.role ?? "sales_agent";
       const teamId = (req.user as any)?.teamId ?? null;
       const companyId = getCompanyId(req);
-      const conversations = await storage.getUnifiedConversations(userId, userRole, teamId, companyId);
+      const search = typeof req.query.search === "string" ? req.query.search : null;
+      const conversations = await storage.getUnifiedConversations(userId, userRole, teamId, companyId, search);
       res.json(conversations);
     } catch (error) {
       console.error("Unified conversations error:", error);

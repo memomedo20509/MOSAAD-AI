@@ -32,6 +32,7 @@ interface UnifiedConversation {
   unreadCount: number;
   totalCount: number;
   unreadByPlatform: Record<string, number>;
+  matchedMessage: string | null;
 }
 
 interface UnifiedMessage {
@@ -114,6 +115,17 @@ function getReplyablePlatforms(platforms: string[]) {
   return platforms.filter(p => REPLY_PLATFORMS.includes(p));
 }
 
+function highlightText(text: string, term: string): React.ReactNode {
+  if (!term.trim()) return text;
+  const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
+  const parts = text.split(regex);
+  return parts.map((part, i) =>
+    regex.test(part)
+      ? <mark key={i} className="bg-yellow-200 dark:bg-yellow-700 text-foreground rounded px-0.5">{part}</mark>
+      : part
+  );
+}
+
 export default function ConversationsPage() {
   const { toast } = useToast();
   const [activePlatform, setActivePlatform] = useState<FilterPlatform>("all");
@@ -123,14 +135,31 @@ export default function ConversationsPage() {
   const [replyText, setReplyText] = useState("");
   const [replyPlatform, setReplyPlatform] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showReminderDialog, setShowReminderDialog] = useState(false);
   const [reminderTitle, setReminderTitle] = useState("");
   const [reminderDate, setReminderDate] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => setDebouncedSearch(value), 400);
+  };
+
+  const searchParams = debouncedSearch.trim()
+    ? `?search=${encodeURIComponent(debouncedSearch.trim())}`
+    : "";
 
   const { data: conversations = [], isLoading } = useQuery<UnifiedConversation[]>({
-    queryKey: ["/api/conversations"],
-    refetchInterval: 15000,
+    queryKey: ["/api/conversations", debouncedSearch],
+    queryFn: async () => {
+      const res = await fetch(`/api/conversations${searchParams}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+    refetchInterval: debouncedSearch.trim() ? false : 15000,
   });
 
   const selectedConv = conversations.find(c => c.leadId === selectedLeadId) ?? null;
@@ -282,9 +311,7 @@ export default function ConversationsPage() {
       const matchById = users.find(u => u.username === filterAgent)?.id === c.assignedTo;
       if (!matchByUsername && !matchById) return false;
     }
-    if (!searchTerm) return true;
-    const s = searchTerm.toLowerCase();
-    return (c.leadName?.toLowerCase().includes(s)) || (c.lastMessage?.toLowerCase().includes(s));
+    return true;
   });
 
   const tabs: { key: FilterPlatform; label: string }[] = [
@@ -350,9 +377,9 @@ export default function ConversationsPage() {
         <div className="w-80 shrink-0 border-r flex flex-col overflow-hidden bg-muted/20">
           <div className="p-2 border-b space-y-2">
             <Input
-              placeholder="بحث بالاسم أو الرسالة..."
+              placeholder="بحث في كل الرسائل..."
               value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
+              onChange={e => handleSearchChange(e.target.value)}
               data-testid="input-search-conversations"
               className="h-8 text-sm"
             />
@@ -421,8 +448,10 @@ export default function ConversationsPage() {
                           {conv.lastMessageAt ? format(new Date(conv.lastMessageAt), "HH:mm") : ""}
                         </span>
                       </div>
-                      <p className="text-xs text-muted-foreground truncate mt-0.5">
-                        {conv.lastMessage ?? "لا توجد رسائل"}
+                      <p className="text-xs text-muted-foreground truncate mt-0.5" data-testid={`conv-preview-${conv.leadId}`}>
+                        {debouncedSearch.trim() && conv.matchedMessage
+                          ? highlightText(conv.matchedMessage, debouncedSearch)
+                          : (conv.lastMessage ?? "لا توجد رسائل")}
                       </p>
                       <div className="flex items-center gap-1 mt-1 flex-wrap">
                         {conv.platforms.map(p => (
@@ -555,10 +584,17 @@ export default function ConversationsPage() {
                                   ? "bg-muted text-foreground"
                                   : isBot
                                   ? "bg-primary text-primary-foreground"
-                                  : "bg-orange-500 text-white"
+                                  : "bg-orange-500 text-white",
+                                debouncedSearch.trim() && msg.messageText?.toLowerCase().includes(debouncedSearch.trim().toLowerCase())
+                                  ? "ring-2 ring-yellow-400 dark:ring-yellow-500"
+                                  : ""
                               )}
                             >
-                              <p className="whitespace-pre-wrap break-words">{msg.messageText}</p>
+                              <p className="whitespace-pre-wrap break-words">
+                                {debouncedSearch.trim() && msg.messageText
+                                  ? highlightText(msg.messageText, debouncedSearch)
+                                  : msg.messageText}
+                              </p>
                               {msg.botActionsSummary && (
                                 <p className="text-xs mt-1 opacity-70 border-t border-white/20 pt-1">
                                   {msg.botActionsSummary}

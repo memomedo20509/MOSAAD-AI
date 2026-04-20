@@ -459,7 +459,7 @@ export interface IStorage {
   }[]>;
 
   // Unified Conversations (merged WA + Social)
-  getUnifiedConversations(userId: string, userRole: string, teamId?: string | null, companyId?: string | null): Promise<{
+  getUnifiedConversations(userId: string, userRole: string, teamId?: string | null, companyId?: string | null, search?: string | null): Promise<{
     leadId: string;
     leadName: string | null;
     assignedTo: string | null;
@@ -470,6 +470,7 @@ export interface IStorage {
     unreadCount: number;
     totalCount: number;
     unreadByPlatform: Record<string, number>;
+    matchedMessage: string | null;
   }[]>;
   getUnifiedThreadMessages(leadId: string): Promise<{
     id: string;
@@ -2741,7 +2742,7 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getUnifiedConversations(userId: string, userRole: string, teamId?: string | null, companyId?: string | null): Promise<{
+  async getUnifiedConversations(userId: string, userRole: string, teamId?: string | null, companyId?: string | null, search?: string | null): Promise<{
     leadId: string;
     leadName: string | null;
     assignedTo: string | null;
@@ -2752,6 +2753,7 @@ export class DatabaseStorage implements IStorage {
     unreadCount: number;
     totalCount: number;
     unreadByPlatform: Record<string, number>;
+    matchedMessage: string | null;
   }[]> {
     const accessibleLeads = await this.getLeadsByRole(userId, userRole, teamId ?? null, null, companyId);
     if (accessibleLeads.length === 0) return [];
@@ -2759,6 +2761,18 @@ export class DatabaseStorage implements IStorage {
     const accessibleLeadIds = accessibleLeads.map(l => l.id);
     const leadMap = new Map(accessibleLeads.map(l => [l.id, l]));
     const placeholders = accessibleLeadIds.map((_, i) => `$${i + 1}`).join(", ");
+
+    const hasSearch = search && search.trim().length > 0;
+    const params: any[] = [...accessibleLeadIds];
+    let havingClause = "";
+    let matchedMessageExpr = "NULL::text";
+
+    if (hasSearch) {
+      const searchParam = `$${accessibleLeadIds.length + 1}`;
+      params.push(`%${search!.trim()}%`);
+      havingClause = `HAVING bool_or(message_text ILIKE ${searchParam})`;
+      matchedMessageExpr = `(ARRAY_AGG(message_text ORDER BY created_at DESC) FILTER (WHERE message_text ILIKE ${searchParam}))[1]`;
+    }
 
     const { rows } = await pool.query(`
       WITH combined AS (
@@ -2786,6 +2800,7 @@ export class DatabaseStorage implements IStorage {
         lead_id AS "leadId",
         MAX(created_at) AS "lastMessageAt",
         (ARRAY_AGG(message_text ORDER BY created_at DESC))[1] AS "lastMessage",
+        ${matchedMessageExpr} AS "matchedMessage",
         COUNT(*)::int AS "totalCount",
         COUNT(*) FILTER (WHERE direction IN ('inbound','comment_reply') AND is_read = false)::int AS "unreadCount",
         ARRAY_AGG(DISTINCT platform) AS platforms,
@@ -2795,10 +2810,11 @@ export class DatabaseStorage implements IStorage {
         COUNT(*) FILTER (WHERE platform = 'facebook_comment' AND is_read = false)::int AS "unreadFbComment"
       FROM combined
       GROUP BY lead_id
+      ${havingClause}
       ORDER BY MAX(created_at) DESC
-    `, accessibleLeadIds);
+    `, params);
 
-    return rows.map((row: any) => {
+    let results = rows.map((row: any) => {
       const lead = leadMap.get(row.leadId);
       const unreadByPlatform: Record<string, number> = {
         whatsapp: row.unreadWhatsapp ?? 0,
@@ -2817,8 +2833,39 @@ export class DatabaseStorage implements IStorage {
         unreadCount: row.unreadCount ?? 0,
         totalCount: row.totalCount ?? 0,
         unreadByPlatform,
+        matchedMessage: row.matchedMessage ?? null,
       };
     });
+
+    if (hasSearch) {
+      const s = search!.trim().toLowerCase();
+      const nameMatches = accessibleLeads
+        .filter(l => l.name && l.name.toLowerCase().includes(s))
+        .map(l => l.id);
+      const resultIds = new Set(results.map(r => r.leadId));
+      for (const leadId of nameMatches) {
+        if (!resultIds.has(leadId)) {
+          const lead = leadMap.get(leadId);
+          if (lead) {
+            results.push({
+              leadId,
+              leadName: lead.name ?? null,
+              assignedTo: lead.assignedTo ?? null,
+              score: lead.score ?? null,
+              platforms: [],
+              lastMessage: null,
+              lastMessageAt: null,
+              unreadCount: 0,
+              totalCount: 0,
+              unreadByPlatform: { whatsapp: 0, messenger: 0, instagram: 0, facebook_comment: 0 },
+              matchedMessage: null,
+            });
+          }
+        }
+      }
+    }
+
+    return results;
   }
 
   async getUnifiedThreadMessages(leadId: string): Promise<{
