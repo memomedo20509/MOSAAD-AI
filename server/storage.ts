@@ -1,5 +1,5 @@
 import { db, pool } from "./db";
-import { eq, and, or, ne, isNotNull, isNull, lt, gte, lte, sql, ilike, desc, count, asc } from "drizzle-orm";
+import { eq, and, or, ne, isNotNull, isNull, lt, gte, lte, sql, ilike, desc, count, asc, inArray } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { computeScore, getScoringConfig, type ScoringContext } from "./scoring";
@@ -370,6 +370,7 @@ export interface IStorage {
     totalCount: number;
   }[]>;
   markWhatsappMessagesRead(leadId: string): Promise<void>;
+  bulkMarkConversationsRead(leadIds: string[], isRead: boolean): Promise<void>;
   getUnreadWhatsappCount(userId: string, userRole: string, teamId?: string | null): Promise<number>;
 
   // Lead Manager Comments
@@ -2138,6 +2139,27 @@ export class DatabaseStorage implements IStorage {
       .update(whatsappMessagesLog)
       .set({ isRead: true })
       .where(and(eq(whatsappMessagesLog.leadId, leadId), eq(whatsappMessagesLog.direction, "inbound")));
+  }
+
+  async bulkMarkConversationsRead(leadIds: string[], isRead: boolean): Promise<void> {
+    if (leadIds.length === 0) return;
+    await db
+      .update(whatsappMessagesLog)
+      .set({ isRead })
+      .where(and(
+        inArray(whatsappMessagesLog.leadId, leadIds),
+        eq(whatsappMessagesLog.direction, "inbound")
+      ));
+    await db
+      .update(socialMessagesLog)
+      .set({ isRead })
+      .where(and(
+        inArray(socialMessagesLog.leadId, leadIds),
+        or(
+          eq(socialMessagesLog.direction, "inbound"),
+          eq(socialMessagesLog.direction, "comment_reply")
+        )
+      ));
   }
 
   async getUnreadWhatsappCount(userId: string, userRole: string, teamId?: string | null): Promise<number> {

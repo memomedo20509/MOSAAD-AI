@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import {
   MessageSquare, Send, Phone, User, Bot, UserCheck, ExternalLink,
-  Bell, Filter
+  Bell, Filter, CheckCheck, CheckSquare, Square, BookOpen, BookMarked
 } from "lucide-react";
 import { SiFacebook, SiInstagram, SiWhatsapp } from "react-icons/si";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -139,6 +139,7 @@ export default function ConversationsPage() {
   const [showReminderDialog, setShowReminderDialog] = useState(false);
   const [reminderTitle, setReminderTitle] = useState("");
   const [reminderDate, setReminderDate] = useState("");
+  const [selectedConvIds, setSelectedConvIds] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -189,6 +190,10 @@ export default function ConversationsPage() {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages]);
+
+  useEffect(() => {
+    setSelectedConvIds(new Set());
+  }, [activePlatform, filterRead, filterAgent, debouncedSearch]);
 
   useEffect(() => {
     if (selectedConv) {
@@ -262,6 +267,47 @@ export default function ConversationsPage() {
     onError: () => toast({ title: "فشل إضافة التذكير", variant: "destructive" }),
   });
 
+  const bulkMarkMutation = useMutation({
+    mutationFn: ({ leadIds, isRead }: { leadIds: string[]; isRead: boolean }) =>
+      apiRequest("POST", "/api/conversations/bulk-mark", { leadIds, isRead }),
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      setSelectedConvIds(new Set());
+      toast({ title: vars.isRead ? "تم تحديد المحادثات كمقروءة" : "تم تحديد المحادثات كغير مقروءة" });
+    },
+    onError: () => toast({ title: "فشل تنفيذ العملية", variant: "destructive" }),
+  });
+
+  const handleMarkAllRead = () => {
+    const unreadIds = filtered.filter(c => c.unreadCount > 0).map(c => c.leadId);
+    if (unreadIds.length === 0) return;
+    bulkMarkMutation.mutate({ leadIds: unreadIds, isRead: true });
+  };
+
+  const handleBulkMark = (isRead: boolean) => {
+    const ids = Array.from(selectedConvIds);
+    if (ids.length === 0) return;
+    bulkMarkMutation.mutate({ leadIds: ids, isRead });
+  };
+
+  const toggleConvSelection = (e: React.MouseEvent, leadId: string) => {
+    e.stopPropagation();
+    setSelectedConvIds(prev => {
+      const next = new Set(prev);
+      if (next.has(leadId)) next.delete(leadId);
+      else next.add(leadId);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedConvIds.size === filtered.length) {
+      setSelectedConvIds(new Set());
+    } else {
+      setSelectedConvIds(new Set(filtered.map(c => c.leadId)));
+    }
+  };
+
   const handleSend = () => {
     if (!selectedLeadId || !replyText.trim() || !replyPlatform) return;
     if (replyPlatform === "whatsapp") {
@@ -334,6 +380,17 @@ export default function ConversationsPage() {
           <h1 className="text-2xl font-semibold tracking-tight">صندوق المحادثات</h1>
           <p className="text-muted-foreground text-sm">جميع المحادثات عبر واتساب وماسنجر وإنستجرام والتعليقات</p>
         </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5 text-xs"
+          onClick={handleMarkAllRead}
+          disabled={bulkMarkMutation.isPending || filtered.every(c => c.unreadCount === 0)}
+          data-testid="button-mark-all-read"
+        >
+          <CheckCheck className="h-3.5 w-3.5" />
+          تحديد الكل كمقروء
+        </Button>
       </div>
 
       <div className="flex gap-1 mb-3 border-b overflow-x-auto shrink-0">
@@ -405,6 +462,43 @@ export default function ConversationsPage() {
                 </SelectContent>
               </Select>
             </div>
+            {selectedConvIds.size > 0 && (
+              <div className="flex items-center gap-1 pt-0.5" data-testid="bulk-action-bar">
+                <button
+                  onClick={toggleSelectAll}
+                  className="p-1 text-muted-foreground hover:text-foreground"
+                  data-testid="button-toggle-select-all"
+                  title="تحديد/إلغاء الكل"
+                >
+                  {selectedConvIds.size === filtered.length
+                    ? <CheckSquare className="h-4 w-4 text-primary" />
+                    : <Square className="h-4 w-4" />}
+                </button>
+                <span className="text-xs text-muted-foreground flex-1">{selectedConvIds.size} محادثة</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-6 text-xs gap-1 px-2"
+                  onClick={() => handleBulkMark(true)}
+                  disabled={bulkMarkMutation.isPending}
+                  data-testid="button-bulk-mark-read"
+                >
+                  <BookOpen className="h-3 w-3" />
+                  مقروء
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-6 text-xs gap-1 px-2"
+                  onClick={() => handleBulkMark(false)}
+                  disabled={bulkMarkMutation.isPending}
+                  data-testid="button-bulk-mark-unread"
+                >
+                  <BookMarked className="h-3 w-3" />
+                  غير مقروء
+                </Button>
+              </div>
+            )}
           </div>
 
           {isLoading ? (
@@ -418,49 +512,67 @@ export default function ConversationsPage() {
             </div>
           ) : (
             <div className="overflow-y-auto flex-1">
-              {filtered.map(conv => (
-                <button
-                  key={conv.leadId}
-                  onClick={() => handleSelectConv(conv)}
-                  data-testid={`conv-item-${conv.leadId}`}
-                  className={cn(
-                    "w-full text-start px-3 py-3 border-b hover:bg-muted/50 transition-colors",
-                    selectedLeadId === conv.leadId && "bg-muted"
-                  )}
-                >
-                  <div className="flex items-start gap-2">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 shrink-0 mt-0.5 relative">
-                      <User className="h-4 w-4 text-primary" />
-                      {conv.unreadCount > 0 && (
-                        <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
-                          {conv.unreadCount > 9 ? "9+" : conv.unreadCount}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="font-medium text-sm truncate">{conv.leadName || "عميل غير معروف"}</span>
-                        <span className="text-xs text-muted-foreground shrink-0">
-                          {conv.lastMessageAt ? format(new Date(conv.lastMessageAt), "HH:mm") : ""}
-                        </span>
+              {filtered.map(conv => {
+                const isChecked = selectedConvIds.has(conv.leadId);
+                return (
+                  <div
+                    key={conv.leadId}
+                    data-testid={`conv-item-${conv.leadId}`}
+                    className={cn(
+                      "flex items-stretch border-b hover:bg-muted/50 transition-colors group",
+                      selectedLeadId === conv.leadId && "bg-muted",
+                      isChecked && "bg-primary/5"
+                    )}
+                  >
+                    <button
+                      onClick={e => toggleConvSelection(e, conv.leadId)}
+                      data-testid={`checkbox-conv-${conv.leadId}`}
+                      className="flex items-center justify-center px-2 shrink-0 text-muted-foreground hover:text-primary"
+                      title="تحديد"
+                    >
+                      {isChecked
+                        ? <CheckSquare className="h-4 w-4 text-primary" />
+                        : <Square className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                    </button>
+                    <button
+                      onClick={() => handleSelectConv(conv)}
+                      className="flex-1 text-start px-2 py-3 min-w-0"
+                    >
+                      <div className="flex items-start gap-2">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 shrink-0 mt-0.5 relative">
+                          <User className="h-4 w-4 text-primary" />
+                          {conv.unreadCount > 0 && (
+                            <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
+                              {conv.unreadCount > 9 ? "9+" : conv.unreadCount}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-medium text-sm truncate">{conv.leadName || "عميل غير معروف"}</span>
+                            <span className="text-xs text-muted-foreground shrink-0">
+                              {conv.lastMessageAt ? format(new Date(conv.lastMessageAt), "HH:mm") : ""}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5" data-testid={`conv-preview-${conv.leadId}`}>
+                            {debouncedSearch.trim() && conv.matchedMessage
+                              ? highlightText(conv.matchedMessage, debouncedSearch)
+                              : (conv.lastMessage ?? "لا توجد رسائل")}
+                          </p>
+                          <div className="flex items-center gap-1 mt-1 flex-wrap">
+                            {conv.platforms.map(p => (
+                              <span key={p} title={PLATFORM_LABEL[p] ?? p}>
+                                {PLATFORM_ICON[p]}
+                              </span>
+                            ))}
+                            {conv.score && <ScoreBadge score={conv.score} />}
+                          </div>
+                        </div>
                       </div>
-                      <p className="text-xs text-muted-foreground truncate mt-0.5" data-testid={`conv-preview-${conv.leadId}`}>
-                        {debouncedSearch.trim() && conv.matchedMessage
-                          ? highlightText(conv.matchedMessage, debouncedSearch)
-                          : (conv.lastMessage ?? "لا توجد رسائل")}
-                      </p>
-                      <div className="flex items-center gap-1 mt-1 flex-wrap">
-                        {conv.platforms.map(p => (
-                          <span key={p} title={PLATFORM_LABEL[p] ?? p}>
-                            {PLATFORM_ICON[p]}
-                          </span>
-                        ))}
-                        {conv.score && <ScoreBadge score={conv.score} />}
-                      </div>
-                    </div>
+                    </button>
                   </div>
-                </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

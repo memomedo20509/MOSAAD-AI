@@ -5479,6 +5479,34 @@ ${pages.map(p => `  <url>
     }
   });
 
+  // POST /api/conversations/bulk-mark — bulk mark conversations as read or unread
+  app.post("/api/conversations/bulk-mark", isAuthenticated, async (req, res) => {
+    try {
+      const { leadIds, isRead } = req.body as { leadIds: string[]; isRead: boolean };
+      if (!Array.isArray(leadIds) || leadIds.length === 0) {
+        return res.status(400).json({ error: "leadIds must be a non-empty array" });
+      }
+      if (typeof isRead !== "boolean") {
+        return res.status(400).json({ error: "isRead must be a boolean" });
+      }
+      const userId = req.user!.id;
+      const userRole = (req.user as any)?.role ?? "sales_agent";
+      const teamId = (req.user as any)?.teamId ?? null;
+      const companyId = getCompanyId(req);
+      const accessibleLeads = await storage.getLeadsByRole(userId, userRole, teamId, null, companyId);
+      const accessibleSet = new Set(accessibleLeads.map(l => l.id));
+      const authorizedIds = leadIds.filter(id => accessibleSet.has(id));
+      if (authorizedIds.length === 0) {
+        return res.status(403).json({ error: "No authorized conversations in the provided list" });
+      }
+      await storage.bulkMarkConversationsRead(authorizedIds, isRead);
+      res.json({ success: true, count: authorizedIds.length });
+    } catch (error) {
+      console.error("Bulk mark conversations error:", error);
+      res.status(500).json({ error: "Failed to bulk mark conversations" });
+    }
+  });
+
   // GET /api/meta/verify-token — return verify token for webhook setup guidance
   app.get("/api/meta/verify-token", isAuthenticated, async (_req, res) => {
     res.json({ verifyToken: META_VERIFY_TOKEN });
