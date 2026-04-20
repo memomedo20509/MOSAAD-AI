@@ -3812,7 +3812,53 @@ ${pages.map(p => `  <url>
       const userId = req.user!.id;
       const settings = await storage.getChatbotSettings(userId);
       if (settings) {
-        res.json(settings);
+        // Migrate any old real-estate defaults to neutral values on the fly
+        // Use exact matching against known legacy strings to avoid rewriting genuine custom content
+        const LEGACY_EXACT = {
+          botRole: "مستشار عقاري",
+          companyName: "شركتنا العقارية",
+          welcomeMessage: "أهلاً! 👋 أنا المساعد الذكي لشركتنا العقارية. يسعدني مساعدتك. ممكن تعرفني باسمك الكريم؟",
+          botPersonality: "أنت مستشار عقاري مصري محترف وودود. بتتكلم بالمصري بشكل طبيعي. بتساعد العملاء يلاقوا الوحدة المناسبة ليهم وبتجمع بياناتهم بطريقة محترمة.",
+          botMission: "جمع بيانات العميل الكاملة (الاسم، الميزانية، نوع الوحدة، عدد الغرف، الموقع المفضل، طريقة الدفع) وترشيح وحدات مناسبة من المشاريع المتاحة قبل تحويله للمندوب.",
+        };
+
+        let companyBizType = "service";
+        const companyId = req.user!.companyId;
+        if (companyId) {
+          try {
+            const { db: _migDb } = await import("./db");
+            const { companies: _migCompanies } = await import("@shared/schema");
+            const { eq: _migEq } = await import("drizzle-orm");
+            const _migRows = await _migDb.select({ businessType: _migCompanies.businessType }).from(_migCompanies).where(_migEq(_migCompanies.id, companyId));
+            if (_migRows[0]?.businessType) companyBizType = _migRows[0].businessType;
+          } catch { /* ignore */ }
+        }
+        const isEcommerce = companyBizType === "ecommerce";
+        const resolved = { ...settings };
+
+        if (resolved.botRole === LEGACY_EXACT.botRole) {
+          resolved.botRole = isEcommerce ? "مساعد متجر" : "مستشار مبيعات";
+        }
+        if (resolved.companyName === LEGACY_EXACT.companyName) {
+          resolved.companyName = isEcommerce ? "متجرنا" : "شركتنا";
+        }
+        if (resolved.welcomeMessage === LEGACY_EXACT.welcomeMessage) {
+          resolved.welcomeMessage = isEcommerce
+            ? "أهلاً! 👋 أنا مساعد متجرنا الذكي. يسعدني أساعدك تلاقي اللي تدور عليه. ممكن تعرفني باسمك الكريم؟"
+            : "أهلاً! 👋 أنا المساعد الذكي لشركتنا. يسعدني مساعدتك. ممكن تعرفني باسمك الكريم؟";
+        }
+        if (resolved.botPersonality === LEGACY_EXACT.botPersonality) {
+          resolved.botPersonality = isEcommerce
+            ? "أنت مساعد متجر إلكتروني مصري محترف وودود. بتتكلم بالمصري بشكل طبيعي. بتساعد العملاء يلاقوا المنتجات المناسبة وبتخلصهم طلباتهم بسهولة وسرعة."
+            : "أنت مستشار مبيعات مصري محترف وودود. بتتكلم بالمصري بشكل طبيعي. بتساعد العملاء وبتجمع بياناتهم بطريقة محترمة.";
+        }
+        if (resolved.botMission === LEGACY_EXACT.botMission) {
+          resolved.botMission = isEcommerce
+            ? "مساعدة العميل في تصفح المنتجات المتاحة وإتمام طلبه بالكامل بما يشمل: المنتجات والكميات وعنوان التوصيل."
+            : "جمع بيانات العميل الكاملة وترشيح الخدمات المناسبة قبل تحويله للمندوب.";
+        }
+
+        res.json(resolved);
         return;
       }
       // No settings row yet — return business-type-aware defaults
@@ -3880,7 +3926,7 @@ ${pages.map(p => `  <url>
         chatGoal: body.chatGoal ?? "lead_qualified",
         workingHoursStart: body.workingHoursStart ?? 9,
         workingHoursEnd: body.workingHoursEnd ?? 18,
-        welcomeMessage: body.welcomeMessage ?? "أهلاً! 👋 أنا المساعد الذكي لشركتنا العقارية.",
+        welcomeMessage: body.welcomeMessage ?? "أهلاً! 👋 أنا المساعد الذكي لشركتنا. يسعدني مساعدتك. ممكن تعرفني باسمك الكريم؟",
         botName: body.botName ?? undefined,
         companyName: body.companyName ?? undefined,
         botRole: body.botRole ?? undefined,
