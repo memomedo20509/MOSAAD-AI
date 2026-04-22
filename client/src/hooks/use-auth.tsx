@@ -7,6 +7,7 @@ import {
 import type { User, RolePermissions } from "@shared/models/auth";
 import { getQueryFn, apiRequest, queryClient } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/lib/i18n";
 
 type LoginData = {
   username: string;
@@ -36,6 +37,7 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
+  const { t } = useLanguage();
   const {
     data: user,
     error,
@@ -51,16 +53,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return await res.json();
     },
     onSuccess: async (user: UserWithPermissions) => {
-      // Invalidate and refetch /api/user to get full user data including permissions
       await queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       toast({
-        title: "تم تسجيل الدخول بنجاح",
-        description: `مرحباً ${user.firstName || user.username}`,
+        title: t.loginSuccess,
+        description: `${t.loginWelcome} ${user.firstName || user.username}`,
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "فشل تسجيل الدخول",
+        title: t.loginFailed,
         description: error.message,
         variant: "destructive",
       });
@@ -73,16 +74,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return await res.json();
     },
     onSuccess: async (user: UserWithPermissions) => {
-      // Invalidate and refetch /api/user to get full user data including permissions
       await queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       toast({
-        title: "تم إنشاء الحساب بنجاح",
-        description: `مرحباً ${user.firstName || user.username}`,
+        title: t.registerSuccess,
+        description: `${t.loginWelcome} ${user.firstName || user.username}`,
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "فشل إنشاء الحساب",
+        title: t.registerFailed,
         description: error.message,
         variant: "destructive",
       });
@@ -96,12 +96,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     onSuccess: () => {
       queryClient.setQueryData(["/api/user"], null);
       toast({
-        title: "تم تسجيل الخروج",
+        title: t.logoutSuccess,
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "فشل تسجيل الخروج",
+        title: t.logoutFailed,
         description: error.message,
         variant: "destructive",
       });

@@ -10,6 +10,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/i18n";
+import { getTranslatedErrorMessage } from "@/lib/api-error";
 import type { Lead, LeadState } from "@shared/schema";
 
 const SCORE_COLORS: Record<string, string> = {
@@ -71,7 +72,11 @@ export default function LeadPipelinePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
     },
-    onError: () => toast({ title: t.pipelineUpdateError, variant: "destructive" }),
+    onError: (error: Error) => toast({
+      title: t.pipelineUpdateError,
+      description: getTranslatedErrorMessage(error, t),
+      variant: "destructive",
+    }),
   });
 
   const sortedStates = [...states].sort((a, b) => a.order - b.order);

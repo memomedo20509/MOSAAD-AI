@@ -2541,6 +2541,33 @@ export const translations = {
     pub_copied: "تم النسخ",
     pub_copyLink: "نسخ الرابط",
     pub_readingTime: "دقيقة للقراءة",
+
+    // Auth toast notifications
+    loginSuccess: "تم تسجيل الدخول بنجاح",
+    loginWelcome: "مرحباً",
+    loginFailed: "فشل تسجيل الدخول",
+    registerSuccess: "تم إنشاء الحساب بنجاح",
+    registerFailed: "فشل إنشاء الحساب",
+    logoutSuccess: "تم تسجيل الخروج",
+    logoutFailed: "فشل تسجيل الخروج",
+
+    // Subscription / usage limit error messages
+    errFeatureNotAvailable: "هذه الميزة غير متاحة في باقتك الحالية. يرجى الترقية للوصول إليها.",
+    errLeadLimitExceeded: "لقد وصلت لحد الليدز الشهري. يرجى الترقية لإنشاء ليدز أكثر.",
+    errMessageLimitExceeded: "لقد وصلت لحد الرسائل الشهري. يرجى الترقية لإرسال رسائل أكثر.",
+    errUserLimitExceeded: "لقد وصلت لحد المستخدمين. يرجى الترقية لإضافة مستخدمين أكثر.",
+    errUnexpected: "حدث خطأ غير متوقع. يرجى المحاولة مجدداً.",
+
+    // Pipeline transition errors
+    errTransitionUntouched: "لا يمكن إرجاع الليد لمرحلة 'غير متفاعل' بعد التعامل معه. فقط المسؤول يمكنه ذلك.",
+    errTransitionBackward: "هذا الانتقال غير مسموح به.",
+    errTransitionAdminRequired: "هذا الانتقال يتطلب صلاحيات المسؤول.",
+    errTransitionSameZone: "لا يمكن الرجوع لمرحلة سابقة داخل نفس المنطقة.",
+    errSystemStateDelete: "لا يمكن حذف الحالات الأساسية للنظام.",
+
+    // CSV import row-level error reasons
+    importErrNameRequired: "الاسم مطلوب",
+    importErrUnknown: "خطأ غير معروف",
   },
   en: {
     // App
@@ -5081,6 +5108,33 @@ export const translations = {
     pub_copied: "Copied!",
     pub_copyLink: "Copy Link",
     pub_readingTime: "min read",
+
+    // Auth toast notifications
+    loginSuccess: "Signed in successfully",
+    loginWelcome: "Welcome",
+    loginFailed: "Sign in failed",
+    registerSuccess: "Account created successfully",
+    registerFailed: "Account creation failed",
+    logoutSuccess: "Signed out",
+    logoutFailed: "Sign out failed",
+
+    // Subscription / usage limit error messages
+    errFeatureNotAvailable: "This feature is not available on your current plan. Please upgrade to access it.",
+    errLeadLimitExceeded: "You have reached your monthly lead limit. Please upgrade to create more leads.",
+    errMessageLimitExceeded: "You have reached your monthly message limit. Please upgrade to send more messages.",
+    errUserLimitExceeded: "You have reached your user limit. Please upgrade to add more users.",
+    errUnexpected: "An unexpected error occurred. Please try again.",
+
+    // Pipeline transition errors
+    errTransitionUntouched: "Cannot move lead back to untouched stage after interaction. Only admins can do this.",
+    errTransitionBackward: "This stage transition is not allowed.",
+    errTransitionAdminRequired: "This transition requires admin permissions.",
+    errTransitionSameZone: "Cannot move back to a previous stage within the same zone.",
+    errSystemStateDelete: "System states cannot be deleted.",
+
+    // CSV import row-level error reasons
+    importErrNameRequired: "Name is required",
+    importErrUnknown: "Unknown error",
   },
 };
 

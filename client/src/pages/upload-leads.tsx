@@ -85,8 +85,7 @@ export default function UploadLeadsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
       toast({ title: `${t.importedCount}: ${data.imported} / ${data.total}` });
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Upload failed";
-      toast({ title: message, variant: "destructive" });
+      toast({ title: t.uploadError, variant: "destructive" });
     } finally {
       setUploading(false);
       setUploadProgress(0);
@@ -230,12 +229,19 @@ export default function UploadLeadsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {result.errors.map((err, i) => (
-                        <tr key={i} className="border-b last:border-0" data-testid={`row-error-${i}`}>
-                          <td className="py-2 px-3"><Badge variant="outline">{err.row}</Badge></td>
-                          <td className="py-2 px-3 text-muted-foreground">{err.reason}</td>
-                        </tr>
-                      ))}
+                      {result.errors.map((err, i) => {
+                        const reasonLabel = err.reason === "NAME_REQUIRED"
+                          ? t.importErrNameRequired
+                          : err.reason === "UNKNOWN_ERROR"
+                            ? t.importErrUnknown
+                            : err.reason;
+                        return (
+                          <tr key={i} className="border-b last:border-0" data-testid={`row-error-${i}`}>
+                            <td className="py-2 px-3"><Badge variant="outline">{err.row}</Badge></td>
+                            <td className="py-2 px-3 text-muted-foreground">{reasonLabel}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

@@ -22,7 +22,7 @@ export function requireFeature(feature: keyof Pick<SubscriptionPlan,
     if (!plan) return next();
     if (!plan[feature]) {
       return res.status(403).json({
-        error: "هذه الميزة غير متاحة في باقتك الحالية. يرجى الترقية للوصول إليها.",
+        error: "This feature is not available on your current plan. Please upgrade to access it.",
         code: "FEATURE_NOT_AVAILABLE",
         feature,
       });
@@ -45,8 +45,8 @@ export function checkUsageLimit(limitType: "leads" | "messages" | "users") {
       if (limitType === "leads") {
         if (plan.maxLeadsPerMonth < 999999 && usage.leadsCount >= plan.maxLeadsPerMonth) {
           return res.status(429).json({
-            error: `لقد وصلت لحد الليدز الشهري (${plan.maxLeadsPerMonth}). يرجى الترقية لإنشاء ليدز أكثر.`,
-            code: "USAGE_LIMIT_EXCEEDED",
+            error: `You have reached your monthly lead limit (${plan.maxLeadsPerMonth}). Please upgrade to create more leads.`,
+            code: "LEAD_LIMIT_EXCEEDED",
             limit: plan.maxLeadsPerMonth,
             current: usage.leadsCount,
             limitType: "leads",
@@ -55,8 +55,8 @@ export function checkUsageLimit(limitType: "leads" | "messages" | "users") {
       } else if (limitType === "messages") {
         if (plan.maxWhatsappMessagesPerMonth < 999999 && usage.messagesCount >= plan.maxWhatsappMessagesPerMonth) {
           return res.status(429).json({
-            error: `لقد وصلت لحد الرسائل الشهري (${plan.maxWhatsappMessagesPerMonth}). يرجى الترقية لإرسال رسائل أكثر.`,
-            code: "USAGE_LIMIT_EXCEEDED",
+            error: `You have reached your monthly message limit (${plan.maxWhatsappMessagesPerMonth}). Please upgrade to send more messages.`,
+            code: "MESSAGE_LIMIT_EXCEEDED",
             limit: plan.maxWhatsappMessagesPerMonth,
             current: usage.messagesCount,
             limitType: "messages",
@@ -65,8 +65,8 @@ export function checkUsageLimit(limitType: "leads" | "messages" | "users") {
       } else if (limitType === "users") {
         if (plan.maxUsers < 999 && usage.usersCount >= plan.maxUsers) {
           return res.status(429).json({
-            error: `لقد وصلت لحد المستخدمين (${plan.maxUsers}). يرجى الترقية لإضافة مستخدمين أكثر.`,
-            code: "USAGE_LIMIT_EXCEEDED",
+            error: `You have reached your user limit (${plan.maxUsers}). Please upgrade to add more users.`,
+            code: "USER_LIMIT_EXCEEDED",
             limit: plan.maxUsers,
             current: usage.usersCount,
             limitType: "users",

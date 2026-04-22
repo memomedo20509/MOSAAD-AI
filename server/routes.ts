@@ -582,7 +582,7 @@ ${pages.map(p => `  <url>
         return res.status(403).json({ error: "Access denied" });
       }
       if (state.isSystemState) {
-        return res.status(403).json({ error: "لا يمكن حذف الحالات الأساسية للنظام" });
+        return res.status(403).json({ error: "Cannot delete system states.", code: "SYSTEM_STATE_DELETE" });
       }
       const deleted = await storage.deleteState(id);
       if (!deleted) {
@@ -723,16 +723,16 @@ ${pages.map(p => `  <url>
               // Rule 1: Cannot move back to Untouched zone once lead has left Untouched
               if (toCategory === "untouched" && fromCategory !== "untouched") {
                 return res.status(403).json({
-                  error: "لا يمكن إرجاع الليد لمرحلة 'غير متفاعل' بعد التعامل معه. فقط الأدمن يمكنه ذلك.",
-                  code: "TRANSITION_BLOCKED"
+                  error: "Cannot move lead back to untouched stage after interaction. Only admins can do this.",
+                  code: "TRANSITION_BLOCKED_UNTOUCHED"
                 });
               }
 
               // Rule 2: Cannot move backwards across zones unless canGoBack is true on target
               if (toZone < fromZone && !toState.canGoBack) {
                 return res.status(403).json({
-                  error: `لا يمكن الرجوع لمرحلة "${toState.name}" من "${fromState.name}". هذا الانتقال غير مسموح.`,
-                  code: "TRANSITION_BLOCKED"
+                  error: `Cannot move lead back to stage "${toState.name}" from "${fromState.name}". This transition is not allowed.`,
+                  code: "TRANSITION_BLOCKED_BACKWARD"
                 });
               }
 
@@ -740,16 +740,16 @@ ${pages.map(p => `  <url>
               if ((fromCategory === "won" || fromCategory === "lost") && 
                   (toCategory === "untouched" || toCategory === "active")) {
                 return res.status(403).json({
-                  error: `لا يمكن إرجاع الليد من مرحلة "${fromState.name}" لمرحلة "${toState.name}". هذا الانتقال يحتاج صلاحية أدمن.`,
-                  code: "TRANSITION_BLOCKED"
+                  error: `Cannot move lead from stage "${fromState.name}" to "${toState.name}". This transition requires admin access.`,
+                  code: "TRANSITION_BLOCKED_ADMIN_REQUIRED"
                 });
               }
 
               // Rule 4: Within the same zone, movement must be forward (ascending order) unless canGoBack on target
               if (toZone === fromZone && toOrder < fromOrder && !toState.canGoBack) {
                 return res.status(403).json({
-                  error: `لا يمكن الرجوع لمرحلة "${toState.name}" من "${fromState.name}" داخل نفس المنطقة.`,
-                  code: "TRANSITION_BLOCKED"
+                  error: `Cannot move lead back to stage "${toState.name}" from "${fromState.name}" within the same zone.`,
+                  code: "TRANSITION_BLOCKED_SAME_ZONE"
                 });
               }
             }
@@ -2807,7 +2807,7 @@ ${pages.map(p => `  <url>
           const row = rows[i];
           const name = pick(row, COL.name);
           if (!name) {
-            errors.push({ row: i + 2, reason: "الاسم مطلوب" });
+            errors.push({ row: i + 2, reason: "NAME_REQUIRED" });
             continue;
           }
           try {
@@ -2828,7 +2828,7 @@ ${pages.map(p => `  <url>
             );
             imported++;
           } catch (err) {
-            errors.push({ row: i + 2, reason: err instanceof Error ? err.message : "خطأ غير معروف" });
+            errors.push({ row: i + 2, reason: "UNKNOWN_ERROR" });
           }
         }
 
