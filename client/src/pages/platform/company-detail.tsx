@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -14,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowRight, Building2, Users, Ban, CheckCircle, FileText, Calendar, CreditCard, Receipt } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/lib/i18n";
 
 interface SubscriptionDetail {
   id: string;
@@ -77,23 +77,6 @@ const STATUS_COLORS: Record<string, string> = {
   past_due: "bg-yellow-100 text-yellow-700",
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  active: "نشط",
-  trial: "تجربة",
-  suspended: "موقوف",
-  cancelled: "ملغي",
-  past_due: "متأخر",
-};
-
-const ROLE_LABELS: Record<string, string> = {
-  super_admin: "مدير النظام",
-  company_owner: "صاحب الشركة",
-  sales_admin: "سيلز أدمن",
-  team_leader: "تيم ليدر",
-  sales_agent: "سيلز",
-  admin: "مدير",
-};
-
 const INVOICE_STATUS_COLORS: Record<string, string> = {
   draft: "bg-gray-100 text-gray-600",
   sent: "bg-blue-100 text-blue-700",
@@ -102,20 +85,38 @@ const INVOICE_STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-gray-100 text-gray-500",
 };
 
-const INVOICE_STATUS_LABELS: Record<string, string> = {
-  draft: "مسودة",
-  sent: "مرسلة",
-  paid: "مدفوعة",
-  overdue: "متأخرة",
-  cancelled: "ملغية",
-};
-
 export default function CompanyDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
+  const { t, isRTL } = useLanguage();
   const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
   const [addInvoiceOpen, setAddInvoiceOpen] = useState(false);
   const [newInvoice, setNewInvoice] = useState({ invoiceNumber: "", amount: "", currency: "EGP", status: "sent", dueDate: "" });
+
+  const STATUS_LABELS: Record<string, string> = {
+    active: t.statusActive,
+    trial: t.statusTrial,
+    suspended: t.statusSuspended,
+    cancelled: t.statusCancelled,
+    past_due: t.statusPastDue,
+  };
+
+  const ROLE_LABELS: Record<string, string> = {
+    super_admin: t.roleLabSuperAdmin,
+    company_owner: t.roleLabCompanyOwner,
+    sales_admin: t.roleLabSalesAdmin,
+    team_leader: t.roleLabTeamLeader,
+    sales_agent: t.roleLabSalesAgent,
+    admin: t.roleLabAdmin,
+  };
+
+  const INVOICE_STATUS_LABELS: Record<string, string> = {
+    draft: t.invoiceStatusDraft,
+    sent: t.invoiceStatusSent,
+    paid: t.invoiceStatusPaid,
+    overdue: t.invoiceStatusOverdue,
+    cancelled: t.invoiceStatusCancelled,
+  };
 
   const { data: company, isLoading } = useQuery<CompanyDetail>({
     queryKey: ["/api/platform/companies", id],
@@ -143,10 +144,10 @@ export default function CompanyDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/platform/companies", id] });
       queryClient.invalidateQueries({ queryKey: ["/api/platform/companies"] });
-      toast({ title: "تم تعليق الشركة" });
+      toast({ title: t.companyDetailSuspended });
       setSuspendDialogOpen(false);
     },
-    onError: () => toast({ title: "فشل التعليق", variant: "destructive" }),
+    onError: () => toast({ title: t.companyDetailSuspendFail, variant: "destructive" }),
   });
 
   const reactivateMutation = useMutation({
@@ -156,9 +157,9 @@ export default function CompanyDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/platform/companies", id] });
       queryClient.invalidateQueries({ queryKey: ["/api/platform/companies"] });
-      toast({ title: "تم إعادة تفعيل الشركة" });
+      toast({ title: t.companyDetailReactivated });
     },
-    onError: () => toast({ title: "فشل إعادة التفعيل", variant: "destructive" }),
+    onError: () => toast({ title: t.companyDetailReactivateFail, variant: "destructive" }),
   });
 
   const createInvoiceMutation = useMutation({
@@ -176,16 +177,16 @@ export default function CompanyDetailPage() {
       refetchInvoices();
       setAddInvoiceOpen(false);
       setNewInvoice({ invoiceNumber: "", amount: "", currency: "EGP", status: "sent", dueDate: "" });
-      toast({ title: "تم إنشاء الفاتورة" });
+      toast({ title: t.companyDetailInvoiceCreated });
     },
-    onError: () => toast({ title: "فشل إنشاء الفاتورة", variant: "destructive" }),
+    onError: () => toast({ title: t.companyDetailInvoiceFail, variant: "destructive" }),
   });
 
   const formatCurrency = (amount: number, currency: string) =>
-    `${amount.toLocaleString("ar-EG")} ${currency}`;
+    `${amount.toLocaleString(isRTL ? "ar-EG" : "en-US")} ${currency}`;
 
   const formatDate = (date: string | null) =>
-    date ? new Date(date).toLocaleDateString("ar-EG") : "—";
+    date ? new Date(date).toLocaleDateString(isRTL ? "ar-EG" : "en-US") : "—";
 
   if (isLoading) {
     return (
@@ -197,24 +198,22 @@ export default function CompanyDetailPage() {
   }
 
   if (!company) {
-    return <div className="text-center py-20 text-muted-foreground">الشركة غير موجودة</div>;
+    return <div className="text-center py-20 text-muted-foreground">{t.companyDetailNotFound}</div>;
   }
 
   const sub = company.subscription;
 
   return (
-    <div className="space-y-6">
-      {/* Breadcrumb */}
+    <div className="space-y-6" dir={isRTL ? "rtl" : "ltr"}>
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Link href="/platform/companies" className="hover:text-foreground flex items-center gap-1">
           <ArrowRight className="h-4 w-4" />
-          الشركات
+          {t.companyDetailBreadcrumb}
         </Link>
         <span>/</span>
         <span className="text-foreground font-medium">{company.name}</span>
       </div>
 
-      {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
@@ -231,7 +230,6 @@ export default function CompanyDetailPage() {
           </div>
         </div>
 
-        {/* Actions */}
         <div className="flex gap-2 flex-wrap">
           {company.status !== "suspended" ? (
             <Button
@@ -240,8 +238,8 @@ export default function CompanyDetailPage() {
               onClick={() => setSuspendDialogOpen(true)}
               data-testid="button-suspend-company"
             >
-              <Ban className="h-4 w-4 ml-1" />
-              تعليق
+              <Ban className="h-4 w-4 me-1" />
+              {t.companyDetailSuspendBtn}
             </Button>
           ) : (
             <Button
@@ -251,47 +249,45 @@ export default function CompanyDetailPage() {
               disabled={reactivateMutation.isPending}
               data-testid="button-reactivate-company"
             >
-              <CheckCircle className="h-4 w-4 ml-1" />
-              إعادة تفعيل
+              <CheckCircle className="h-4 w-4 me-1" />
+              {t.companyDetailReactivateBtn}
             </Button>
           )}
         </div>
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="profile" dir="rtl">
+      <Tabs defaultValue="profile" dir={isRTL ? "rtl" : "ltr"}>
         <TabsList>
-          <TabsTrigger value="profile">الملف الشخصي</TabsTrigger>
-          <TabsTrigger value="users">المستخدمون</TabsTrigger>
-          <TabsTrigger value="subscription">الاشتراك</TabsTrigger>
-          <TabsTrigger value="invoices">الفواتير</TabsTrigger>
+          <TabsTrigger value="profile">{t.companyDetailProfileTab}</TabsTrigger>
+          <TabsTrigger value="users">{t.companyDetailUsersTab}</TabsTrigger>
+          <TabsTrigger value="subscription">{t.companyDetailSubscriptionTab}</TabsTrigger>
+          <TabsTrigger value="invoices">{t.companyDetailInvoicesTab}</TabsTrigger>
         </TabsList>
 
-        {/* Profile Tab */}
         <TabsContent value="profile" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>معلومات الشركة</CardTitle>
+              <CardTitle>{t.companyDetailInfoTitle}</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-4">
               <div>
-                <Label className="text-muted-foreground text-xs">اسم الشركة</Label>
+                <Label className="text-muted-foreground text-xs">{t.companyDetailNameLabel}</Label>
                 <p className="font-medium">{company.name}</p>
               </div>
               <div>
-                <Label className="text-muted-foreground text-xs">الرابط المختصر</Label>
+                <Label className="text-muted-foreground text-xs">{t.companyDetailSlugLabel}</Label>
                 <p className="font-medium">{company.slug}</p>
               </div>
               <div>
-                <Label className="text-muted-foreground text-xs">القطاع</Label>
+                <Label className="text-muted-foreground text-xs">{t.companyDetailIndustryLabel}</Label>
                 <p className="font-medium">{company.industry ?? "—"}</p>
               </div>
               <div>
-                <Label className="text-muted-foreground text-xs">تاريخ الإنشاء</Label>
+                <Label className="text-muted-foreground text-xs">{t.companyDetailCreatedLabel}</Label>
                 <p className="font-medium">{formatDate(company.createdAt)}</p>
               </div>
               <div>
-                <Label className="text-muted-foreground text-xs">الحالة</Label>
+                <Label className="text-muted-foreground text-xs">{t.companyDetailStatusLabel}</Label>
                 <Badge className={`mt-1 ${STATUS_COLORS[company.status] ?? ""}`}>
                   {STATUS_LABELS[company.status] ?? company.status}
                 </Badge>
@@ -300,18 +296,17 @@ export default function CompanyDetailPage() {
           </Card>
         </TabsContent>
 
-        {/* Users Tab */}
         <TabsContent value="users" className="mt-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5" />
-                المستخدمون ({company.users.length})
+                {t.companyDetailUsersTitle} ({company.users.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
               {company.users.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">لا يوجد مستخدمون</p>
+                <p className="text-muted-foreground text-center py-8">{t.companyDetailNoUsers}</p>
               ) : (
                 <div className="space-y-2">
                   {company.users.map((user) => (
@@ -336,43 +331,42 @@ export default function CompanyDetailPage() {
           </Card>
         </TabsContent>
 
-        {/* Subscription Tab */}
         <TabsContent value="subscription" className="mt-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CreditCard className="h-5 w-5" />
-                الاشتراك والباقة
+                {t.companyDetailSubTitle}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {sub ? (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label className="text-muted-foreground text-xs">الباقة</Label>
+                    <Label className="text-muted-foreground text-xs">{t.companyDetailPlanLabel}</Label>
                     <p className="font-medium">{sub.plan?.nameAr || sub.plan?.name || "—"}</p>
                   </div>
                   <div>
-                    <Label className="text-muted-foreground text-xs">السعر الشهري</Label>
+                    <Label className="text-muted-foreground text-xs">{t.companyDetailMonthlyLabel}</Label>
                     <p className="font-medium">
                       {sub.plan ? formatCurrency(sub.plan.priceMonthly, sub.plan.currency) : "—"}
                     </p>
                   </div>
                   <div>
-                    <Label className="text-muted-foreground text-xs">حالة الاشتراك</Label>
+                    <Label className="text-muted-foreground text-xs">{t.companyDetailSubStatusLabel}</Label>
                     <Badge className={`mt-1 ${STATUS_COLORS[sub.status] ?? ""}`}>
                       {STATUS_LABELS[sub.status] ?? sub.status}
                     </Badge>
                   </div>
                   <div>
-                    <Label className="text-muted-foreground text-xs">تاريخ بداية الفترة</Label>
+                    <Label className="text-muted-foreground text-xs">{t.companyDetailPeriodStartLabel}</Label>
                     <p className="font-medium flex items-center gap-1">
                       <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
                       {formatDate(sub.currentPeriodStart)}
                     </p>
                   </div>
                   <div>
-                    <Label className="text-muted-foreground text-xs">تاريخ التجديد</Label>
+                    <Label className="text-muted-foreground text-xs">{t.companyDetailRenewalLabel}</Label>
                     <p className="font-medium flex items-center gap-1">
                       <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
                       {formatDate(sub.currentPeriodEnd)}
@@ -380,26 +374,26 @@ export default function CompanyDetailPage() {
                   </div>
                   {sub.trialEndsAt && (
                     <div>
-                      <Label className="text-muted-foreground text-xs">انتهاء التجربة</Label>
+                      <Label className="text-muted-foreground text-xs">{t.companyDetailTrialEndLabel}</Label>
                       <p className="font-medium">{formatDate(sub.trialEndsAt)}</p>
                     </div>
                   )}
                   {sub.cancelledAt && (
                     <div>
-                      <Label className="text-muted-foreground text-xs">تاريخ الإلغاء</Label>
+                      <Label className="text-muted-foreground text-xs">{t.companyDetailCancelDateLabel}</Label>
                       <p className="font-medium text-red-600">{formatDate(sub.cancelledAt)}</p>
                     </div>
                   )}
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <p className="text-muted-foreground">لا يوجد اشتراك مرتبط بهذه الشركة</p>
+                  <p className="text-muted-foreground">{t.companyDetailNoSub}</p>
                   <div>
-                    <Label className="text-muted-foreground text-xs">الباقة المخصصة (من إعدادات الشركة)</Label>
-                    <p className="font-medium">{company.planId ?? "بدون باقة"}</p>
+                    <Label className="text-muted-foreground text-xs">{t.companyDetailAssignedPlanLabel}</Label>
+                    <p className="font-medium">{company.planId ?? t.companyDetailNoPlan}</p>
                   </div>
                   <div>
-                    <Label className="text-muted-foreground text-xs">حالة الحساب</Label>
+                    <Label className="text-muted-foreground text-xs">{t.companyDetailAccountStatusLabel}</Label>
                     <Badge className={`mt-1 ${STATUS_COLORS[company.status] ?? ""}`}>
                       {STATUS_LABELS[company.status] ?? company.status}
                     </Badge>
@@ -410,16 +404,15 @@ export default function CompanyDetailPage() {
           </Card>
         </TabsContent>
 
-        {/* Invoices Tab */}
         <TabsContent value="invoices" className="mt-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <Receipt className="h-5 w-5" />
-                الفواتير
+                {t.companyDetailInvoicesTitle}
               </CardTitle>
               <Button size="sm" onClick={() => setAddInvoiceOpen(true)} data-testid="button-add-invoice">
-                + فاتورة جديدة
+                {t.companyDetailAddInvoiceBtn}
               </Button>
             </CardHeader>
             <CardContent>
@@ -430,18 +423,18 @@ export default function CompanyDetailPage() {
               ) : invoices.length === 0 ? (
                 <div className="text-center py-12">
                   <FileText className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-                  <p className="text-muted-foreground">لا توجد فواتير بعد</p>
+                  <p className="text-muted-foreground">{t.companyDetailNoInvoices}</p>
                 </div>
               ) : (
                 <div className="space-y-2">
                   {invoices.map((inv) => (
                     <div key={inv.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50" data-testid={`row-invoice-${inv.id}`}>
                       <div>
-                        <p className="font-medium text-sm">فاتورة #{inv.invoiceNumber}</p>
+                        <p className="font-medium text-sm">{t.companyDetailInvoiceNum}{inv.invoiceNumber}</p>
                         <p className="text-xs text-muted-foreground">
                           {formatDate(inv.createdAt)}
-                          {inv.dueDate && ` · الاستحقاق: ${formatDate(inv.dueDate)}`}
-                          {inv.paidAt && ` · مدفوعة: ${formatDate(inv.paidAt)}`}
+                          {inv.dueDate && ` · ${t.companyDetailInvoiceDue} ${formatDate(inv.dueDate)}`}
+                          {inv.paidAt && ` · ${t.companyDetailInvoicePaid} ${formatDate(inv.paidAt)}`}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -459,38 +452,36 @@ export default function CompanyDetailPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Suspend Dialog */}
       <Dialog open={suspendDialogOpen} onOpenChange={setSuspendDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>تعليق الشركة</DialogTitle>
+            <DialogTitle>{t.companyDetailSuspendDialogTitle}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            هل أنت متأكد من تعليق شركة <strong>{company.name}</strong>؟ لن يتمكن المستخدمون من الدخول.
+            {t.companyDetailSuspendConfirmText} <strong>{company.name}</strong>? {t.companyDetailSuspendNote}
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSuspendDialogOpen(false)}>إلغاء</Button>
+            <Button variant="outline" onClick={() => setSuspendDialogOpen(false)}>{t.companyDetailCancel}</Button>
             <Button
               variant="destructive"
               onClick={() => suspendMutation.mutate()}
               disabled={suspendMutation.isPending}
               data-testid="button-confirm-suspend"
             >
-              تعليق
+              {t.companyDetailSuspendConfirmBtn}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Add Invoice Dialog */}
       <Dialog open={addInvoiceOpen} onOpenChange={setAddInvoiceOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>إنشاء فاتورة جديدة</DialogTitle>
+            <DialogTitle>{t.companyDetailNewInvoiceTitle}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>رقم الفاتورة</Label>
+              <Label>{t.invoiceNumberLabel}</Label>
               <Input
                 value={newInvoice.invoiceNumber}
                 onChange={(e) => setNewInvoice({ ...newInvoice, invoiceNumber: e.target.value })}
@@ -500,7 +491,7 @@ export default function CompanyDetailPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>المبلغ</Label>
+                <Label>{t.invoiceAmountLabel}</Label>
                 <Input
                   type="number"
                   value={newInvoice.amount}
@@ -510,36 +501,36 @@ export default function CompanyDetailPage() {
                 />
               </div>
               <div>
-                <Label>العملة</Label>
+                <Label>{t.invoiceCurrencyLabel}</Label>
                 <Select value={newInvoice.currency} onValueChange={(v) => setNewInvoice({ ...newInvoice, currency: v })}>
                   <SelectTrigger data-testid="select-invoice-currency">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="EGP">جنيه مصري (EGP)</SelectItem>
-                    <SelectItem value="USD">دولار (USD)</SelectItem>
-                    <SelectItem value="SAR">ريال سعودي (SAR)</SelectItem>
+                    <SelectItem value="EGP">{t.invoiceCurrencyEGP}</SelectItem>
+                    <SelectItem value="USD">{t.invoiceCurrencyUSD}</SelectItem>
+                    <SelectItem value="SAR">{t.invoiceCurrencySAR}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>الحالة</Label>
+                <Label>{t.invoiceStatusLabel}</Label>
                 <Select value={newInvoice.status} onValueChange={(v) => setNewInvoice({ ...newInvoice, status: v })}>
                   <SelectTrigger data-testid="select-invoice-status">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="draft">مسودة</SelectItem>
-                    <SelectItem value="sent">مرسلة</SelectItem>
-                    <SelectItem value="paid">مدفوعة</SelectItem>
-                    <SelectItem value="overdue">متأخرة</SelectItem>
+                    <SelectItem value="draft">{t.invoiceStatusDraft}</SelectItem>
+                    <SelectItem value="sent">{t.invoiceStatusSent}</SelectItem>
+                    <SelectItem value="paid">{t.invoiceStatusPaid}</SelectItem>
+                    <SelectItem value="overdue">{t.invoiceStatusOverdue}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>تاريخ الاستحقاق</Label>
+                <Label>{t.invoiceDueDateLabel}</Label>
                 <Input
                   type="date"
                   value={newInvoice.dueDate}
@@ -550,13 +541,13 @@ export default function CompanyDetailPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddInvoiceOpen(false)}>إلغاء</Button>
+            <Button variant="outline" onClick={() => setAddInvoiceOpen(false)}>{t.companyDetailCancel}</Button>
             <Button
               onClick={() => createInvoiceMutation.mutate()}
               disabled={createInvoiceMutation.isPending || !newInvoice.invoiceNumber || !newInvoice.amount}
               data-testid="button-confirm-add-invoice"
             >
-              إنشاء الفاتورة
+              {t.invoiceCreateBtn}
             </Button>
           </DialogFooter>
         </DialogContent>

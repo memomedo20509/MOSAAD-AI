@@ -5,14 +5,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { MessageSquare, Users, TrendingUp, Bot, Circle, Zap } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import type { Lead, SubscriptionPlan, UsageRecord } from "@shared/schema";
+import type { Lead, SubscriptionPlan } from "@shared/schema";
 import { format } from "date-fns";
+import { useLanguage } from "@/lib/i18n";
+
+type LeadRecord = Lead & {
+  status: string;
+  sourceChannel: string | null;
+};
 
 const CHANNEL_COLORS: Record<string, string> = {
   messenger: "#1877F2",
   whatsapp: "#25D366",
   web: "#6366f1",
-  instagram: "#E1306C",
+  instagram: "#E4405F",
   other: "#6b7280",
 };
 
@@ -79,6 +85,7 @@ function UsageBar({ label, used, max, colorClass = "bg-primary" }: {
 }
 
 function UsageWidget() {
+  const { t, isRTL } = useLanguage();
   const { data, isLoading } = useQuery<{
     usage: { leadsCount: number; messagesCount: number; usersCount: number; aiCallsCount: number; month: string };
     limits: SubscriptionPlan | null;
@@ -94,12 +101,18 @@ function UsageWidget() {
   const trialEndsAt = sub?.trialEndsAt ? new Date(sub.trialEndsAt) : null;
   const daysLeft = trialEndsAt ? Math.max(0, Math.ceil((trialEndsAt.getTime() - Date.now()) / 86400000)) : null;
 
+  const getStatusLabel = (status: string) => {
+    if (status === "trial") return t.subscriptionTrial;
+    if (status === "active") return t.subscriptionActive;
+    return t.subscriptionInactive;
+  };
+
   return (
     <Card data-testid="card-usage-widget">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
           <Zap className="h-4 w-4 text-primary" />
-          Plan Usage — {limits?.nameAr ?? limits?.name ?? "—"}
+          {t.planUsage} — {isRTL ? (limits?.nameAr ?? limits?.name ?? "—") : (limits?.name ?? "—")}
         </CardTitle>
         {sub && (
           <Badge
@@ -114,8 +127,8 @@ function UsageWidget() {
             data-testid="badge-subscription-status"
           >
             {sub.status === "trial" && daysLeft !== null
-              ? `Trial · ${daysLeft}d left`
-              : sub.status}
+              ? `${getStatusLabel("trial")} · ${daysLeft} ${t.trialDaysLeft}`
+              : getStatusLabel(sub.status)}
           </Badge>
         )}
       </CardHeader>
@@ -126,12 +139,12 @@ function UsageWidget() {
           </div>
         ) : usage && limits ? (
           <div className="space-y-3">
-            <UsageBar label="Leads" used={usage.leadsCount} max={limits.maxLeadsPerMonth} />
-            <UsageBar label="Messages" used={usage.messagesCount} max={limits.maxWhatsappMessagesPerMonth} />
-            <UsageBar label="Users" used={usage.usersCount} max={limits.maxUsers} />
+            <UsageBar label={t.usageLeads} used={usage.leadsCount} max={limits.maxLeadsPerMonth} />
+            <UsageBar label={t.usageMessages} used={usage.messagesCount} max={limits.maxWhatsappMessagesPerMonth} />
+            <UsageBar label={t.usageUsers} used={usage.usersCount} max={limits.maxUsers} />
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">No usage data yet</p>
+          <p className="text-sm text-muted-foreground">{t.noUsageData}</p>
         )}
       </CardContent>
     </Card>
@@ -139,6 +152,24 @@ function UsageWidget() {
 }
 
 export default function Dashboard() {
+  const { t, isRTL } = useLanguage();
+
+  const STATUS_LABELS: Record<string, string> = {
+    new: t.statusNew,
+    contacted: t.statusContacted,
+    qualified: t.statusQualified,
+    converted: t.statusConverted,
+    lost: t.statusLost,
+  };
+
+  const CHANNEL_LABELS: Record<string, string> = {
+    messenger: t.sourceMessenger,
+    whatsapp: t.sourceWhatsapp,
+    web: t.sourceWebsite,
+    instagram: t.sourceInstagram,
+    other: t.sourceOther,
+  };
+
   const { data: analytics, isLoading } = useQuery<{
     totalLeads: number;
     totalConversations: number;
@@ -146,7 +177,7 @@ export default function Dashboard() {
     leadsByStatus: { status: string; count: number }[];
   }>({ queryKey: ["/api/analytics"] });
 
-  const { data: leads = [], isLoading: leadsLoading } = useQuery<Lead[]>({
+  const { data: leads = [], isLoading: leadsLoading } = useQuery<LeadRecord[]>({
     queryKey: ["/api/leads"],
   });
 
@@ -163,7 +194,7 @@ export default function Dashboard() {
     : 0;
 
   const channelChartData = (analytics?.leadsByChannel ?? []).map(item => ({
-    name: item.channel.charAt(0).toUpperCase() + item.channel.slice(1),
+    name: CHANNEL_LABELS[item.channel] ?? (item.channel.charAt(0).toUpperCase() + item.channel.slice(1)),
     value: item.count,
     color: CHANNEL_COLORS[item.channel] ?? "#6b7280",
   }));
@@ -172,8 +203,8 @@ export default function Dashboard() {
     <div className="space-y-6" data-testid="page-dashboard">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight" data-testid="text-dashboard-title">Overview</h1>
-          <p className="text-muted-foreground">Your SalesBot AI performance at a glance</p>
+          <h1 className="text-2xl font-semibold tracking-tight" data-testid="text-dashboard-title">{t.overview}</h1>
+          <p className="text-muted-foreground">{t.dashboardSubtitle}</p>
         </div>
         <div className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm" data-testid="status-bot">
           <Circle
@@ -188,36 +219,36 @@ export default function Dashboard() {
               ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
               : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"}
           >
-            {chatbotConfig?.isActive !== false ? "Active" : "Inactive"}
+            {chatbotConfig?.isActive !== false ? t.botOnline : t.botOffline}
           </Badge>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <KPICard
-          title="Total Leads"
+          title={t.totalLeads}
           value={analytics?.totalLeads ?? 0}
           icon={Users}
           isLoading={isLoading}
-          sub="All time"
+          sub={t.allTime}
         />
         <KPICard
-          title="Conversations"
+          title={t.communicationLog}
           value={analytics?.totalConversations ?? 0}
           icon={MessageSquare}
           isLoading={isLoading}
-          sub="All channels"
+          sub={t.allChannelsLabel}
         />
         <KPICard
-          title="Conversion Rate"
+          title={t.conversionRate}
           value={`${conversionRate}%`}
           icon={TrendingUp}
           isLoading={isLoading}
-          sub="Leads converted"
+          sub={t.leadsConverted}
         />
         <KPICard
-          title="Bot Status"
-          value={chatbotConfig?.isActive !== false ? "Online" : "Offline"}
+          title={t.botStatusTitle}
+          value={chatbotConfig?.isActive !== false ? t.botOnline : t.botOffline}
           icon={Bot}
           isLoading={false}
           sub={chatbotConfig?.personaName ?? "SalesBot"}
@@ -229,7 +260,7 @@ export default function Dashboard() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Conversations by Channel</CardTitle>
+            <CardTitle>{t.conversationsByChannel}</CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -239,7 +270,7 @@ export default function Dashboard() {
             ) : channelChartData.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
                 <MessageSquare className="h-10 w-10 mb-2" />
-                <p className="text-sm">No channel data yet</p>
+                <p className="text-sm">{t.noChannelData}</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={220}>
@@ -259,7 +290,7 @@ export default function Dashboard() {
                       <Cell key={idx} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(val) => [val, "Conversations"]} />
+                  <Tooltip />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
@@ -269,7 +300,7 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Leads by Status</CardTitle>
+            <CardTitle>{t.leadsByStatusTitle}</CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -280,13 +311,13 @@ export default function Dashboard() {
               <div className="space-y-2">
                 {analytics?.leadsByStatus.map(item => (
                   <div key={item.status} className="flex items-center justify-between rounded-md border p-3" data-testid={`row-status-${item.status}`}>
-                    <span className="font-medium capitalize">{item.status}</span>
+                    <span className="font-medium">{STATUS_LABELS[item.status] ?? item.status}</span>
                     <Badge className={STATUS_COLORS[item.status] ?? ""}>{item.count}</Badge>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground text-sm text-center py-8">No leads yet</p>
+              <p className="text-muted-foreground text-sm text-center py-8">{t.noLeadsYet}</p>
             )}
           </CardContent>
         </Card>
@@ -294,7 +325,7 @@ export default function Dashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent Leads</CardTitle>
+          <CardTitle>{t.recentLeadsTitle}</CardTitle>
         </CardHeader>
         <CardContent>
           {leadsLoading ? (
@@ -304,18 +335,18 @@ export default function Dashboard() {
           ) : recentLeads.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
               <Users className="h-10 w-10 mb-2" />
-              <p className="text-sm">No leads captured yet</p>
+              <p className="text-sm">{t.noLeadsCaptured}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="border-b">
                   <tr>
-                    <th className="text-start py-2 px-3 font-medium text-muted-foreground">Name</th>
-                    <th className="text-start py-2 px-3 font-medium text-muted-foreground">Phone</th>
-                    <th className="text-start py-2 px-3 font-medium text-muted-foreground">Channel</th>
-                    <th className="text-start py-2 px-3 font-medium text-muted-foreground">Status</th>
-                    <th className="text-start py-2 px-3 font-medium text-muted-foreground">Date</th>
+                    <th className="text-start py-2 px-3 font-medium text-muted-foreground">{t.name}</th>
+                    <th className="text-start py-2 px-3 font-medium text-muted-foreground">{t.phone}</th>
+                    <th className="text-start py-2 px-3 font-medium text-muted-foreground">{t.channel}</th>
+                    <th className="text-start py-2 px-3 font-medium text-muted-foreground">{t.status}</th>
+                    <th className="text-start py-2 px-3 font-medium text-muted-foreground">{t.date}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -323,12 +354,12 @@ export default function Dashboard() {
                     <tr key={lead.id} className="border-b last:border-0 hover:bg-muted/40" data-testid={`row-recent-lead-${lead.id}`}>
                       <td className="py-2 px-3 font-medium">{lead.name ?? "—"}</td>
                       <td className="py-2 px-3 text-muted-foreground">{lead.phone ?? "—"}</td>
-                      <td className="py-2 px-3 text-muted-foreground capitalize">{lead.sourceChannel ?? "—"}</td>
+                      <td className="py-2 px-3 text-muted-foreground">{CHANNEL_LABELS[lead.sourceChannel ?? ""] ?? lead.sourceChannel ?? "—"}</td>
                       <td className="py-2 px-3">
-                        <Badge className={STATUS_COLORS[lead.status] ?? ""}>{lead.status}</Badge>
+                        <Badge className={STATUS_COLORS[lead.status ?? ""] ?? ""}>{STATUS_LABELS[lead.status ?? ""] ?? lead.status ?? "—"}</Badge>
                       </td>
                       <td className="py-2 px-3 text-muted-foreground text-xs">
-                        {lead.createdAt ? format(new Date(lead.createdAt), "MMM d, HH:mm") : "—"}
+                        {lead.createdAt ? format(new Date(lead.createdAt), isRTL ? "d MMM HH:mm" : "MMM d, HH:mm") : "—"}
                       </td>
                     </tr>
                   ))}

@@ -13,6 +13,7 @@ import { Package, Plus, Pencil, Trash2, Check } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
+import { useLanguage } from "@/lib/i18n";
 
 interface Plan {
   id: string;
@@ -40,6 +41,7 @@ interface PlanForm {
 
 function PlanDialog({ plan, open, onClose }: { plan?: Plan; open: boolean; onClose: () => void }) {
   const { toast } = useToast();
+  const { t, isRTL } = useLanguage();
   const isEdit = !!plan;
 
   const { register, handleSubmit, reset, watch, setValue } = useForm<PlanForm>({
@@ -69,52 +71,51 @@ function PlanDialog({ plan, open, onClose }: { plan?: Plan; open: boolean; onClo
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/platform/plans"] });
-      toast({ title: isEdit ? "تم تحديث الباقة" : "تم إنشاء الباقة" });
+      toast({ title: isEdit ? t.platformPlanUpdated : t.platformPlanCreated });
       onClose();
     },
-    onError: () => toast({ title: "حدث خطأ", variant: "destructive" }),
+    onError: () => toast({ title: t.platformPlanError, variant: "destructive" }),
   });
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg" dir="rtl">
+      <DialogContent className="max-w-lg" dir={isRTL ? "rtl" : "ltr"}>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "تعديل الباقة" : "إضافة باقة جديدة"}</DialogTitle>
+          <DialogTitle>{isEdit ? t.platformPlanEditTitle : t.platformPlanAddTitle}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4">
           <div>
-            <Label>اسم الباقة *</Label>
-            <Input {...register("name", { required: true })} placeholder="مثال: باقة المحترف" data-testid="input-plan-name" />
+            <Label>{t.platformPlanNameLabel}</Label>
+            <Input {...register("name", { required: true })} placeholder={t.platformPlanNamePlaceholder} data-testid="input-plan-name" />
           </div>
           <div>
-            <Label>الوصف</Label>
-            <Textarea {...register("description")} placeholder="وصف قصير للباقة" rows={2} data-testid="input-plan-description" />
+            <Label>{t.platformPlanDescLabel}</Label>
+            <Textarea {...register("description")} placeholder={t.platformPlanDescPlaceholder} rows={2} data-testid="input-plan-description" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>السعر الشهري (ج.م) *</Label>
+              <Label>{t.platformPlanMonthlyLabel}</Label>
               <Input type="number" {...register("priceMonthly", { valueAsNumber: true })} data-testid="input-plan-price-monthly" />
             </div>
             <div>
-              <Label>السعر السنوي (ج.م)</Label>
+              <Label>{t.platformPlanYearlyLabel}</Label>
               <Input type="number" {...register("priceYearly", { valueAsNumber: true })} data-testid="input-plan-price-yearly" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>أقصى عدد مستخدمين</Label>
+              <Label>{t.platformPlanMaxUsersLabel}</Label>
               <Input type="number" {...register("maxUsers", { valueAsNumber: true })} data-testid="input-plan-max-users" />
             </div>
             <div>
-              <Label>أقصى عدد ليدز</Label>
+              <Label>{t.platformPlanMaxLeadsLabel}</Label>
               <Input type="number" {...register("maxLeads", { valueAsNumber: true })} data-testid="input-plan-max-leads" />
             </div>
           </div>
           <div>
-            <Label>المميزات (كل ميزة في سطر)</Label>
+            <Label>{t.platformPlanFeaturesLabel}</Label>
             <Textarea
               {...register("features")}
-              placeholder={"إدارة الليدز\nواتساب\nتقارير متقدمة"}
               rows={4}
               data-testid="input-plan-features"
             />
@@ -125,12 +126,12 @@ function PlanDialog({ plan, open, onClose }: { plan?: Plan; open: boolean; onClo
               onCheckedChange={(v) => setValue("isActive", v)}
               data-testid="switch-plan-active"
             />
-            <Label>الباقة مفعّلة</Label>
+            <Label>{t.platformPlanActiveSwitchLabel}</Label>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>إلغاء</Button>
+            <Button type="button" variant="outline" onClick={onClose}>{t.platformPlanCancel}</Button>
             <Button type="submit" disabled={mutation.isPending} data-testid="button-save-plan">
-              {mutation.isPending ? "جاري الحفظ..." : "حفظ"}
+              {mutation.isPending ? t.platformPlanSaving : t.platformPlanSave}
             </Button>
           </DialogFooter>
         </form>
@@ -141,6 +142,7 @@ function PlanDialog({ plan, open, onClose }: { plan?: Plan; open: boolean; onClo
 
 export default function PlatformPlansPage() {
   const { toast } = useToast();
+  const { t, isRTL } = useLanguage();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<Plan | undefined>();
 
@@ -154,21 +156,21 @@ export default function PlatformPlansPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/platform/plans"] });
-      toast({ title: "تم حذف الباقة" });
+      toast({ title: t.platformPlanDeleted });
     },
-    onError: () => toast({ title: "فشل الحذف", variant: "destructive" }),
+    onError: () => toast({ title: t.platformPlanDeleteFail, variant: "destructive" }),
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isRTL ? "rtl" : "ltr"}>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">إدارة الباقات</h1>
-          <p className="text-muted-foreground">خطط الاشتراك المتاحة للشركات</p>
+          <h1 className="text-2xl font-bold">{t.platformPlansTitle}</h1>
+          <p className="text-muted-foreground">{t.platformPlansDesc}</p>
         </div>
         <Button onClick={() => { setEditingPlan(undefined); setDialogOpen(true); }} data-testid="button-add-plan">
-          <Plus className="h-4 w-4 ml-1" />
-          إضافة باقة
+          <Plus className="h-4 w-4 me-1" />
+          {t.platformPlanAddBtn}
         </Button>
       </div>
 
@@ -180,9 +182,9 @@ export default function PlatformPlansPage() {
         <Card>
           <CardContent className="py-16 text-center">
             <Package className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground">لا توجد باقات بعد</p>
+            <p className="text-muted-foreground">{t.platformPlanEmpty}</p>
             <Button className="mt-4" onClick={() => { setEditingPlan(undefined); setDialogOpen(true); }}>
-              إضافة أول باقة
+              {t.platformPlanAddFirst}
             </Button>
           </CardContent>
         </Card>
@@ -191,7 +193,7 @@ export default function PlatformPlansPage() {
           {plans.map((plan) => (
             <Card key={plan.id} className={`relative ${!plan.isActive ? "opacity-60" : ""}`} data-testid={`card-plan-${plan.id}`}>
               {!plan.isActive && (
-                <Badge className="absolute top-3 left-3 bg-gray-100 text-gray-600">غير مفعّل</Badge>
+                <Badge className="absolute top-3 start-3 bg-gray-100 text-gray-600">{t.platformPlanInactive}</Badge>
               )}
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -206,18 +208,18 @@ export default function PlatformPlansPage() {
                   </div>
                 </div>
                 <div>
-                  <span className="text-2xl font-bold">{plan.priceMonthly.toLocaleString("ar-EG")}</span>
-                  <span className="text-muted-foreground text-sm"> ج.م/شهر</span>
+                  <span className="text-2xl font-bold">{plan.priceMonthly.toLocaleString(isRTL ? "ar-EG" : "en-US")}</span>
+                  <span className="text-muted-foreground text-sm"> {t.platformPlanPerMonth}</span>
                 </div>
                 {plan.priceYearly && (
-                  <p className="text-xs text-muted-foreground">{plan.priceYearly.toLocaleString("ar-EG")} ج.م/سنة</p>
+                  <p className="text-xs text-muted-foreground">{plan.priceYearly.toLocaleString(isRTL ? "ar-EG" : "en-US")} {t.platformPlanPerYear}</p>
                 )}
               </CardHeader>
               <CardContent className="space-y-3">
                 {plan.description && <p className="text-sm text-muted-foreground">{plan.description}</p>}
                 <div className="flex gap-3 text-xs text-muted-foreground">
-                  {plan.maxUsers && <span>أقصى {plan.maxUsers} مستخدم</span>}
-                  {plan.maxLeads && <span>أقصى {plan.maxLeads} ليد</span>}
+                  {plan.maxUsers && <span>{t.platformPlanMaxSuffix} {plan.maxUsers} {t.platformPlanUserSuffix}</span>}
+                  {plan.maxLeads && <span>{t.platformPlanMaxSuffix} {plan.maxLeads} {t.platformPlanLeadSuffix}</span>}
                 </div>
                 {plan.features && plan.features.length > 0 && (
                   <ul className="space-y-1">
@@ -228,7 +230,7 @@ export default function PlatformPlansPage() {
                       </li>
                     ))}
                     {plan.features.length > 5 && (
-                      <li className="text-xs text-muted-foreground">+{plan.features.length - 5} مميزات أخرى</li>
+                      <li className="text-xs text-muted-foreground">+{plan.features.length - 5} {t.platformPlanMoreFeatures}</li>
                     )}
                   </ul>
                 )}

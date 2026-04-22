@@ -14,6 +14,7 @@ import {
 import { SiFacebook, SiInstagram, SiWhatsapp } from "react-icons/si";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/lib/i18n";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
@@ -73,12 +74,15 @@ const PLATFORM_ICON: Record<string, React.ReactNode> = {
   facebook_comment: <span className="text-[#1877F2] text-xs font-bold">📢</span>,
 };
 
-const PLATFORM_LABEL: Record<string, string> = {
-  messenger: "ماسنجر",
-  instagram: "إنستجرام",
-  whatsapp: "واتساب",
-  facebook_comment: "تعليق فيسبوك",
-};
+function usePlatformLabels() {
+  const { t } = useLanguage();
+  return {
+    messenger: t.convPlatformMessenger,
+    instagram: t.convPlatformInstagram,
+    whatsapp: t.convPlatformWhatsapp,
+    facebook_comment: t.convPlatformFbComment,
+  };
+}
 
 const PLATFORM_COLOR: Record<string, string> = {
   whatsapp: "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800",
@@ -88,27 +92,30 @@ const PLATFORM_COLOR: Record<string, string> = {
 };
 
 function PlatformBadge({ platform }: { platform: string }) {
+  const platformLabels = usePlatformLabels();
   return (
     <span className={cn(
       "inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border",
       PLATFORM_COLOR[platform] ?? "bg-muted border-border"
     )}>
       {PLATFORM_ICON[platform]}
-      <span className="hidden sm:inline">{PLATFORM_LABEL[platform] ?? platform}</span>
+      <span className="hidden sm:inline">{platformLabels[platform as keyof typeof platformLabels] ?? platform}</span>
     </span>
   );
 }
 
 function ScoreBadge({ score }: { score: string | null }) {
+  const { t } = useLanguage();
   if (!score) return null;
   const cfg = {
-    hot: { label: "ساخن 🔥", cls: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200" },
-    warm: { label: "دافئ", cls: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200" },
-    cold: { label: "بارد", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200" },
+    hot: { label: t.convScoreHot, cls: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200" },
+    warm: { label: t.convScoreWarm, cls: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200" },
+    cold: { label: t.convScoreCold, cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200" },
   }[score] ?? { label: score, cls: "bg-muted text-muted-foreground border-border" };
   return <Badge variant="outline" className={cn("text-xs border", cfg.cls)}>{cfg.label}</Badge>;
 }
 
+const BOT_AGENT_NAME_DB = "\u0627\u0644\u0628\u0648\u062a";
 const REPLY_PLATFORMS = ["whatsapp", "messenger", "instagram"];
 
 function getReplyablePlatforms(platforms: string[]) {
@@ -128,6 +135,8 @@ function highlightText(text: string, term: string): React.ReactNode {
 
 export default function ConversationsPage() {
   const { toast } = useToast();
+  const { t, isRTL } = useLanguage();
+  const platformLabels = usePlatformLabels();
   const [activePlatform, setActivePlatform] = useState<FilterPlatform>("all");
   const [filterRead, setFilterRead] = useState<FilterRead>("all");
   const [filterAgent, setFilterAgent] = useState<string>("all");
@@ -217,9 +226,9 @@ export default function ConversationsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/conversations", selectedLeadId, "messages"] });
       setReplyText("");
-      toast({ title: "تم إرسال الرسالة" });
+      toast({ title: t.convSent });
     },
-    onError: () => toast({ title: "فشل الإرسال", variant: "destructive" }),
+    onError: () => toast({ title: t.convSendError, variant: "destructive" }),
   });
 
   const sendWhatsAppMutation = useMutation({
@@ -230,14 +239,14 @@ export default function ConversationsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/conversations", selectedLeadId, "messages"] });
       setReplyText("");
     },
-    onError: () => toast({ title: "فشل إرسال الرسالة", variant: "destructive" }),
+    onError: () => toast({ title: t.convSendErrorMsg, variant: "destructive" }),
   });
 
   const takeoverMutation = useMutation({
     mutationFn: (leadId: string) => apiRequest("POST", `/api/leads/${leadId}/bot/takeover`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads", selectedLeadId] });
-      toast({ title: "تم تسلّم المحادثة من البوت" });
+      toast({ title: t.convTakeoverSuccess });
     },
   });
 
@@ -245,14 +254,14 @@ export default function ConversationsPage() {
     mutationFn: (leadId: string) => apiRequest("POST", `/api/leads/${leadId}/bot/reactivate`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads", selectedLeadId] });
-      toast({ title: "تم تفعيل البوت مجدداً" });
+      toast({ title: t.convBotActivated });
     },
   });
 
   const logCallMutation = useMutation({
-    mutationFn: (leadId: string) => apiRequest("POST", "/api/call-logs", { leadId, outcome: "answered", notes: "مكالمة من صندوق المحادثات" }),
-    onSuccess: () => toast({ title: "تم تسجيل المكالمة" }),
-    onError: () => toast({ title: "فشل تسجيل المكالمة", variant: "destructive" }),
+    mutationFn: (leadId: string) => apiRequest("POST", "/api/call-logs", { leadId, outcome: "answered", notes: t.convTitle }),
+    onSuccess: () => toast({ title: t.convCallLogged }),
+    onError: () => toast({ title: t.convCallLogError, variant: "destructive" }),
   });
 
   const createReminderMutation = useMutation({
@@ -262,9 +271,9 @@ export default function ConversationsPage() {
       setShowReminderDialog(false);
       setReminderTitle("");
       setReminderDate("");
-      toast({ title: "تم إضافة التذكير" });
+      toast({ title: t.convReminderAdded });
     },
-    onError: () => toast({ title: "فشل إضافة التذكير", variant: "destructive" }),
+    onError: () => toast({ title: t.convReminderError, variant: "destructive" }),
   });
 
   const bulkMarkMutation = useMutation({
@@ -273,9 +282,9 @@ export default function ConversationsPage() {
     onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
       setSelectedConvIds(new Set());
-      toast({ title: vars.isRead ? "تم تحديد المحادثات كمقروءة" : "تم تحديد المحادثات كغير مقروءة" });
+      toast({ title: vars.isRead ? t.convBulkReadSuccess : t.convBulkUnreadSuccess });
     },
-    onError: () => toast({ title: "فشل تنفيذ العملية", variant: "destructive" }),
+    onError: () => toast({ title: t.convBulkError, variant: "destructive" }),
   });
 
   const handleMarkAllRead = () => {
@@ -327,7 +336,7 @@ export default function ConversationsPage() {
     for (const p of conv.platforms) {
       if (p === "messenger" || p === "instagram" || p === "facebook_comment") socialPlatforms.add(p);
     }
-    for (const p of socialPlatforms) {
+    for (const p of Array.from(socialPlatforms)) {
       apiRequest("POST", `/api/leads/${conv.leadId}/social-messages/read`, { platform: p }).catch(() => {});
     }
     queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
@@ -357,11 +366,11 @@ export default function ConversationsPage() {
   });
 
   const tabs: { key: FilterPlatform; label: string }[] = [
-    { key: "all", label: "الكل" },
-    { key: "whatsapp", label: "واتساب" },
-    { key: "messenger", label: "ماسنجر" },
-    { key: "instagram", label: "إنستجرام" },
-    { key: "facebook_comment", label: "تعليقات" },
+    { key: "all", label: t.convPlatformAll },
+    { key: "whatsapp", label: t.convPlatformWhatsapp },
+    { key: "messenger", label: t.convPlatformMessenger },
+    { key: "instagram", label: t.convPlatformInstagram },
+    { key: "facebook_comment", label: t.convPlatformComments },
   ];
 
   const replyablePlatforms = selectedConv ? getReplyablePlatforms(selectedConv.platforms) : [];
@@ -374,11 +383,11 @@ export default function ConversationsPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex flex-col" data-testid="page-conversations">
+    <div className="h-[calc(100vh-8rem)] flex flex-col" data-testid="page-conversations" dir={isRTL ? "rtl" : "ltr"}>
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">صندوق المحادثات</h1>
-          <p className="text-muted-foreground text-sm">جميع المحادثات عبر واتساب وماسنجر وإنستجرام والتعليقات</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t.convTitle}</h1>
+          <p className="text-muted-foreground text-sm">{t.convSubtitle}</p>
         </div>
         <Button
           size="sm"
@@ -389,7 +398,7 @@ export default function ConversationsPage() {
           data-testid="button-mark-all-read"
         >
           <CheckCheck className="h-3.5 w-3.5" />
-          تحديد الكل كمقروء
+          {t.convMarkAllRead}
         </Button>
       </div>
 
@@ -430,7 +439,7 @@ export default function ConversationsPage() {
         <div className="w-80 shrink-0 border-r flex flex-col overflow-hidden bg-muted/20">
           <div className="p-2 border-b space-y-2">
             <Input
-              placeholder="بحث في كل الرسائل..."
+              placeholder={t.convSearchPlaceholder}
               value={searchTerm}
               onChange={e => handleSearchChange(e.target.value)}
               data-testid="input-search-conversations"
@@ -439,21 +448,21 @@ export default function ConversationsPage() {
             <div className="flex gap-1">
               <Select value={filterRead} onValueChange={v => setFilterRead(v as FilterRead)}>
                 <SelectTrigger className="h-7 text-xs flex-1" data-testid="filter-read">
-                  <Filter className="h-3 w-3 ml-1" />
+                  <Filter className="h-3 w-3 me-1" />
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">الكل</SelectItem>
-                  <SelectItem value="unread">غير مقروء</SelectItem>
-                  <SelectItem value="read">مقروء</SelectItem>
+                  <SelectItem value="all">{t.convAll}</SelectItem>
+                  <SelectItem value="unread">{t.convUnread}</SelectItem>
+                  <SelectItem value="read">{t.convRead}</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={filterAgent} onValueChange={setFilterAgent}>
                 <SelectTrigger className="h-7 text-xs flex-1" data-testid="filter-agent">
-                  <SelectValue placeholder="المندوب" />
+                  <SelectValue placeholder={t.convAgent} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">كل المندوبين</SelectItem>
+                  <SelectItem value="all">{t.convAllAgents}</SelectItem>
                   {users.map(u => (
                     <SelectItem key={u.id} value={u.username}>
                       {u.firstName ? `${u.firstName} ${u.lastName ?? ""}`.trim() : u.username}
@@ -468,13 +477,12 @@ export default function ConversationsPage() {
                   onClick={toggleSelectAll}
                   className="p-1 text-muted-foreground hover:text-foreground"
                   data-testid="button-toggle-select-all"
-                  title="تحديد/إلغاء الكل"
                 >
                   {selectedConvIds.size === filtered.length
                     ? <CheckSquare className="h-4 w-4 text-primary" />
                     : <Square className="h-4 w-4" />}
                 </button>
-                <span className="text-xs text-muted-foreground flex-1">{selectedConvIds.size} محادثة</span>
+                <span className="text-xs text-muted-foreground flex-1">{selectedConvIds.size} {t.convSelectedCount}</span>
                 <Button
                   size="sm"
                   variant="outline"
@@ -484,7 +492,7 @@ export default function ConversationsPage() {
                   data-testid="button-bulk-mark-read"
                 >
                   <BookOpen className="h-3 w-3" />
-                  مقروء
+                  {t.convMarkRead}
                 </Button>
                 <Button
                   size="sm"
@@ -495,7 +503,7 @@ export default function ConversationsPage() {
                   data-testid="button-bulk-mark-unread"
                 >
                   <BookMarked className="h-3 w-3" />
-                  غير مقروء
+                  {t.convMarkUnread}
                 </Button>
               </div>
             )}
@@ -508,7 +516,7 @@ export default function ConversationsPage() {
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center flex-1 text-muted-foreground p-4">
               <MessageSquare className="h-8 w-8 mb-2" />
-              <p className="text-sm text-center">لا توجد محادثات</p>
+              <p className="text-sm text-center">{t.convNoConversations}</p>
             </div>
           ) : (
             <div className="overflow-y-auto flex-1">
@@ -528,7 +536,7 @@ export default function ConversationsPage() {
                       onClick={e => toggleConvSelection(e, conv.leadId)}
                       data-testid={`checkbox-conv-${conv.leadId}`}
                       className="flex items-center justify-center px-2 shrink-0 text-muted-foreground hover:text-primary"
-                      title="تحديد"
+                      title={t.convSelectTooltip}
                     >
                       {isChecked
                         ? <CheckSquare className="h-4 w-4 text-primary" />
@@ -549,7 +557,7 @@ export default function ConversationsPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-1">
-                            <span className="font-medium text-sm truncate">{conv.leadName || "عميل غير معروف"}</span>
+                            <span className="font-medium text-sm truncate">{conv.leadName || t.convUnknownCustomer}</span>
                             <span className="text-xs text-muted-foreground shrink-0">
                               {conv.lastMessageAt ? format(new Date(conv.lastMessageAt), "HH:mm") : ""}
                             </span>
@@ -557,11 +565,11 @@ export default function ConversationsPage() {
                           <p className="text-xs text-muted-foreground truncate mt-0.5" data-testid={`conv-preview-${conv.leadId}`}>
                             {debouncedSearch.trim() && conv.matchedMessage
                               ? highlightText(conv.matchedMessage, debouncedSearch)
-                              : (conv.lastMessage ?? "لا توجد رسائل")}
+                              : (conv.lastMessage ?? t.convNoMessages)}
                           </p>
                           <div className="flex items-center gap-1 mt-1 flex-wrap">
                             {conv.platforms.map(p => (
-                              <span key={p} title={PLATFORM_LABEL[p] ?? p}>
+                              <span key={p} title={platformLabels[p as keyof typeof platformLabels] ?? p}>
                                 {PLATFORM_ICON[p]}
                               </span>
                             ))}
@@ -581,14 +589,14 @@ export default function ConversationsPage() {
           {!selectedConv ? (
             <div className="flex flex-1 items-center justify-center text-muted-foreground flex-col gap-2">
               <MessageSquare className="h-12 w-12" />
-              <p>اختر محادثة للعرض</p>
+              <p>{t.convSelectConversation}</p>
             </div>
           ) : (
             <>
               <div className="flex flex-col flex-1 min-w-0 min-h-0">
                 <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b bg-card shrink-0 flex-wrap gap-y-2">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold">{selectedConv.leadName || "عميل"}</span>
+                    <span className="font-semibold">{selectedConv.leadName || t.convCustomer}</span>
                     <ScoreBadge score={selectedConv.score} />
                     {selectedConv.platforms.map(p => <PlatformBadge key={p} platform={p} />)}
                     {selectedConv.assignedTo && (
@@ -598,8 +606,8 @@ export default function ConversationsPage() {
                       </Badge>
                     )}
                     {botActive && botStage !== "handed_off"
-                      ? <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs">بوت نشط</Badge>
-                      : <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-xs">يدوي</Badge>
+                      ? <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs">{t.convBotActive}</Badge>
+                      : <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-xs">{t.convManual}</Badge>
                     }
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -612,7 +620,7 @@ export default function ConversationsPage() {
                       data-testid="button-log-call"
                     >
                       <Phone className="h-3 w-3" />
-                      تسجيل مكالمة
+                      {t.convLogCall}
                     </Button>
                     <Button
                       size="sm"
@@ -622,7 +630,7 @@ export default function ConversationsPage() {
                       data-testid="button-add-reminder"
                     >
                       <Bell className="h-3 w-3" />
-                      تذكير
+                      {t.convReminder}
                     </Button>
                     <Button
                       size="sm"
@@ -633,7 +641,7 @@ export default function ConversationsPage() {
                     >
                       <Link href="/leads">
                         <ExternalLink className="h-3 w-3" />
-                        ملف العميل
+                        {t.convProfile}
                       </Link>
                     </Button>
                     {botActive && botStage !== "handed_off" ? (
@@ -646,7 +654,7 @@ export default function ConversationsPage() {
                         data-testid="button-takeover"
                       >
                         <UserCheck className="h-3 w-3" />
-                        تسلّم
+                        {t.convTakeover}
                       </Button>
                     ) : (
                       <Button
@@ -658,7 +666,7 @@ export default function ConversationsPage() {
                         data-testid="button-reactivate-bot"
                       >
                         <Bot className="h-3 w-3" />
-                        تفعيل البوت
+                        {t.convActivateBot}
                       </Button>
                     )}
                   </div>
@@ -672,13 +680,13 @@ export default function ConversationsPage() {
                   ) : messages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                       <MessageSquare className="h-8 w-8 mb-2" />
-                      <p className="text-sm">لا توجد رسائل بعد</p>
+                      <p className="text-sm">{t.convNoMessagesYet}</p>
                     </div>
                   ) : (
                     <>
                       {messages.map(msg => {
                         const isInbound = msg.direction === "inbound" || msg.direction === "comment_reply";
-                        const isBot = msg.agentName === "البوت";
+                        const isBot = msg.agentName === BOT_AGENT_NAME_DB;
                         return (
                           <div
                             key={msg.id}
@@ -714,7 +722,7 @@ export default function ConversationsPage() {
                                   {msg.createdAt ? format(new Date(msg.createdAt), "HH:mm") : ""}
                                 </span>
                                 {!isInbound && (
-                                  <span>· {isBot ? "بوت" : msg.agentName || "مندوب"}</span>
+                                  <span>· {isBot ? t.convBot : msg.agentName || t.convSalesAgent}</span>
                                 )}
                               </div>
                             </div>
@@ -729,13 +737,13 @@ export default function ConversationsPage() {
                 <div className="border-t p-3 bg-card shrink-0">
                   {replyablePlatforms.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-1">
-                      هذا العميل تواصل عبر تعليقات فقط — لا يمكن إرسال رسائل مباشرة من هنا
+                      {t.convCommentOnlyNote}
                     </p>
                   ) : (
                     <div className="space-y-2">
                       {replyablePlatforms.length > 1 && (
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground shrink-0">إرسال عبر:</span>
+                          <span className="text-xs text-muted-foreground shrink-0">{t.convSendVia}</span>
                           <div className="flex gap-1">
                             {replyablePlatforms.map(p => (
                               <button
@@ -750,7 +758,7 @@ export default function ConversationsPage() {
                                 )}
                               >
                                 {PLATFORM_ICON[p]}
-                                {PLATFORM_LABEL[p]}
+                                {platformLabels[p as keyof typeof platformLabels] ?? p}
                               </button>
                             ))}
                           </div>
@@ -760,9 +768,8 @@ export default function ConversationsPage() {
                         <Input
                           value={replyText}
                           onChange={e => setReplyText(e.target.value)}
-                          placeholder={`اكتب رسالتك عبر ${PLATFORM_LABEL[replyPlatform ?? "whatsapp"] ?? ""}...`}
+                          placeholder={`${t.convTypePlaceholder} ${platformLabels[replyPlatform as keyof typeof platformLabels ?? "whatsapp"] ?? ""}...`}
                           data-testid="input-reply"
-                          dir="rtl"
                           onKeyDown={e => {
                             if (e.key === "Enter" && !e.shiftKey && replyText.trim()) {
                               e.preventDefault();
@@ -784,64 +791,64 @@ export default function ConversationsPage() {
                 </div>
               </div>
 
-              <div className="w-56 shrink-0 border-l p-4 overflow-y-auto bg-muted/10 hidden lg:block">
-                <h3 className="font-semibold text-sm mb-3">بيانات العميل</h3>
-                <div className="space-y-3 text-sm" dir="rtl">
+              <div className="w-56 shrink-0 border-s p-4 overflow-y-auto bg-muted/10 hidden lg:block">
+                <h3 className="font-semibold text-sm mb-3">{t.convCustomerData}</h3>
+                <div className="space-y-3 text-sm">
                   <div className="flex items-start gap-2">
                     <User className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                     <div>
-                      <p className="text-muted-foreground text-xs">الاسم</p>
-                      <p className="font-medium">{leadInfo?.name ?? selectedConv.leadName ?? "غير معروف"}</p>
+                      <p className="text-muted-foreground text-xs">{t.convNameLabel}</p>
+                      <p className="font-medium">{leadInfo?.name ?? selectedConv.leadName ?? t.convUnknown}</p>
                     </div>
                   </div>
                   {leadInfo?.phone && (
                     <div className="flex items-start gap-2">
                       <Phone className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                       <div>
-                        <p className="text-muted-foreground text-xs">الهاتف</p>
+                        <p className="text-muted-foreground text-xs">{t.convPhoneLabel}</p>
                         <p className="font-medium">{leadInfo.phone}</p>
                       </div>
                     </div>
                   )}
                   {selectedConv.score && (
                     <div>
-                      <p className="text-muted-foreground text-xs mb-1">التقييم</p>
+                      <p className="text-muted-foreground text-xs mb-1">{t.convScoreLabel}</p>
                       <ScoreBadge score={selectedConv.score} />
                     </div>
                   )}
                   {leadInfo?.budget && (
                     <div>
-                      <p className="text-muted-foreground text-xs">الميزانية</p>
+                      <p className="text-muted-foreground text-xs">{t.convBudgetLabel}</p>
                       <p className="font-medium">{leadInfo.budget}</p>
                     </div>
                   )}
                   {leadInfo?.unitType && (
                     <div>
-                      <p className="text-muted-foreground text-xs">نوع الوحدة</p>
+                      <p className="text-muted-foreground text-xs">{t.convUnitTypeLabel}</p>
                       <p className="font-medium">{leadInfo.unitType}</p>
                     </div>
                   )}
                   {leadInfo?.location && (
                     <div>
-                      <p className="text-muted-foreground text-xs">الموقع</p>
+                      <p className="text-muted-foreground text-xs">{t.convLocationLabel}</p>
                       <p className="font-medium">{leadInfo.location}</p>
                     </div>
                   )}
                   {selectedConv.assignedTo && (
                     <div>
-                      <p className="text-muted-foreground text-xs">المندوب</p>
+                      <p className="text-muted-foreground text-xs">{t.convAgentLabel}</p>
                       <p className="font-medium">{getUserDisplayName(selectedConv.assignedTo)}</p>
                     </div>
                   )}
                   <div className="pt-2 border-t">
-                    <p className="text-muted-foreground text-xs mb-1">المنصات</p>
+                    <p className="text-muted-foreground text-xs mb-1">{t.convPlatformsLabel}</p>
                     <div className="flex flex-wrap gap-1">
                       {selectedConv.platforms.map(p => <PlatformBadge key={p} platform={p} />)}
                     </div>
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    <p>الرسائل: {selectedConv.totalCount}</p>
-                    <p>غير مقروءة: {selectedConv.unreadCount}</p>
+                    <p>{t.convTotalMessages}: {selectedConv.totalCount}</p>
+                    <p>{t.convUnreadMessages}: {selectedConv.unreadCount}</p>
                   </div>
                 </div>
               </div>
@@ -853,20 +860,20 @@ export default function ConversationsPage() {
       <Dialog open={showReminderDialog} onOpenChange={setShowReminderDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>إضافة تذكير</DialogTitle>
+            <DialogTitle>{t.convAddReminder}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
-              <Label>العنوان</Label>
+              <Label>{t.convReminderTitle}</Label>
               <Input
                 value={reminderTitle}
                 onChange={e => setReminderTitle(e.target.value)}
-                placeholder="اكتب عنوان التذكير..."
+                placeholder={t.convReminderTitlePlaceholder}
                 data-testid="input-reminder-title"
               />
             </div>
             <div>
-              <Label>التاريخ والوقت</Label>
+              <Label>{t.convReminderDateTime}</Label>
               <Input
                 type="datetime-local"
                 value={reminderDate}
@@ -876,7 +883,7 @@ export default function ConversationsPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowReminderDialog(false)}>إلغاء</Button>
+            <Button variant="outline" onClick={() => setShowReminderDialog(false)}>{t.cancel}</Button>
             <Button
               onClick={() => {
                 if (!selectedLeadId || !reminderTitle || !reminderDate) return;
@@ -885,7 +892,7 @@ export default function ConversationsPage() {
               disabled={createReminderMutation.isPending || !reminderTitle || !reminderDate}
               data-testid="button-save-reminder"
             >
-              حفظ
+              {t.convReminderSave}
             </Button>
           </DialogFooter>
         </DialogContent>

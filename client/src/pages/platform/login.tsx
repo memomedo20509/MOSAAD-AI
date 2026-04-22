@@ -8,12 +8,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Bot, Loader2 } from "lucide-react";
+import { useLanguage } from "@/lib/i18n";
 
 type LoginData = { username: string; password: string };
 
 export default function PlatformLoginPage() {
   const [, navigate] = useLocation();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [loginData, setLoginData] = useState({ username: "", password: "" });
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -37,9 +39,9 @@ export default function PlatformLoginPage() {
     onError: (error: Error) => {
       try {
         const body = JSON.parse(error.message.replace(/^\d+:\s*/, ""));
-        setErrorMsg(body.error || "فشل تسجيل الدخول");
+        setErrorMsg(body.error || t.platformLoginFail);
       } catch {
-        setErrorMsg("فشل تسجيل الدخول");
+        setErrorMsg(t.platformLoginFail);
       }
     },
   });
@@ -59,13 +61,13 @@ export default function PlatformLoginPage() {
               <Bot className="h-6 w-6 text-primary-foreground" />
             </div>
           </div>
-          <CardTitle className="text-2xl">بوابة المنصة</CardTitle>
-          <CardDescription>تسجيل دخول مشرف المنصة</CardDescription>
+          <CardTitle className="text-2xl">{t.platformLoginTitle}</CardTitle>
+          <CardDescription>{t.platformLoginDesc}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="platform-login-username">اسم المستخدم</Label>
+              <Label htmlFor="platform-login-username">{t.platformLoginUserLabel}</Label>
               <Input
                 id="platform-login-username"
                 value={loginData.username}
@@ -77,7 +79,7 @@ export default function PlatformLoginPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="platform-login-password">كلمة المرور</Label>
+              <Label htmlFor="platform-login-password">{t.platformLoginPassLabel}</Label>
               <Input
                 id="platform-login-password"
                 type="password"
@@ -99,7 +101,7 @@ export default function PlatformLoginPage() {
               data-testid="button-platform-login"
             >
               {platformLoginMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              تسجيل الدخول
+              {t.platformLoginBtn}
             </Button>
 
             {import.meta.env.DEV && (
@@ -115,7 +117,7 @@ export default function PlatformLoginPage() {
                   disabled={platformLoginMutation.isPending}
                   data-testid="button-platform-quick-login"
                 >
-                  Quick Login (Dev)
+                  {t.quickLoginDev}
                 </Button>
               </div>
             )}

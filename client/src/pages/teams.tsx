@@ -8,19 +8,19 @@ export default function TeamsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">{t.teams ?? "الفرق"}</h1>
-        <p className="text-muted-foreground">إدارة فرق العمل والمجموعات</p>
+        <h1 className="text-2xl font-bold">{t.teamsTitle}</h1>
+        <p className="text-muted-foreground">{t.teamsDesc}</p>
       </div>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
-            الفرق
+            {t.teamsTitle}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground text-center py-8">
-            لا توجد فرق بعد. يمكنك إضافة فرق من هنا.
+            {t.teamsEmpty}
           </p>
         </CardContent>
       </Card>

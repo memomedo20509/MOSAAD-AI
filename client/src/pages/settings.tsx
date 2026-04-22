@@ -10,22 +10,38 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Briefcase, ShoppingCart, Building2 } from "lucide-react";
 import type { Company } from "@shared/schema";
+import { useLanguage } from "@/lib/i18n";
+import { normalizeIndustry } from "@/lib/legacy-normalizers";
 
-const INDUSTRIES = [
-  "عقارات",
-  "سيارات",
-  "تأمين",
-  "تعليم",
-  "رعاية صحية",
-  "تقنية",
-  "تجزئة",
-  "ضيافة",
-  "مالية",
-  "أخرى",
-];
+const INDUSTRY_IDS = [
+  "real_estate",
+  "automotive",
+  "insurance",
+  "education",
+  "healthcare",
+  "technology",
+  "retail",
+  "hospitality",
+  "finance",
+  "other",
+] as const;
 
 export default function SettingsPage() {
   const { toast } = useToast();
+  const { t, isRTL } = useLanguage();
+
+  const INDUSTRY_LABELS: Record<string, string> = {
+    real_estate: t.onboardingIndustryRealEstate,
+    automotive: t.onboardingIndustryCars,
+    insurance: t.onboardingIndustryInsurance,
+    education: t.onboardingIndustryEducation,
+    healthcare: t.onboardingIndustryHealthcare,
+    technology: t.onboardingIndustryTech,
+    retail: t.onboardingIndustryRetail,
+    hospitality: t.onboardingIndustryHospitality,
+    finance: t.onboardingIndustryFinance,
+    other: t.onboardingIndustryOther,
+  };
 
   const { data: company, isLoading } = useQuery<Company>({ queryKey: ["/api/companies/me"] });
 
@@ -42,7 +58,7 @@ export default function SettingsPage() {
     if (company) {
       setForm({
         name: company.name ?? "",
-        industry: company.industry ?? "",
+        industry: normalizeIndustry(company.industry, INDUSTRY_IDS),
         businessType: company.businessType ?? "service",
         workingHours: company.workingHours ?? "",
         timezone: company.timezone ?? "",
@@ -56,27 +72,26 @@ export default function SettingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/companies/me"] });
       queryClient.invalidateQueries({ queryKey: ["/api/onboarding/status"] });
-      // Invalidate user cache so adaptive labels (business type) update immediately in-session
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-      toast({ title: "تم حفظ الإعدادات بنجاح" });
+      toast({ title: t.settingsSavedSuccess });
     },
-    onError: () => toast({ title: "فشل حفظ الإعدادات", variant: "destructive" }),
+    onError: () => toast({ title: t.settingsSavedError, variant: "destructive" }),
   });
 
   return (
-    <div className="space-y-6 max-w-2xl" data-testid="page-settings" dir="rtl">
+    <div className="space-y-6 max-w-2xl" data-testid="page-settings" dir={isRTL ? "rtl" : "ltr"}>
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">إعدادات الشركة</h1>
-        <p className="text-muted-foreground">معلومات وإعدادات حسابك</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.companySettings}</h1>
+        <p className="text-muted-foreground">{t.companySettingsSubtitle}</p>
       </div>
 
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
             <Building2 className="h-5 w-5 text-muted-foreground" />
-            <CardTitle>ملف الشركة</CardTitle>
+            <CardTitle>{t.companyProfileCard}</CardTitle>
           </div>
-          <CardDescription>المعلومات الأساسية عن شركتك</CardDescription>
+          <CardDescription>{t.companyProfileDesc}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {isLoading ? (
@@ -84,7 +99,7 @@ export default function SettingsPage() {
           ) : (
             <>
               <div className="space-y-2">
-                <Label>نوع النشاط التجاري</Label>
+                <Label>{t.businessTypeLabel}</Label>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
@@ -100,8 +115,8 @@ export default function SettingsPage() {
                       <Briefcase className={`h-5 w-5 ${form.businessType === "service" ? "text-primary" : "text-muted-foreground"}`} />
                     </div>
                     <div className="text-center">
-                      <p className="font-semibold text-sm">خدمات / مبيعات</p>
-                      <p className="text-xs text-muted-foreground">ليدز ومواعيد</p>
+                      <p className="font-semibold text-sm">{t.businessTypeService}</p>
+                      <p className="text-xs text-muted-foreground">{t.businessTypeServiceDesc}</p>
                     </div>
                   </button>
                   <button
@@ -118,46 +133,46 @@ export default function SettingsPage() {
                       <ShoppingCart className={`h-5 w-5 ${form.businessType === "ecommerce" ? "text-primary" : "text-muted-foreground"}`} />
                     </div>
                     <div className="text-center">
-                      <p className="font-semibold text-sm">متجر إلكتروني</p>
-                      <p className="text-xs text-muted-foreground">منتجات وطلبات</p>
+                      <p className="font-semibold text-sm">{t.businessTypeEcommerce}</p>
+                      <p className="text-xs text-muted-foreground">{t.businessTypeEcommerceDesc}</p>
                     </div>
                   </button>
                 </div>
               </div>
 
               <div className="space-y-1">
-                <Label htmlFor="settings-company-name">اسم الشركة</Label>
+                <Label htmlFor="settings-company-name">{t.companyNameSetting}</Label>
                 <Input
                   id="settings-company-name"
                   data-testid="input-company-name"
                   value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="شركتي"
+                  placeholder={t.companyNamePlaceholderSetting}
                 />
               </div>
 
               <div className="space-y-1">
-                <Label htmlFor="settings-industry">المجال</Label>
+                <Label htmlFor="settings-industry">{t.industryLabel}</Label>
                 <Select value={form.industry} onValueChange={v => setForm(f => ({ ...f, industry: v }))}>
                   <SelectTrigger id="settings-industry" data-testid="select-industry">
-                    <SelectValue placeholder="اختر المجال" />
+                    <SelectValue placeholder={t.industryPlaceholder} />
                   </SelectTrigger>
                   <SelectContent>
-                    {INDUSTRIES.map(i => (
-                      <SelectItem key={i} value={i}>{i}</SelectItem>
+                    {INDUSTRY_IDS.map(id => (
+                      <SelectItem key={id} value={id}>{INDUSTRY_LABELS[id]}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-1">
-                <Label htmlFor="settings-working-hours">ساعات العمل</Label>
+                <Label htmlFor="settings-working-hours">{t.workingHoursLabel}</Label>
                 <Input
                   id="settings-working-hours"
                   data-testid="input-working-hours"
                   value={form.workingHours}
                   onChange={e => setForm(f => ({ ...f, workingHours: e.target.value }))}
-                  placeholder="مثال: 9 ص – 5 م"
+                  placeholder={t.workingHoursPlaceholder}
                 />
               </div>
 
@@ -166,7 +181,7 @@ export default function SettingsPage() {
                 disabled={updateMutation.isPending}
                 data-testid="button-save-settings"
               >
-                {updateMutation.isPending ? "جاري الحفظ..." : "حفظ التغييرات"}
+                {updateMutation.isPending ? t.saving : t.saveChanges}
               </Button>
             </>
           )}

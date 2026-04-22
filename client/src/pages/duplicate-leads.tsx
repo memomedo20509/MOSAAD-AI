@@ -10,12 +10,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useLanguage } from "@/lib/i18n";
 import type { Lead } from "@shared/schema";
 import { format } from "date-fns";
 
 export default function DuplicateLeadsPage() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { t, isRTL } = useLanguage();
   const isEcommerce = user?.companyBusinessType === "ecommerce";
   const [search, setSearch] = useState("");
   const [mergeGroup, setMergeGroup] = useState<{ phone: string; leads: Lead[] } | null>(null);
@@ -49,9 +51,9 @@ export default function DuplicateLeadsPage() {
     mutationFn: (id: string) => apiRequest("DELETE", `/api/leads/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
-      toast({ title: "تم حذف الليد المكرر" });
+      toast({ title: t.deleteLeadSuccessDuplicate });
     },
-    onError: () => toast({ title: "فشل في حذف الليد", variant: "destructive" }),
+    onError: () => toast({ title: t.deleteLeadError, variant: "destructive" }),
   });
 
   const mergeMutation = useMutation({
@@ -64,9 +66,9 @@ export default function DuplicateLeadsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
       setMergeGroup(null);
       setKeepLeadId(null);
-      toast({ title: isEcommerce ? "تم دمج الطلبات المكررة" : "تم دمج الليدز المكررة" });
+      toast({ title: t.mergeSuccess });
     },
-    onError: () => toast({ title: isEcommerce ? "فشل في دمج الطلبات" : "فشل في دمج الليدز", variant: "destructive" }),
+    onError: () => toast({ title: t.mergeError, variant: "destructive" }),
   });
 
   const handleMerge = () => {
@@ -78,26 +80,26 @@ export default function DuplicateLeadsPage() {
   const totalDuplicates = duplicateGroups.reduce((s, g) => s + g.leads.length - 1, 0);
 
   return (
-    <div className="space-y-6" data-testid="page-duplicate-leads">
+    <div className="space-y-6" data-testid="page-duplicate-leads" dir={isRTL ? "rtl" : "ltr"}>
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{isEcommerce ? "الطلبات المكررة" : "الليدز المكررة"}</h1>
-        <p className="text-muted-foreground">{isEcommerce ? "إدارة الطلبات المكررة بناءً على رقم الهاتف" : "إدارة الليدز المكررة بناءً على رقم الهاتف"}</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{isEcommerce ? t.navDuplicateOrders : t.duplicatedLeadsTitle}</h1>
+        <p className="text-muted-foreground">{isEcommerce ? t.duplicatedLeadsSubtitle : t.duplicatedLeadsSubtitle}</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative max-w-xs flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="بحث بالاسم أو الهاتف..."
+            placeholder={t.searchDuplicates}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="ps-9"
             data-testid="input-search-duplicates"
           />
         </div>
-        <div className="flex items-center gap-2 ml-auto">
-          <Badge variant="secondary" data-testid="badge-groups-count">{duplicateGroups.length} مجموعة</Badge>
-          <Badge variant="destructive" data-testid="badge-duplicates-count">{totalDuplicates} مكرر</Badge>
+        <div className="flex items-center gap-2 ms-auto">
+          <Badge variant="secondary" data-testid="badge-groups-count">{duplicateGroups.length} {t.phoneGroup}</Badge>
+          <Badge variant="destructive" data-testid="badge-duplicates-count">{totalDuplicates} {t.duplicateCount}</Badge>
         </div>
       </div>
 
@@ -108,8 +110,8 @@ export default function DuplicateLeadsPage() {
           <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
             <Copy className="h-12 w-12 text-muted-foreground" />
             <div className="text-center">
-              <p className="font-medium">{isEcommerce ? "لا يوجد طلبات مكررة" : "لا يوجد ليدز مكررة"}</p>
-              <p className="text-sm text-muted-foreground">جميع أرقام الهواتف فريدة</p>
+              <p className="font-medium">{t.noDuplicatesFound}</p>
+              <p className="text-sm text-muted-foreground">{t.allPhonesUnique}</p>
             </div>
           </CardContent>
         </Card>
@@ -122,7 +124,7 @@ export default function DuplicateLeadsPage() {
                   <div className="flex items-center gap-2 text-base">
                     <Phone className="h-4 w-4" />
                     <span dir="ltr">{group.phone}</span>
-                    <Badge variant="destructive" className="text-xs">{group.leads.length} نسخ</Badge>
+                    <Badge variant="destructive" className="text-xs">{group.leads.length}</Badge>
                   </div>
                   <Button
                     size="sm"
@@ -130,8 +132,8 @@ export default function DuplicateLeadsPage() {
                     onClick={() => { setMergeGroup(group); setKeepLeadId(group.leads[0].id); }}
                     data-testid={`button-merge-group-${group.phone}`}
                   >
-                    <Merge className="h-4 w-4 mr-1" />
-                    دمج
+                    <Merge className="h-4 w-4 me-1" />
+                    {t.mergeLeads}
                   </Button>
                 </CardTitle>
               </CardHeader>
@@ -140,10 +142,10 @@ export default function DuplicateLeadsPage() {
                   <table className="w-full text-sm">
                     <thead className="border-b">
                       <tr>
-                        <th className="text-start py-2 px-3 font-medium">الاسم</th>
-                        <th className="text-start py-2 px-3 font-medium">القناة</th>
-                        <th className="text-start py-2 px-3 font-medium">تاريخ الإنشاء</th>
-                        <th className="text-end py-2 px-3 font-medium">إجراءات</th>
+                        <th className="text-start py-2 px-3 font-medium">{t.name}</th>
+                        <th className="text-start py-2 px-3 font-medium">{t.channel}</th>
+                        <th className="text-start py-2 px-3 font-medium">{t.date}</th>
+                        <th className="text-end py-2 px-3 font-medium">{t.actions}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -151,8 +153,8 @@ export default function DuplicateLeadsPage() {
                         <tr key={lead.id} className="border-b last:border-0" data-testid={`row-dup-lead-${lead.id}`}>
                           <td className="py-2 px-3">
                             <div className="flex items-center gap-2">
-                              {idx === 0 && <Badge className="bg-green-100 text-green-700 text-[10px]">أصلي</Badge>}
-                              <span className="font-medium" data-testid={`text-dup-name-${lead.id}`}>{lead.name ?? "بدون اسم"}</span>
+                              {idx === 0 && <Badge className="bg-green-100 text-green-700 text-[10px]">{t.original}</Badge>}
+                              <span className="font-medium" data-testid={`text-dup-name-${lead.id}`}>{lead.name ?? "—"}</span>
                             </div>
                           </td>
                           <td className="py-2 px-3 text-muted-foreground capitalize" data-testid={`text-dup-channel-${lead.id}`}>{lead.channel ?? "—"}</td>
@@ -169,8 +171,8 @@ export default function DuplicateLeadsPage() {
                                 disabled={deleteMutation.isPending}
                                 data-testid={`button-delete-dup-${lead.id}`}
                               >
-                                <Trash2 className="h-4 w-4 mr-1" />
-                                حذف
+                                <Trash2 className="h-4 w-4 me-1" />
+                                {t.delete}
                               </Button>
                             )}
                           </td>
@@ -188,11 +190,11 @@ export default function DuplicateLeadsPage() {
       <Dialog open={!!mergeGroup} onOpenChange={(open) => { if (!open) { setMergeGroup(null); setKeepLeadId(null); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{isEcommerce ? "دمج الطلبات المكررة" : "دمج الليدز المكررة"}</DialogTitle>
+            <DialogTitle>{t.mergeLeads}</DialogTitle>
           </DialogHeader>
           {mergeGroup && (
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">اختر الليد الذي تريد الاحتفاظ به. سيتم حذف الباقي.</p>
+              <p className="text-sm text-muted-foreground">{t.keepLead} — {t.confirmMerge}</p>
               <div className="space-y-2">
                 {mergeGroup.leads.map((lead) => (
                   <div
@@ -203,11 +205,11 @@ export default function DuplicateLeadsPage() {
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="font-medium">{lead.name ?? "بدون اسم"}</span>
-                        <span className="text-xs text-muted-foreground ml-2">{lead.channel ?? ""}</span>
+                        <span className="font-medium">{lead.name ?? "—"}</span>
+                        <span className="text-xs text-muted-foreground ms-2">{lead.channel ?? ""}</span>
                       </div>
                       {keepLeadId === lead.id && (
-                        <Badge className="bg-green-100 text-green-700">الاحتفاظ</Badge>
+                        <Badge className="bg-green-100 text-green-700">{t.keepLead}</Badge>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
@@ -219,9 +221,9 @@ export default function DuplicateLeadsPage() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setMergeGroup(null); setKeepLeadId(null); }} data-testid="button-cancel-merge">إلغاء</Button>
+            <Button variant="outline" onClick={() => { setMergeGroup(null); setKeepLeadId(null); }} data-testid="button-cancel-merge">{t.cancel}</Button>
             <Button onClick={handleMerge} disabled={!keepLeadId || mergeMutation.isPending} data-testid="button-confirm-merge">
-              {mergeMutation.isPending ? "جاري الدمج..." : "تأكيد الدمج"}
+              {mergeMutation.isPending ? t.mergingLeads : t.confirmMerge}
             </Button>
           </DialogFooter>
         </DialogContent>

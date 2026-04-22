@@ -8,9 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { History, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { useLanguage } from "@/lib/i18n";
 import type { LeadHistory } from "@shared/schema";
 import { format } from "date-fns";
-import { ar } from "date-fns/locale";
+import { ar, enUS } from "date-fns/locale";
 
 const ACTION_COLORS: Record<string, string> = {
   created: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
@@ -23,25 +24,27 @@ const ACTION_COLORS: Record<string, string> = {
   other: "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400",
 };
 
-const ACTION_LABELS: Record<string, string> = {
-  created: "إنشاء",
-  state_change: "تغيير حالة",
-  assignment: "تعيين",
-  reassignment: "إعادة تعيين",
-  call: "مكالمة",
-  whatsapp: "واتساب",
-  note: "ملاحظة",
-  other: "أخرى",
-};
-
 export default function ActivityLogPage() {
   const { user } = useAuth();
+  const { t, isRTL } = useLanguage();
   const isEcommerce = user?.companyBusinessType === "ecommerce";
+  const dateLocale = isRTL ? ar : enUS;
   const [search, setSearch] = useState("");
   const [filterAction, setFilterAction] = useState("all");
   const [filterUser, setFilterUser] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+
+  const ACTION_LABELS: Record<string, string> = {
+    created: t.activityLogActionCreated,
+    state_change: t.activityLogActionStateChange,
+    assignment: t.activityLogActionAssignment,
+    reassignment: t.activityLogActionReassignment,
+    call: t.activityLogActionCall,
+    whatsapp: t.activityLogActionWhatsapp,
+    note: t.activityLogActionNote,
+    other: t.activityLogActionOther,
+  };
 
   const { data: history = [], isLoading } = useQuery<LeadHistory[]>({
     queryKey: ["/api/history"],
@@ -86,29 +89,29 @@ export default function ActivityLogPage() {
   const hasFilters = filterAction !== "all" || filterUser !== "all" || search || dateFrom || dateTo;
 
   return (
-    <div className="space-y-6" data-testid="page-activity-log">
+    <div className="space-y-6" data-testid="page-activity-log" dir={isRTL ? "rtl" : "ltr"}>
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">سجل الإجراءات</h1>
-        <p className="text-muted-foreground">{isEcommerce ? "تتبع جميع الإجراءات على الطلبات" : "تتبع جميع الإجراءات على الليدز"}</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.actionsLogTitle}</h1>
+        <p className="text-muted-foreground">{isEcommerce ? t.actionsLogSubtitleOrders : t.actionsLogSubtitle}</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative max-w-xs flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="بحث في السجل..."
+            placeholder={t.searchLog}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="ps-9"
             data-testid="input-search-log"
           />
         </div>
         <Select value={filterAction} onValueChange={setFilterAction}>
           <SelectTrigger className="w-40" data-testid="select-filter-action">
-            <SelectValue placeholder="نوع الإجراء" />
+            <SelectValue placeholder={t.filterByAction} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">جميع الإجراءات</SelectItem>
+            <SelectItem value="all">{t.allActions}</SelectItem>
             {Object.entries(ACTION_LABELS).map(([key, label]) => (
               <SelectItem key={key} value={key}>{label}</SelectItem>
             ))}
@@ -116,10 +119,10 @@ export default function ActivityLogPage() {
         </Select>
         <Select value={filterUser} onValueChange={setFilterUser}>
           <SelectTrigger className="w-40" data-testid="select-filter-user">
-            <SelectValue placeholder="المستخدم" />
+            <SelectValue placeholder={t.filterByUser} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">جميع المستخدمين</SelectItem>
+            <SelectItem value="all">{t.allUsers}</SelectItem>
             {uniqueUsers.map((u) => (
               <SelectItem key={u} value={u}>{u}</SelectItem>
             ))}
@@ -130,7 +133,7 @@ export default function ActivityLogPage() {
           value={dateFrom}
           onChange={(e) => setDateFrom(e.target.value)}
           className="w-40"
-          placeholder="من تاريخ"
+          placeholder={t.dateFromLabel}
           data-testid="input-date-from"
         />
         <Input
@@ -138,7 +141,7 @@ export default function ActivityLogPage() {
           value={dateTo}
           onChange={(e) => setDateTo(e.target.value)}
           className="w-40"
-          placeholder="إلى تاريخ"
+          placeholder={t.dateToLabel}
           data-testid="input-date-to"
         />
         {hasFilters && (
@@ -148,10 +151,10 @@ export default function ActivityLogPage() {
             onClick={() => { setSearch(""); setFilterAction("all"); setFilterUser("all"); setDateFrom(""); setDateTo(""); }}
             data-testid="button-clear-filters"
           >
-            مسح الفلاتر
+            {t.clearAllFilters}
           </Button>
         )}
-        <span className="text-sm text-muted-foreground ml-auto" data-testid="text-results-count">{filtered.length} إجراء</span>
+        <span className="text-sm text-muted-foreground ms-auto" data-testid="text-results-count">{filtered.length} {t.activityCount}</span>
       </div>
 
       {isLoading ? (
@@ -161,9 +164,9 @@ export default function ActivityLogPage() {
           <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
             <History className="h-12 w-12 text-muted-foreground" />
             <div className="text-center">
-              <p className="font-medium">لا يوجد إجراءات</p>
+              <p className="font-medium">{t.noActivityFound}</p>
               <p className="text-sm text-muted-foreground">
-                {hasFilters ? "لا يوجد إجراءات تطابق الفلاتر المحددة" : "لم يتم تسجيل أي إجراءات بعد"}
+                {hasFilters ? t.noResultsWithFilters : t.noActivityYet}
               </p>
             </div>
           </CardContent>
@@ -175,10 +178,10 @@ export default function ActivityLogPage() {
               <table className="w-full text-sm">
                 <thead className="border-b">
                   <tr>
-                    <th className="text-start py-3 px-4 font-medium">الإجراء</th>
-                    <th className="text-start py-3 px-4 font-medium">التفاصيل</th>
-                    <th className="text-start py-3 px-4 font-medium">بواسطة</th>
-                    <th className="text-start py-3 px-4 font-medium">التاريخ</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.action}</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.details}</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.by}</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.date}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -192,9 +195,9 @@ export default function ActivityLogPage() {
                       <td className="py-3 px-4 text-muted-foreground max-w-xs truncate" data-testid={`text-description-${entry.id}`}>
                         {entry.description ?? entry.action}
                       </td>
-                      <td className="py-3 px-4 text-muted-foreground" data-testid={`text-performed-by-${entry.id}`}>{entry.performedBy ?? "النظام"}</td>
+                      <td className="py-3 px-4 text-muted-foreground" data-testid={`text-performed-by-${entry.id}`}>{entry.performedBy ?? t.system}</td>
                       <td className="py-3 px-4 text-muted-foreground text-xs whitespace-nowrap" data-testid={`text-date-${entry.id}`}>
-                        {entry.createdAt ? format(new Date(entry.createdAt), "d MMM yyyy - hh:mm a", { locale: ar }) : "—"}
+                        {entry.createdAt ? format(new Date(entry.createdAt), "d MMM yyyy - hh:mm a", { locale: dateLocale }) : "—"}
                       </td>
                     </tr>
                   ))}
@@ -203,7 +206,7 @@ export default function ActivityLogPage() {
             </div>
             {filtered.length > 200 && (
               <div className="text-center py-3 text-sm text-muted-foreground border-t" data-testid="text-pagination-info">
-                يتم عرض أول 200 إجراء من {filtered.length}
+                {t.showingFirst} 200 {t.outOf} {filtered.length}
               </div>
             )}
           </CardContent>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -12,14 +12,16 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/lib/i18n";
 import type { User } from "@shared/models/auth";
 
 const ROLES = ["super_admin", "admin", "sales_manager", "team_leader", "sales_agent", "company_owner", "sales_admin"] as const;
 
-function UserForm({ onSave, onCancel, isPending }: {
+function UserForm({ onSave, onCancel, isPending, t }: {
   onSave: (data: Record<string, unknown>) => void;
   onCancel: () => void;
   isPending: boolean;
+  t: ReturnType<typeof useLanguage>["t"];
 }) {
   const [form, setForm] = useState({ username: "", password: "", email: "", firstName: "", lastName: "", role: "sales_agent", isActive: true });
 
@@ -27,28 +29,28 @@ function UserForm({ onSave, onCancel, isPending }: {
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <Label>First Name</Label>
+          <Label>{t.usersFirstName}</Label>
           <Input data-testid="input-first-name" value={form.firstName} onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))} />
         </div>
         <div>
-          <Label>Last Name</Label>
+          <Label>{t.usersLastName}</Label>
           <Input data-testid="input-last-name" value={form.lastName} onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))} />
         </div>
       </div>
       <div>
-        <Label>Username *</Label>
+        <Label>{t.usersUsernameLbl}</Label>
         <Input data-testid="input-username" value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} />
       </div>
       <div>
-        <Label>Password *</Label>
+        <Label>{t.usersPasswordLbl}</Label>
         <Input data-testid="input-password" type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
       </div>
       <div>
-        <Label>Email</Label>
+        <Label>{t.usersEmailLbl}</Label>
         <Input data-testid="input-email" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
       </div>
       <div>
-        <Label>Role</Label>
+        <Label>{t.usersRoleLabel}</Label>
         <Select value={form.role} onValueChange={v => setForm(f => ({ ...f, role: v }))}>
           <SelectTrigger data-testid="select-role"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -58,12 +60,12 @@ function UserForm({ onSave, onCancel, isPending }: {
       </div>
       <div className="flex items-center gap-3">
         <Switch checked={form.isActive} onCheckedChange={v => setForm(f => ({ ...f, isActive: v }))} data-testid="switch-is-active" />
-        <Label>Active</Label>
+        <Label>{t.usersActiveLabel}</Label>
       </div>
       <DialogFooter>
-        <Button variant="outline" onClick={onCancel} data-testid="button-cancel">Cancel</Button>
+        <Button variant="outline" onClick={onCancel} data-testid="button-cancel">{t.ticketCancelBtn}</Button>
         <Button onClick={() => onSave(form)} disabled={!form.username || !form.password || isPending} data-testid="button-save-user">
-          {isPending ? "Creating..." : "Create User"}
+          {isPending ? t.usersCreating : t.usersCreateBtn}
         </Button>
       </DialogFooter>
     </div>
@@ -71,6 +73,7 @@ function UserForm({ onSave, onCancel, isPending }: {
 }
 
 export default function UsersPage() {
+  const { t, isRTL } = useLanguage();
   const { toast } = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -81,21 +84,21 @@ export default function UsersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       setDialogOpen(false);
-      toast({ title: "User created" });
+      toast({ title: t.usersCreated });
     },
-    onError: () => toast({ title: "Failed to create user", variant: "destructive" }),
+    onError: () => toast({ title: t.usersCreateFail, variant: "destructive" }),
   });
 
   return (
-    <div className="space-y-6" data-testid="page-users">
+    <div className="space-y-6" data-testid="page-users" dir={isRTL ? "rtl" : "ltr"}>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
-          <p className="text-muted-foreground">Manage team members and their access</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t.usersTitle}</h1>
+          <p className="text-muted-foreground">{t.usersDesc}</p>
         </div>
         <Button onClick={() => setDialogOpen(true)} data-testid="button-add-user">
-          <Plus className="h-4 w-4 mr-2" />
-          Add User
+          <Plus className={`h-4 w-4 ${isRTL ? "ms-2" : "me-2"}`} />
+          {t.addUser}
         </Button>
       </div>
 
@@ -105,7 +108,7 @@ export default function UsersPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
             <Users className="h-12 w-12 text-muted-foreground" />
-            <p className="font-medium">No users yet</p>
+            <p className="font-medium">{t.usersNoUsers}</p>
           </CardContent>
         </Card>
       ) : (
@@ -115,11 +118,11 @@ export default function UsersPage() {
               <table className="w-full text-sm">
                 <thead className="border-b">
                   <tr>
-                    <th className="text-start py-3 px-4 font-medium">Name</th>
-                    <th className="text-start py-3 px-4 font-medium">Username</th>
-                    <th className="text-start py-3 px-4 font-medium">Email</th>
-                    <th className="text-start py-3 px-4 font-medium">Role</th>
-                    <th className="text-start py-3 px-4 font-medium">Status</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.usersColName}</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.usersColUsername}</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.usersColEmail}</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.usersColRole}</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.usersColStatus}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -131,7 +134,7 @@ export default function UsersPage() {
                       <td className="py-3 px-4"><Badge variant="secondary">{user.role ?? "—"}</Badge></td>
                       <td className="py-3 px-4">
                         <Badge className={user.isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>
-                          {user.isActive ? "Active" : "Inactive"}
+                          {user.isActive ? t.usersActive : t.usersInactive}
                         </Badge>
                       </td>
                     </tr>
@@ -144,9 +147,9 @@ export default function UsersPage() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Add User</DialogTitle></DialogHeader>
-          <UserForm onSave={data => createMutation.mutate(data)} onCancel={() => setDialogOpen(false)} isPending={createMutation.isPending} />
+        <DialogContent className="max-w-lg" dir={isRTL ? "rtl" : "ltr"}>
+          <DialogHeader><DialogTitle>{t.usersFormTitle}</DialogTitle></DialogHeader>
+          <UserForm onSave={data => createMutation.mutate(data)} onCancel={() => setDialogOpen(false)} isPending={createMutation.isPending} t={t} />
         </DialogContent>
       </Dialog>
     </div>

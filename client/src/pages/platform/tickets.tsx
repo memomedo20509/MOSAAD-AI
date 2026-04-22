@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Ticket, Search, ChevronLeft, AlertTriangle, Clock } from "lucide-react";
+import { Ticket, Search, ChevronLeft, ChevronRight, AlertTriangle, Clock } from "lucide-react";
+import { useLanguage } from "@/lib/i18n";
 
 interface TicketItem {
   id: string;
@@ -23,25 +24,11 @@ interface TicketItem {
   updatedAt: string;
 }
 
-const PRIORITY_LABELS: Record<string, string> = {
-  low: "منخفض",
-  medium: "متوسط",
-  high: "عالي",
-  urgent: "عاجل",
-};
-
 const PRIORITY_COLORS: Record<string, string> = {
   low: "bg-gray-100 text-gray-600",
   medium: "bg-blue-100 text-blue-600",
   high: "bg-orange-100 text-orange-600",
   urgent: "bg-red-100 text-red-600",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  open: "مفتوح",
-  in_progress: "قيد المعالجة",
-  resolved: "تم الحل",
-  closed: "مغلق",
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -55,6 +42,21 @@ export default function PlatformTicketsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
+  const { t, isRTL } = useLanguage();
+
+  const PRIORITY_LABELS: Record<string, string> = {
+    low: t.ticketPriorityLow,
+    medium: t.ticketPriorityMedium,
+    high: t.ticketPriorityHigh,
+    urgent: t.ticketPriorityUrgent,
+  };
+
+  const STATUS_LABELS: Record<string, string> = {
+    open: t.ticketStatusOpen,
+    in_progress: t.ticketStatusInProgress,
+    resolved: t.ticketStatusResolved,
+    closed: t.ticketStatusClosed,
+  };
 
   const queryParams = new URLSearchParams();
   if (statusFilter !== "all") queryParams.set("status", statusFilter);
@@ -69,68 +71,66 @@ export default function PlatformTicketsPage() {
     },
   });
 
-  const filteredTickets = tickets.filter((t) =>
-    !search || t.subject.toLowerCase().includes(search.toLowerCase()) || (t.companyName?.toLowerCase().includes(search.toLowerCase()))
+  const filteredTickets = tickets.filter((tkt) =>
+    !search || tkt.subject.toLowerCase().includes(search.toLowerCase()) || (tkt.companyName?.toLowerCase().includes(search.toLowerCase()))
   );
 
-  const formatDate = (d: string) => new Date(d).toLocaleDateString("ar-EG", { day: "numeric", month: "short", year: "numeric" });
+  const formatDate = (d: string) => new Date(d).toLocaleDateString(isRTL ? "ar-EG" : "en-US", { day: "numeric", month: "short", year: "numeric" });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isRTL ? "rtl" : "ltr"}>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">نظام التذاكر</h1>
-          <p className="text-muted-foreground">تذاكر دعم فني الشركات</p>
+          <h1 className="text-2xl font-bold">{t.ticketsTitle}</h1>
+          <p className="text-muted-foreground">{t.ticketsDesc}</p>
         </div>
         <div className="flex gap-2">
           <Badge variant="outline" className="px-3 py-1">
-            {tickets.filter(t => t.status === "open").length} مفتوح
+            {tickets.filter(tkt => tkt.status === "open").length} {t.ticketsOpenBadge}
           </Badge>
           <Badge className="bg-orange-100 text-orange-700 px-3 py-1">
-            {tickets.filter(t => t.priority === "urgent").length} عاجل
+            {tickets.filter(tkt => tkt.priority === "urgent").length} {t.ticketsUrgentBadge}
           </Badge>
         </div>
       </div>
 
-      {/* Filters */}
       <div className="flex gap-3 flex-wrap">
         <div className="relative flex-1 min-w-48">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground`} />
           <Input
-            placeholder="بحث في التذاكر..."
+            placeholder={t.ticketsSearchPlaceholder}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pr-9"
+            className={isRTL ? "pr-9" : "pl-9"}
             data-testid="input-search-tickets"
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-36" data-testid="select-ticket-status">
-            <SelectValue placeholder="الحالة" />
+            <SelectValue placeholder={t.ticketsStatusPlaceholder} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">جميع الحالات</SelectItem>
-            <SelectItem value="open">مفتوح</SelectItem>
-            <SelectItem value="in_progress">قيد المعالجة</SelectItem>
-            <SelectItem value="resolved">تم الحل</SelectItem>
-            <SelectItem value="closed">مغلق</SelectItem>
+            <SelectItem value="all">{t.ticketsAllStatuses}</SelectItem>
+            <SelectItem value="open">{t.ticketStatusOpen}</SelectItem>
+            <SelectItem value="in_progress">{t.ticketStatusInProgress}</SelectItem>
+            <SelectItem value="resolved">{t.ticketStatusResolved}</SelectItem>
+            <SelectItem value="closed">{t.ticketStatusClosed}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={priorityFilter} onValueChange={setPriorityFilter}>
           <SelectTrigger className="w-36" data-testid="select-ticket-priority">
-            <SelectValue placeholder="الأولوية" />
+            <SelectValue placeholder={t.ticketsPriorityPlaceholder} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">جميع الأولويات</SelectItem>
-            <SelectItem value="urgent">عاجل</SelectItem>
-            <SelectItem value="high">عالي</SelectItem>
-            <SelectItem value="medium">متوسط</SelectItem>
-            <SelectItem value="low">منخفض</SelectItem>
+            <SelectItem value="all">{t.ticketsAllPriorities}</SelectItem>
+            <SelectItem value="urgent">{t.ticketPriorityUrgent}</SelectItem>
+            <SelectItem value="high">{t.ticketPriorityHigh}</SelectItem>
+            <SelectItem value="medium">{t.ticketPriorityMedium}</SelectItem>
+            <SelectItem value="low">{t.ticketPriorityLow}</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {/* Tickets List */}
       {isLoading ? (
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
@@ -139,7 +139,7 @@ export default function PlatformTicketsPage() {
         <Card>
           <CardContent className="py-16 text-center">
             <Ticket className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground">لا توجد تذاكر</p>
+            <p className="text-muted-foreground">{t.ticketsEmpty}</p>
           </CardContent>
         </Card>
       ) : (
@@ -162,7 +162,7 @@ export default function PlatformTicketsPage() {
                     <p className="text-sm text-muted-foreground line-clamp-1">{ticket.description}</p>
                     <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                       {ticket.companyName && <span>🏢 {ticket.companyName}</span>}
-                      {ticket.createdByName && <span>من: {ticket.createdByName}</span>}
+                      {ticket.createdByName && <span>{t.ticketsFrom} {ticket.createdByName}</span>}
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
                         {formatDate(ticket.createdAt)}
@@ -171,8 +171,8 @@ export default function PlatformTicketsPage() {
                   </div>
                   <Link href={`/platform/tickets/${ticket.id}`}>
                     <Button variant="ghost" size="sm" data-testid={`button-ticket-detail-${ticket.id}`}>
-                      <ChevronLeft className="h-4 w-4" />
-                      فتح
+                      {isRTL ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      {t.ticketsOpenBtn}
                     </Button>
                   </Link>
                 </div>

@@ -7,6 +7,7 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, Legend,
 } from "recharts";
 import { useMemo } from "react";
+import { useLanguage } from "@/lib/i18n";
 
 const COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#8b5cf6", "#ef4444"];
 
@@ -36,6 +37,7 @@ function StatCard({ title, value, icon: Icon, isLoading, sub }: {
 }
 
 export default function AnalyticsPage() {
+  const { t } = useLanguage();
   const { data: analytics, isLoading } = useQuery<{
     totalLeads: number;
     totalConversations: number;
@@ -78,44 +80,44 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-6" data-testid="page-analytics">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
-        <p className="text-muted-foreground">Insights about your chatbot performance</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.analyticsTitle}</h1>
+        <p className="text-muted-foreground">{t.analyticsSubtitle}</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Total Leads"
+          title={t.totalLeads}
           value={analytics?.totalLeads ?? 0}
           icon={Users}
           isLoading={isLoading}
-          sub="All time"
+          sub={t.allTime}
         />
         <StatCard
-          title="Conversations"
+          title={t.communicationLog}
           value={analytics?.totalConversations ?? 0}
           icon={MessageSquare}
           isLoading={isLoading}
-          sub="All channels"
+          sub={t.allChannelsLabel}
         />
         <StatCard
-          title="Conversion Rate"
+          title={t.conversionRate}
           value={`${conversionRate}%`}
           icon={TrendingUp}
           isLoading={isLoading}
-          sub="Leads → Converted"
+          sub={t.leadsConverted}
         />
         <StatCard
-          title="Avg Response Time"
+          title={t.avgResponseTimeSub}
           value="< 1s"
           icon={Clock}
           isLoading={false}
-          sub="Bot response time"
+          sub={t.botResponseTimeSub}
         />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Conversations & Leads (Last 30 Days)</CardTitle>
+          <CardTitle>{t.conversations30DaysTitle}</CardTitle>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={280}>
@@ -129,8 +131,8 @@ export default function AnalyticsPage() {
               <YAxis tick={{ fontSize: 11 }} />
               <Tooltip />
               <Legend />
-              <Line type="monotone" dataKey="conversations" stroke="#3b82f6" strokeWidth={2} dot={false} name="Conversations" />
-              <Line type="monotone" dataKey="leads" stroke="#22c55e" strokeWidth={2} dot={false} name="Leads" />
+              <Line type="monotone" dataKey="conversations" stroke="#3b82f6" strokeWidth={2} dot={false} name={t.communicationLog} />
+              <Line type="monotone" dataKey="leads" stroke="#22c55e" strokeWidth={2} dot={false} name={t.leads} />
             </LineChart>
           </ResponsiveContainer>
         </CardContent>
@@ -139,7 +141,7 @@ export default function AnalyticsPage() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Top Questions Asked</CardTitle>
+            <CardTitle>{t.topQuestionsTitle}</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
@@ -156,7 +158,7 @@ export default function AnalyticsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Leads by Source Channel</CardTitle>
+            <CardTitle>{t.leadsBySourceChannel}</CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -166,7 +168,7 @@ export default function AnalyticsPage() {
             ) : channelData.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
                 <MessageSquare className="h-8 w-8 mb-2" />
-                <p className="text-sm">No channel data yet</p>
+                <p className="text-sm">{t.noChannelDataYet}</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={220}>
@@ -187,13 +189,13 @@ export default function AnalyticsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Leads by Status</CardTitle>
+          <CardTitle>{t.leadsByStatusTitle}</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
           ) : (analytics?.leadsByStatus.length ?? 0) === 0 ? (
-            <p className="text-muted-foreground text-sm text-center py-8">No data yet</p>
+            <p className="text-muted-foreground text-sm text-center py-8">{t.noDataYet}</p>
           ) : (
             <div className="space-y-3">
               {analytics?.leadsByStatus.map((item, i) => {

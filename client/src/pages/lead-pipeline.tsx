@@ -9,6 +9,7 @@ import { Phone, User, GripVertical } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useLanguage } from "@/lib/i18n";
 import type { Lead, LeadState } from "@shared/schema";
 
 const SCORE_COLORS: Record<string, string> = {
@@ -17,7 +18,7 @@ const SCORE_COLORS: Record<string, string> = {
   cold: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
 };
 
-function LeadCard({ lead, onDragStart }: { lead: Lead; onDragStart: (e: React.DragEvent, leadId: string) => void }) {
+function LeadCard({ lead, onDragStart, noName }: { lead: Lead; onDragStart: (e: React.DragEvent, leadId: string) => void; noName: string }) {
   return (
     <div
       draggable
@@ -28,7 +29,7 @@ function LeadCard({ lead, onDragStart }: { lead: Lead; onDragStart: (e: React.Dr
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <GripVertical className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-          <span className="font-medium text-sm truncate">{lead.name || "بدون اسم"}</span>
+          <span className="font-medium text-sm truncate">{lead.name || noName}</span>
         </div>
         {lead.score && (
           <Badge className={`text-[10px] px-1.5 py-0 ${SCORE_COLORS[lead.score] ?? ""}`} data-testid={`badge-score-${lead.id}`}>
@@ -55,6 +56,7 @@ function LeadCard({ lead, onDragStart }: { lead: Lead; onDragStart: (e: React.Dr
 export default function LeadPipelinePage() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { t, isRTL } = useLanguage();
   const isEcommerce = user?.companyBusinessType === "ecommerce";
   const [search, setSearch] = useState("");
   const [filterChannel, setFilterChannel] = useState("all");
@@ -69,7 +71,7 @@ export default function LeadPipelinePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
     },
-    onError: () => toast({ title: "فشل في تحديث حالة الليد", variant: "destructive" }),
+    onError: () => toast({ title: t.pipelineUpdateError, variant: "destructive" }),
   });
 
   const sortedStates = [...states].sort((a, b) => a.order - b.order);
@@ -115,15 +117,15 @@ export default function LeadPipelinePage() {
   const isLoading = statesLoading || leadsLoading;
 
   return (
-    <div className="space-y-4" data-testid="page-lead-pipeline">
+    <div className="space-y-4" data-testid="page-lead-pipeline" dir={isRTL ? "rtl" : "ltr"}>
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{isEcommerce ? "خط سير الطلبات" : "خط سير الليدز"}</h1>
-        <p className="text-muted-foreground">{isEcommerce ? "إدارة الطلبات بالسحب والإفلات" : "إدارة الليدز بالسحب والإفلات"}</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{isEcommerce ? t.pipelineTitleOrders : t.pipelineTitle}</h1>
+        <p className="text-muted-foreground">{isEcommerce ? t.pipelineSubtitleOrders : t.pipelineSubtitle}</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <Input
-          placeholder="بحث بالاسم أو الهاتف..."
+          placeholder={t.searchByNameOrPhone}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-xs"
@@ -134,16 +136,16 @@ export default function LeadPipelinePage() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">جميع المصادر</SelectItem>
-            <SelectItem value="facebook">Facebook</SelectItem>
-            <SelectItem value="whatsapp">WhatsApp</SelectItem>
-            <SelectItem value="instagram">Instagram</SelectItem>
-            <SelectItem value="website">Website</SelectItem>
-            <SelectItem value="referral">إحالة</SelectItem>
-            <SelectItem value="other">أخرى</SelectItem>
+            <SelectItem value="all">{t.allSources}</SelectItem>
+            <SelectItem value="facebook">{t.sourceFacebook}</SelectItem>
+            <SelectItem value="whatsapp">{t.sourceWhatsapp}</SelectItem>
+            <SelectItem value="instagram">{t.sourceInstagram}</SelectItem>
+            <SelectItem value="website">{t.sourceWebsite}</SelectItem>
+            <SelectItem value="referral">{t.channelReferral}</SelectItem>
+            <SelectItem value="other">{t.other}</SelectItem>
           </SelectContent>
         </Select>
-        <span className="text-sm text-muted-foreground ml-auto">{filteredLeads.length} {isEcommerce ? "طلب" : "ليد"}</span>
+        <span className="text-sm text-muted-foreground ms-auto">{filteredLeads.length} {isEcommerce ? t.orderCount : t.leadCount}</span>
       </div>
 
       {isLoading ? (
@@ -159,7 +161,7 @@ export default function LeadPipelinePage() {
       ) : sortedStates.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center text-muted-foreground">
-            لا توجد حالات. قم بإضافة حالات من صفحة الإعدادات أولاً.
+            {t.noStates}
           </CardContent>
         </Card>
       ) : (
@@ -169,13 +171,13 @@ export default function LeadPipelinePage() {
               <div className="flex items-center justify-between mb-3 px-1">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-gray-400" />
-                  <span className="font-medium text-sm">بدون حالة</span>
+                  <span className="font-medium text-sm">{t.noState}</span>
                 </div>
                 <Badge variant="secondary" className="text-xs">{unassignedLeads.length}</Badge>
               </div>
               <div className="space-y-2 bg-muted/30 rounded-lg p-2 min-h-[200px]">
                 {unassignedLeads.map((lead) => (
-                  <LeadCard key={lead.id} lead={lead} onDragStart={handleDragStart} />
+                  <LeadCard key={lead.id} lead={lead} onDragStart={handleDragStart} noName={t.noName} />
                 ))}
               </div>
             </div>
@@ -201,10 +203,10 @@ export default function LeadPipelinePage() {
                   data-testid={`column-state-${state.id}`}
                 >
                   {stateLeads.length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center py-8">{isEcommerce ? "لا يوجد طلبات" : "لا يوجد ليدز"}</p>
+                    <p className="text-xs text-muted-foreground text-center py-8">{isEcommerce ? t.noOrdersInState : t.noLeadsInState}</p>
                   ) : (
                     stateLeads.map((lead) => (
-                      <LeadCard key={lead.id} lead={lead} onDragStart={handleDragStart} />
+                      <LeadCard key={lead.id} lead={lead} onDragStart={handleDragStart} noName={t.noName} />
                     ))
                   )}
                 </div>

@@ -3,11 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
-import { Users, Calendar, TrendingUp, DollarSign, ArrowLeft } from "lucide-react";
+import { Users, Calendar, TrendingUp, DollarSign, ArrowLeft, ArrowRight } from "lucide-react";
 import { PLATFORM_LEAD_STAGE_LABELS } from "@shared/schema";
 import type { PlatformLead } from "@shared/schema";
 import { format } from "date-fns";
-import { ar } from "date-fns/locale";
+import { ar, enUS } from "date-fns/locale";
+import { useLanguage } from "@/lib/i18n";
 
 const STAGE_COLORS: Record<string, string> = {
   new_lead: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
@@ -49,6 +50,9 @@ function KPICard({ title, value, icon: Icon, isLoading, sub, color }: {
 }
 
 export default function PlatformDashboardPage() {
+  const { t, isRTL } = useLanguage();
+  const dateLocale = isRTL ? ar : enUS;
+  const NavIcon = isRTL ? ArrowLeft : ArrowRight;
   const { data: kpis, isLoading: kpisLoading } = useQuery<{
     leadsThisMonth: number;
     demosScheduled: number;
@@ -68,35 +72,35 @@ export default function PlatformDashboardPage() {
     .slice(0, 5);
 
   return (
-    <div className="space-y-6" data-testid="page-platform-dashboard">
+    <div className="space-y-6" data-testid="page-platform-dashboard" dir={isRTL ? "rtl" : "ltr"}>
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">لوحة تحكم المنصة</h1>
-        <p className="text-muted-foreground">مبيعات وأداء المنصة</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.platformSalesDashTitle}</h1>
+        <p className="text-muted-foreground">{t.platformSalesDashDesc}</p>
       </div>
 
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <KPICard
-          title="ليدز هذا الشهر"
+          title={t.platformSalesLeadsMonth}
           value={kpis?.leadsThisMonth ?? 0}
           icon={Users}
           isLoading={kpisLoading}
-          sub="ليد جديد في المنصة"
+          sub={t.platformSalesLeadsMonthSub}
           color="text-blue-500"
         />
         <KPICard
-          title="ديمو مجدول"
+          title={t.platformSalesDemos}
           value={kpis?.demosScheduled ?? 0}
           icon={Calendar}
           isLoading={kpisLoading}
-          sub="مجدول أو منتهي"
+          sub={t.platformSalesDemosSub}
           color="text-amber-500"
         />
         <KPICard
-          title="معدل الإغلاق"
+          title={t.platformSalesCloseRate}
           value={kpis ? `${kpis.conversionRate}%` : "—"}
           icon={TrendingUp}
           isLoading={kpisLoading}
-          sub="نسبة Won / (Won + Lost)"
+          sub={t.platformSalesCloseRateSub}
           color="text-green-500"
         />
         <KPICard
@@ -104,7 +108,7 @@ export default function PlatformDashboardPage() {
           value={kpis ? `$${kpis.pipelineValue.toLocaleString()}` : "—"}
           icon={DollarSign}
           isLoading={kpisLoading}
-          sub="صفقات قيد التفاوض"
+          sub={t.platformSalesPipelineSub}
           color="text-indigo-500"
         />
       </div>
@@ -112,17 +116,17 @@ export default function PlatformDashboardPage() {
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">آخر الليدز</CardTitle>
+            <CardTitle className="text-sm font-medium">{t.platformSalesRecentLeads}</CardTitle>
             <Link href="/platform/leads" className="text-xs text-primary flex items-center gap-1 hover:underline" data-testid="link-all-platform-leads">
-              عرض الكل
-              <ArrowLeft className="h-3 w-3" />
+              {t.platformSalesViewAll}
+              <NavIcon className="h-3 w-3" />
             </Link>
           </CardHeader>
           <CardContent>
             {leadsLoading ? (
               <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
             ) : recentLeads.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">لا يوجد ليدز بعد</p>
+              <p className="text-sm text-muted-foreground text-center py-4">{t.platformSalesNoLeads}</p>
             ) : (
               <div className="space-y-3">
                 {recentLeads.map(lead => (
@@ -130,7 +134,7 @@ export default function PlatformDashboardPage() {
                     <div className="min-w-0">
                       <p className="font-medium text-sm truncate">{lead.companyName}</p>
                       {lead.createdAt && (
-                        <p className="text-xs text-muted-foreground">{format(new Date(lead.createdAt), "dd MMM", { locale: ar })}</p>
+                        <p className="text-xs text-muted-foreground">{format(new Date(lead.createdAt), "dd MMM", { locale: dateLocale })}</p>
                       )}
                     </div>
                     <Badge className={`flex-shrink-0 text-xs ${STAGE_COLORS[lead.stage] ?? ""}`}>
@@ -145,17 +149,17 @@ export default function PlatformDashboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">إجراءات قادمة</CardTitle>
+            <CardTitle className="text-sm font-medium">{t.platformSalesUpcoming}</CardTitle>
             <Link href="/platform/leads/pipeline" className="text-xs text-primary flex items-center gap-1 hover:underline" data-testid="link-platform-pipeline">
               Pipeline
-              <ArrowLeft className="h-3 w-3" />
+              <NavIcon className="h-3 w-3" />
             </Link>
           </CardHeader>
           <CardContent>
             {leadsLoading ? (
               <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
             ) : upcomingActions.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">لا يوجد إجراءات قادمة</p>
+              <p className="text-sm text-muted-foreground text-center py-4">{t.platformSalesNoActions}</p>
             ) : (
               <div className="space-y-3">
                 {upcomingActions.map(lead => (
@@ -163,7 +167,7 @@ export default function PlatformDashboardPage() {
                     <div className="min-w-0">
                       <p className="font-medium text-sm truncate">{lead.companyName}</p>
                       {lead.nextActionDate && (
-                        <p className="text-xs text-muted-foreground">{format(new Date(lead.nextActionDate), "dd MMM yyyy", { locale: ar })}</p>
+                        <p className="text-xs text-muted-foreground">{format(new Date(lead.nextActionDate), "dd MMM yyyy", { locale: dateLocale })}</p>
                       )}
                     </div>
                     {lead.dealValue && (

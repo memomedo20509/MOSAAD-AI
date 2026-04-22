@@ -12,8 +12,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { ShoppingBag, Search, X } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/lib/i18n";
 import type { Order, OrderStatus } from "@shared/schema";
-import { ORDER_STATUSES, ORDER_STATUS_LABELS } from "@shared/schema";
+import { ORDER_STATUSES } from "@shared/schema";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +28,16 @@ const STATUS_COLORS: Record<OrderStatus, string> = {
 
 export default function OrdersPage() {
   const { toast } = useToast();
+  const { t, isRTL } = useLanguage();
+
+  const ORDER_STATUS_I18N: Record<OrderStatus, string> = {
+    new: t.orderStatusNew,
+    confirmed: t.orderStatusConfirmed,
+    in_delivery: t.orderStatusInDelivery,
+    completed: t.orderStatusCompleted,
+    cancelled: t.orderStatusCancelled,
+  };
+
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -42,9 +53,9 @@ export default function OrdersPage() {
       if (selectedOrder?.id === id) {
         setSelectedOrder(prev => prev ? { ...prev, ...data } : null);
       }
-      toast({ title: "تم تحديث الطلب" });
+      toast({ title: t.orderUpdatedSuccess });
     },
-    onError: () => toast({ title: "فشل تحديث الطلب", variant: "destructive" }),
+    onError: () => toast({ title: t.orderUpdatedError, variant: "destructive" }),
   });
 
   const updateStatus = (status: OrderStatus) => {
@@ -74,33 +85,33 @@ export default function OrdersPage() {
   const hasFilters = filterStatus !== "all" || search;
 
   return (
-    <div className="space-y-6" dir="rtl" data-testid="page-orders">
+    <div className="space-y-6" dir={isRTL ? "rtl" : "ltr"} data-testid="page-orders">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">الطلبات</h1>
-          <p className="text-muted-foreground">إدارة طلبات العملاء الواردة</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t.ordersTitle}</h1>
+          <p className="text-muted-foreground">{t.ordersSubtitle}</p>
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative max-w-xs w-full">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="بحث باسم العميل أو الهاتف..."
-            className="pr-9"
+            placeholder={t.searchOrders}
+            className="ps-9"
             data-testid="input-search-orders"
           />
         </div>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="w-44" data-testid="select-filter-status">
-            <SelectValue placeholder="الحالة" />
+            <SelectValue placeholder={t.status} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">جميع الحالات</SelectItem>
+            <SelectItem value="all">{t.allStatus}</SelectItem>
             {ORDER_STATUSES.map(s => (
-              <SelectItem key={s} value={s}>{ORDER_STATUS_LABELS[s]}</SelectItem>
+              <SelectItem key={s} value={s}>{ORDER_STATUS_I18N[s]}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -111,11 +122,11 @@ export default function OrdersPage() {
             onClick={() => { setFilterStatus("all"); setSearch(""); }}
             data-testid="button-clear-filters"
           >
-            <X className="h-4 w-4 ml-1" />
-            مسح
+            <X className="h-4 w-4 me-1" />
+            {t.clearBtn}
           </Button>
         )}
-        <span className="text-sm text-muted-foreground mr-auto">{filtered.length} طلب</span>
+        <span className="text-sm text-muted-foreground ms-auto">{filtered.length} {t.orderCount}</span>
       </div>
 
       {isLoading ? (
@@ -125,17 +136,17 @@ export default function OrdersPage() {
           <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
             <ShoppingBag className="h-12 w-12 text-muted-foreground" />
             <div className="text-center">
-              <p className="font-medium">لا توجد طلبات بعد</p>
-              <p className="text-sm text-muted-foreground">الطلبات التي يجمعها الشات بوت ستظهر هنا</p>
+              <p className="font-medium">{t.noOrdersYet}</p>
+              <p className="text-sm text-muted-foreground">{t.orderBotCapture}</p>
             </div>
           </CardContent>
         </Card>
       ) : filtered.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 gap-2">
-            <p className="font-medium text-muted-foreground">لا توجد نتائج مطابقة</p>
+            <p className="font-medium text-muted-foreground">{t.noOrdersFound}</p>
             <Button variant="ghost" size="sm" onClick={() => { setFilterStatus("all"); setSearch(""); }}>
-              مسح الفلاتر
+              {t.clearFilters}
             </Button>
           </CardContent>
         </Card>
@@ -146,13 +157,13 @@ export default function OrdersPage() {
               <table className="w-full text-sm">
                 <thead className="border-b">
                   <tr>
-                    <th className="text-right py-3 px-4 font-medium">رقم الطلب</th>
-                    <th className="text-right py-3 px-4 font-medium">العميل</th>
-                    <th className="text-right py-3 px-4 font-medium hidden md:table-cell">الهاتف</th>
-                    <th className="text-right py-3 px-4 font-medium hidden md:table-cell">المنتجات</th>
-                    <th className="text-right py-3 px-4 font-medium">الإجمالي</th>
-                    <th className="text-right py-3 px-4 font-medium">الحالة</th>
-                    <th className="text-right py-3 px-4 font-medium hidden lg:table-cell">التاريخ</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.orderNumber}</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.orderCustomer}</th>
+                    <th className="text-start py-3 px-4 font-medium hidden md:table-cell">{t.orderPhone}</th>
+                    <th className="text-start py-3 px-4 font-medium hidden md:table-cell">{t.orderItemsCount}</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.orderTotal}</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.status}</th>
+                    <th className="text-start py-3 px-4 font-medium hidden lg:table-cell">{t.orderDate}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -170,18 +181,18 @@ export default function OrdersPage() {
                         #{order.id.slice(0, 8).toUpperCase()}
                       </td>
                       <td className="py-3 px-4 font-medium">{order.customerName ?? "—"}</td>
-                      <td className="py-3 px-4 text-muted-foreground hidden md:table-cell">
+                      <td className="py-3 px-4 text-muted-foreground hidden md:table-cell" dir="ltr">
                         {order.customerPhone ?? "—"}
                       </td>
                       <td className="py-3 px-4 text-muted-foreground hidden md:table-cell">
-                        {Array.isArray(order.items) ? order.items.length : 0} منتج
+                        {Array.isArray(order.items) ? order.items.length : 0} {t.productCount}
                       </td>
                       <td className="py-3 px-4 font-medium">
-                        {Number(order.totalAmount).toLocaleString("ar-EG")} ر.س
+                        {Number(order.totalAmount).toLocaleString()} {t.currencySymbol}
                       </td>
                       <td className="py-3 px-4">
                         <Badge className={cn(STATUS_COLORS[order.status as OrderStatus] ?? "")}>
-                          {ORDER_STATUS_LABELS[order.status as OrderStatus] ?? order.status}
+                          {ORDER_STATUS_I18N[order.status as OrderStatus] ?? order.status}
                         </Badge>
                       </td>
                       <td className="py-3 px-4 text-muted-foreground text-xs hidden lg:table-cell">
@@ -197,19 +208,19 @@ export default function OrdersPage() {
       )}
 
       <Sheet open={!!selectedOrder} onOpenChange={open => !open && setSelectedOrder(null)}>
-        <SheetContent className="w-96 sm:w-[480px] overflow-y-auto" side="left">
+        <SheetContent className="w-96 sm:w-[480px] overflow-y-auto" side={isRTL ? "right" : "left"}>
           <SheetHeader>
-            <SheetTitle>تفاصيل الطلب</SheetTitle>
+            <SheetTitle>{t.orderDetails}</SheetTitle>
           </SheetHeader>
           {selectedOrder && (
-            <div className="mt-4 space-y-5 text-sm" dir="rtl">
+            <div className="mt-4 space-y-5 text-sm" dir={isRTL ? "rtl" : "ltr"}>
               <div className="space-y-2">
-                <h3 className="font-semibold text-base">معلومات العميل</h3>
+                <h3 className="font-semibold text-base">{t.orderCustomerInfo}</h3>
                 {[
-                  { label: "رقم الطلب", value: `#${selectedOrder.id.slice(0, 8).toUpperCase()}` },
-                  { label: "الاسم", value: selectedOrder.customerName },
-                  { label: "الهاتف", value: selectedOrder.customerPhone },
-                  { label: "عنوان التوصيل", value: selectedOrder.deliveryAddress },
+                  { label: t.orderNumber, value: `#${selectedOrder.id.slice(0, 8).toUpperCase()}` },
+                  { label: t.name, value: selectedOrder.customerName },
+                  { label: t.phone, value: selectedOrder.customerPhone },
+                  { label: t.orderDeliveryAddress, value: selectedOrder.deliveryAddress },
                 ].map(({ label, value }) => (
                   <div key={label} className="flex justify-between gap-2 border-b pb-2">
                     <span className="text-muted-foreground">{label}</span>
@@ -217,38 +228,38 @@ export default function OrdersPage() {
                   </div>
                 ))}
                 <div className="flex justify-between gap-2 border-b pb-2">
-                  <span className="text-muted-foreground">التاريخ</span>
+                  <span className="text-muted-foreground">{t.orderDate}</span>
                   <span>{selectedOrder.createdAt ? format(new Date(selectedOrder.createdAt), "dd/MM/yyyy HH:mm") : "—"}</span>
                 </div>
               </div>
 
               {Array.isArray(selectedOrder.items) && selectedOrder.items.length > 0 && (
                 <div className="space-y-2">
-                  <h3 className="font-semibold text-base">المنتجات المطلوبة</h3>
+                  <h3 className="font-semibold text-base">{t.orderRequestedItems}</h3>
                   <div className="rounded-md border divide-y">
                     {selectedOrder.items.map((item, idx) => (
                       <div key={idx} className="flex items-center justify-between px-3 py-2 gap-2">
                         <div className="min-w-0">
                           <p className="font-medium truncate">{item.productName}</p>
                           <p className="text-xs text-muted-foreground">
-                            {item.quantity} × {Number(item.unitPrice).toLocaleString("ar-EG")} ر.س
+                            {item.quantity} × {Number(item.unitPrice).toLocaleString()} {t.currencySymbol}
                           </p>
                         </div>
                         <span className="font-medium shrink-0">
-                          {(item.quantity * item.unitPrice).toLocaleString("ar-EG")} ر.س
+                          {(item.quantity * item.unitPrice).toLocaleString()} {t.currencySymbol}
                         </span>
                       </div>
                     ))}
                   </div>
                   <div className="flex justify-between font-semibold pt-1">
-                    <span>الإجمالي</span>
-                    <span>{Number(selectedOrder.totalAmount).toLocaleString("ar-EG")} ر.س</span>
+                    <span>{t.orderTotal}</span>
+                    <span>{Number(selectedOrder.totalAmount).toLocaleString()} {t.currencySymbol}</span>
                   </div>
                 </div>
               )}
 
               <div className="space-y-2">
-                <h3 className="font-semibold text-base">تحديث الحالة</h3>
+                <h3 className="font-semibold text-base">{t.updateOrderStatus}</h3>
                 <div className="grid grid-cols-2 gap-2">
                   {ORDER_STATUSES.map(s => (
                     <Button
@@ -260,20 +271,20 @@ export default function OrdersPage() {
                       disabled={updateMutation.isPending}
                       data-testid={`button-status-${s}`}
                     >
-                      {ORDER_STATUS_LABELS[s]}
+                      {ORDER_STATUS_I18N[s]}
                     </Button>
                   ))}
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="internal-note" className="font-semibold text-base">ملاحظات داخلية</Label>
+                <Label htmlFor="internal-note" className="font-semibold text-base">{t.internalNotes}</Label>
                 <Textarea
                   id="internal-note"
                   data-testid="input-internal-note"
                   value={internalNote}
                   onChange={e => setInternalNote(e.target.value)}
-                  placeholder="أضف ملاحظة داخلية..."
+                  placeholder={t.internalNotePlaceholder}
                   rows={3}
                 />
                 <Button
@@ -282,7 +293,7 @@ export default function OrdersPage() {
                   disabled={updateMutation.isPending}
                   data-testid="button-save-note"
                 >
-                  حفظ الملاحظة
+                  {t.saveNote}
                 </Button>
               </div>
             </div>

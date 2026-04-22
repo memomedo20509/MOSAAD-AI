@@ -13,6 +13,8 @@ import { Bot, MessageSquare, Save, Clock, Target, ShoppingBag } from "lucide-rea
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/lib/i18n";
+import { LEGACY_REALESTATE_BOT_ROLE, LEGACY_REALESTATE_COMPANY_NAME, LEGACY_REALESTATE_CHAT_GOAL, LEGACY_REALESTATE_WELCOME_FRAGMENT } from "@/lib/legacy-normalizers";
 import type { ChatbotSettings, Project } from "@shared/schema";
 import { CHAT_GOALS, CHAT_GOAL_LABELS, CHAT_GOAL_DESCRIPTIONS } from "@shared/schema";
 import { cn } from "@/lib/utils";
@@ -22,32 +24,25 @@ interface CompanyProfile {
   name?: string;
 }
 
-const LEGACY_REALESTATE = {
-  botRole: "مستشار عقاري",
-  companyName: "شركتنا العقارية",
-  chatGoal: "lead_qualified",
-  welcomeMessageFragment: "العقارية",
-};
-
-function getDefaultsByBusinessType(businessType: string) {
+function getDefaultsByBusinessType(businessType: string, t: ReturnType<typeof import("@/lib/i18n").useLanguage>["t"]) {
   if (businessType === "ecommerce") {
     return {
-      botName: "مساعد المتجر",
-      companyName: "متجرنا",
-      botRole: "مساعد متجر",
-      botPersonality: "أنت مساعد متجر إلكتروني مصري محترف وودود. بتتكلم بالمصري بشكل طبيعي. بتساعد العملاء يلاقوا المنتجات المناسبة وبتخلصهم طلباتهم بسهولة وسرعة.",
-      botMission: "مساعدة العميل في تصفح المنتجات المتاحة وإتمام طلبه بالكامل بما يشمل: المنتجات والكميات وعنوان التوصيل.",
-      welcomeMessage: "أهلاً! 👋 أنا مساعد متجرنا الذكي. يسعدني أساعدك تلاقي اللي تدور عليه. ممكن تعرفني باسمك الكريم؟",
+      botName: t.chatbotDefaultBotNameStore,
+      companyName: t.chatbotDefaultCompanyNameStore,
+      botRole: t.chatbotDefaultBotRoleStore,
+      botPersonality: t.chatbotDefaultPersonalityStore,
+      botMission: t.chatbotDefaultMissionStore,
+      welcomeMessage: t.chatbotDefaultWelcomeStore,
       chatGoal: "order_placement",
     };
   }
   return {
-    botName: "المساعد الذكي",
-    companyName: "شركتنا",
-    botRole: "مستشار مبيعات",
-    botPersonality: "أنت مستشار مبيعات مصري محترف وودود. بتتكلم بالمصري بشكل طبيعي. بتساعد العملاء وبتجمع بياناتهم بطريقة محترمة.",
-    botMission: "جمع بيانات العميل الكاملة وترشيح الخدمات المناسبة قبل تحويله للمندوب.",
-    welcomeMessage: "أهلاً! 👋 أنا المساعد الذكي لشركتنا. يسعدني مساعدتك. ممكن تعرفني باسمك الكريم؟",
+    botName: t.chatbotDefaultBotName,
+    companyName: t.chatbotDefaultCompanyName,
+    botRole: t.chatbotDefaultBotRole,
+    botPersonality: t.chatbotDefaultPersonality,
+    botMission: t.chatbotDefaultMission,
+    welcomeMessage: t.chatbotDefaultWelcome,
     chatGoal: "lead_qualified",
   };
 }
@@ -60,13 +55,14 @@ function resolveField(value: string | null | undefined, legacyValue: string | nu
 
 export default function ChatbotConfigPage() {
   const { toast } = useToast();
+  const { t, isRTL } = useLanguage();
   const { data: settings, isLoading } = useQuery<ChatbotSettings>({ queryKey: ["/api/chatbot/settings"] });
   const { data: projects = [] } = useQuery<Project[]>({ queryKey: ["/api/projects"] });
   const { data: companyProfile } = useQuery<CompanyProfile>({ queryKey: ["/api/companies/me"] });
 
   const businessType = companyProfile?.businessType ?? "service";
   const isEcommerce = businessType === "ecommerce";
-  const typeDefaults = getDefaultsByBusinessType(businessType);
+  const typeDefaults = getDefaultsByBusinessType(businessType, t);
 
   const [form, setForm] = useState({
     isActive: false,
@@ -86,14 +82,13 @@ export default function ChatbotConfigPage() {
 
   useEffect(() => {
     if (settings) {
-      const lre = isEcommerce ? LEGACY_REALESTATE : null;
-      const resolvedBotRole = resolveField(settings.botRole, lre?.botRole, typeDefaults.botRole);
-      const resolvedCompanyName = resolveField(settings.companyName, lre?.companyName, typeDefaults.companyName);
-      const resolvedChatGoal = (isEcommerce && (settings.chatGoal === "lead_qualified" || !settings.chatGoal))
+      const resolvedBotRole = resolveField(settings.botRole, isEcommerce ? LEGACY_REALESTATE_BOT_ROLE : null, typeDefaults.botRole);
+      const resolvedCompanyName = resolveField(settings.companyName, isEcommerce ? LEGACY_REALESTATE_COMPANY_NAME : null, typeDefaults.companyName);
+      const resolvedChatGoal = (isEcommerce && (settings.chatGoal === LEGACY_REALESTATE_CHAT_GOAL || !settings.chatGoal))
         ? typeDefaults.chatGoal
         : (settings.chatGoal ?? typeDefaults.chatGoal);
       const rawWelcome = settings.welcomeMessage ?? "";
-      const resolvedWelcome = (isEcommerce && rawWelcome.includes(LEGACY_REALESTATE.welcomeMessageFragment))
+      const resolvedWelcome = (isEcommerce && rawWelcome.includes(LEGACY_REALESTATE_WELCOME_FRAGMENT))
         ? typeDefaults.welcomeMessage
         : (rawWelcome || typeDefaults.welcomeMessage);
       setForm({
@@ -118,9 +113,9 @@ export default function ChatbotConfigPage() {
     mutationFn: (data: typeof form) => apiRequest("PUT", "/api/chatbot/settings", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/chatbot/settings"] });
-      toast({ title: "تم حفظ إعدادات البوت" });
+      toast({ title: t.chatbotSaved });
     },
-    onError: () => toast({ title: "فشل حفظ الإعدادات", variant: "destructive" }),
+    onError: () => toast({ title: t.chatbotSaveError, variant: "destructive" }),
   });
 
   const toggleProject = (projectId: string) => {
@@ -136,16 +131,16 @@ export default function ChatbotConfigPage() {
 
   const previewMessages = isEcommerce ? [
     { role: "bot", content: form.welcomeMessage || typeDefaults.welcomeMessage },
-    { role: "user", content: "عايز أشوف المنتجات" },
-    { role: "bot", content: "تمام! عندنا تشكيلة رائعة. هقولك على أفضل المنتجات المتاحة دلوقتي 🛍️" },
-    { role: "user", content: "عايز 2 حبة من المنتج الأول" },
-    { role: "bot", content: "تمام! دلوقتي محتاج عنوان التوصيل منك علشان نكمل الطلب 📦" },
+    { role: "user", content: t.chatbotPreviewUserBrowse },
+    { role: "bot", content: t.chatbotPreviewBotBrowse },
+    { role: "user", content: t.chatbotPreviewUserOrder },
+    { role: "bot", content: t.chatbotPreviewBotOrder },
   ] : [
     { role: "bot", content: form.welcomeMessage || typeDefaults.welcomeMessage },
-    { role: "user", content: "أنا مهتم بخدماتكم" },
-    { role: "bot", content: "تمام! ممكن تعرفني باسمك الكريم؟" },
-    { role: "user", content: "أنا أحمد" },
-    { role: "bot", content: "أهلاً أحمد! يسعدنا خدمتك. إيه اللي تدور عليه بالضبط؟" },
+    { role: "user", content: t.chatbotPreviewUserInterest },
+    { role: "bot", content: t.chatbotPreviewBotAskName },
+    { role: "user", content: t.chatbotPreviewUserName },
+    { role: "bot", content: t.chatbotPreviewBotGreet },
   ];
 
   const availableGoals = isEcommerce
@@ -153,22 +148,20 @@ export default function ChatbotConfigPage() {
     : CHAT_GOALS.filter(g => g !== "order_placement");
 
   return (
-    <div className="space-y-6" data-testid="page-chatbot-config" dir="rtl">
+    <div className="space-y-6" data-testid="page-chatbot-config" dir={isRTL ? "rtl" : "ltr"}>
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">إعدادات البوت الذكي</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">{t.chatbotTitle}</h1>
             {isEcommerce && (
               <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 flex items-center gap-1">
                 <ShoppingBag className="h-3 w-3" />
-                متجر إلكتروني
+                {t.chatbotEcommerceBadge}
               </Badge>
             )}
           </div>
           <p className="text-muted-foreground">
-            {isEcommerce
-              ? "تخصيص مساعد المتجر الذكي لاستقبال الطلبات وخدمة العملاء"
-              : "تخصيص شخصية ومهمة مساعد المبيعات الذكي"}
+            {isEcommerce ? t.chatbotSubtitleEcommerce : t.chatbotSubtitle}
           </p>
         </div>
         <Button
@@ -176,8 +169,8 @@ export default function ChatbotConfigPage() {
           disabled={saveMutation.isPending}
           data-testid="button-save-config"
         >
-          <Save className="h-4 w-4 ml-2" />
-          {saveMutation.isPending ? "جاري الحفظ..." : "حفظ التغييرات"}
+          <Save className="h-4 w-4 me-2" />
+          {saveMutation.isPending ? t.chatbotSaving : t.chatbotSaveBtn}
         </Button>
       </div>
 
@@ -185,8 +178,8 @@ export default function ChatbotConfigPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>الهوية والشخصية</CardTitle>
-              <CardDescription>حدد اسم البوت وشخصيته</CardDescription>
+              <CardTitle>{t.chatbotIdentityTitle}</CardTitle>
+              <CardDescription>{t.chatbotIdentityDesc}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {isLoading ? (
@@ -200,22 +193,22 @@ export default function ChatbotConfigPage() {
                       onCheckedChange={v => setForm(f => ({ ...f, isActive: v }))}
                       data-testid="switch-bot-active"
                     />
-                    <Label htmlFor="bot-active">تفعيل البوت</Label>
+                    <Label htmlFor="bot-active">{t.chatbotActivate}</Label>
                     <Badge className={form.isActive
                       ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                       : "bg-gray-100 text-gray-500 dark:bg-gray-800"
                     }>
-                      {form.isActive ? "مفعّل" : "معطّل"}
+                      {form.isActive ? t.chatbotActiveLabel : t.chatbotInactiveLabel}
                     </Badge>
                   </div>
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <Target className="h-4 w-4 text-muted-foreground" />
-                      <Label htmlFor="chat-goal">هدف المحادثة</Label>
+                      <Label htmlFor="chat-goal">{t.chatbotGoal}</Label>
                     </div>
                     <Select value={form.chatGoal} onValueChange={v => setForm(f => ({ ...f, chatGoal: v }))}>
                       <SelectTrigger id="chat-goal" data-testid="select-chat-goal">
-                        <SelectValue placeholder="اختر هدف البوت" />
+                        <SelectValue placeholder={t.chatbotGoalPlaceholder} />
                       </SelectTrigger>
                       <SelectContent>
                         {availableGoals.map(goal => (
@@ -230,7 +223,7 @@ export default function ChatbotConfigPage() {
                     </Select>
                   </div>
                   <div>
-                    <Label htmlFor="bot-name">اسم البوت</Label>
+                    <Label htmlFor="bot-name">{t.chatbotName}</Label>
                     <Input
                       id="bot-name"
                       data-testid="input-bot-name"
@@ -240,7 +233,7 @@ export default function ChatbotConfigPage() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="company-name">اسم الشركة</Label>
+                    <Label htmlFor="company-name">{t.chatbotCompanyName}</Label>
                     <Input
                       id="company-name"
                       data-testid="input-company-name"
@@ -250,7 +243,7 @@ export default function ChatbotConfigPage() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="bot-role">دور البوت</Label>
+                    <Label htmlFor="bot-role">{t.chatbotRole}</Label>
                     <Input
                       id="bot-role"
                       data-testid="input-bot-role"
@@ -260,7 +253,7 @@ export default function ChatbotConfigPage() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="bot-personality">شخصية البوت</Label>
+                    <Label htmlFor="bot-personality">{t.chatbotPersonality}</Label>
                     <Textarea
                       id="bot-personality"
                       data-testid="input-bot-personality"
@@ -272,7 +265,7 @@ export default function ChatbotConfigPage() {
                   </div>
                   <div>
                     <Label htmlFor="bot-mission">
-                      {isEcommerce ? "مهمة البوت (تدفق الطلب)" : "مهمة البوت"}
+                      {isEcommerce ? t.chatbotMissionEcommerce : t.chatbotMission}
                     </Label>
                     <Textarea
                       id="bot-mission"
@@ -284,7 +277,7 @@ export default function ChatbotConfigPage() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="welcome-message">رسالة الترحيب</Label>
+                    <Label htmlFor="welcome-message">{t.chatbotWelcomeMsg}</Label>
                     <Textarea
                       id="welcome-message"
                       data-testid="input-welcome-message"
@@ -301,11 +294,9 @@ export default function ChatbotConfigPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>{isEcommerce ? "معلومات المتجر" : "معلومات الشركة"}</CardTitle>
+              <CardTitle>{isEcommerce ? t.chatbotKnowledgeTitleEcommerce : t.chatbotKnowledgeTitle}</CardTitle>
               <CardDescription>
-                {isEcommerce
-                  ? "معلومات إضافية عن المتجر والسياسات يستخدمها البوت في المحادثات"
-                  : "معلومات إضافية يستخدمها البوت في المحادثات"}
+                {isEcommerce ? t.chatbotKnowledgeDescEcommerce : t.chatbotKnowledgeDesc}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -314,9 +305,7 @@ export default function ChatbotConfigPage() {
                 data-testid="input-company-knowledge"
                 value={form.companyKnowledge}
                 onChange={e => setForm(f => ({ ...f, companyKnowledge: e.target.value }))}
-                placeholder={isEcommerce
-                  ? "معلومات عن المتجر، سياسات التوصيل والاسترجاع، العروض الحالية، مناطق التغطية..."
-                  : "معلومات عن الشركة، سياسات الدفع، العروض الحالية..."}
+                placeholder={isEcommerce ? t.chatbotKnowledgePlaceholderEcommerce : t.chatbotKnowledgePlaceholder}
                 rows={5}
               />
             </CardContent>
@@ -326,13 +315,13 @@ export default function ChatbotConfigPage() {
             <CardHeader>
               <div className="flex items-center gap-2">
                 <Clock className="h-5 w-5 text-muted-foreground" />
-                <CardTitle>ساعات العمل والاستجابة</CardTitle>
+                <CardTitle>{t.chatbotHoursTitle}</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="hours-start">بداية الدوام</Label>
+                  <Label htmlFor="hours-start">{t.chatbotHoursStart}</Label>
                   <Input
                     id="hours-start"
                     type="number"
@@ -344,7 +333,7 @@ export default function ChatbotConfigPage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="hours-end">نهاية الدوام</Label>
+                  <Label htmlFor="hours-end">{t.chatbotHoursEnd}</Label>
                   <Input
                     id="hours-end"
                     type="number"
@@ -363,10 +352,10 @@ export default function ChatbotConfigPage() {
                   onCheckedChange={v => setForm(f => ({ ...f, respondAlways: v }))}
                   data-testid="switch-respond-always"
                 />
-                <Label htmlFor="respond-always">الرد دائماً (حتى أثناء ساعات العمل)</Label>
+                <Label htmlFor="respond-always">{t.chatbotRespondAlways}</Label>
               </div>
               <p className="text-xs text-muted-foreground">
-                عند التعطيل، يرد البوت فقط خارج ساعات العمل المحددة
+                {t.chatbotRespondAlwaysHint}
               </p>
             </CardContent>
           </Card>
@@ -374,8 +363,8 @@ export default function ChatbotConfigPage() {
           {!isEcommerce && projects.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>المشاريع المفعّلة</CardTitle>
-                <CardDescription>اختر المشاريع التي يمكن للبوت ترشيح وحداتها (اتركها فارغة لتفعيل الكل)</CardDescription>
+                <CardTitle>{t.chatbotProjectsTitle}</CardTitle>
+                <CardDescription>{t.chatbotProjectsDesc}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
                 {projects.map((project: Project) => (
@@ -400,16 +389,16 @@ export default function ChatbotConfigPage() {
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <ShoppingBag className="h-5 w-5 text-muted-foreground" />
-                  <CardTitle>وضع المتجر الإلكتروني</CardTitle>
+                  <CardTitle>{t.chatbotEcommerceMode}</CardTitle>
                 </div>
-                <CardDescription>البوت يعمل في وضع المتجر: يعرض المنتجات ويستقبل الطلبات مباشرة</CardDescription>
+                <CardDescription>{t.chatbotEcommerceModeDesc}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-3 text-sm text-blue-800 dark:text-blue-300 space-y-1">
-                  <p>✅ البوت يعرض المنتجات المتاحة من كتالوج المنتجات</p>
-                  <p>✅ يجمع الطلب (المنتج + الكمية + عنوان التوصيل)</p>
-                  <p>✅ يُنشئ طلباً تلقائياً في النظام عند تأكيد العميل</p>
-                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">لإدارة المنتجات والمخزون اذهب لصفحة المنتجات</p>
+                  <p>✅ {t.chatbotEcommerceFeature1}</p>
+                  <p>✅ {t.chatbotEcommerceFeature2}</p>
+                  <p>✅ {t.chatbotEcommerceFeature3}</p>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">{t.chatbotEcommerceFeature4}</p>
                 </div>
               </CardContent>
             </Card>
@@ -421,10 +410,10 @@ export default function ChatbotConfigPage() {
             <CardHeader>
               <div className="flex items-center gap-2">
                 <Bot className="h-5 w-5 text-primary" />
-                <CardTitle>معاينة المحادثة</CardTitle>
+                <CardTitle>{t.chatbotPreviewTitle}</CardTitle>
               </div>
               <CardDescription>
-                {isEcommerce ? "شكل محادثة إتمام الطلب" : "شكل المحادثة مع العملاء"}
+                {isEcommerce ? t.chatbotPreviewDescEcommerce : t.chatbotPreviewDesc}
               </CardDescription>
             </CardHeader>
             <CardContent>

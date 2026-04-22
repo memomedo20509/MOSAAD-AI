@@ -48,7 +48,7 @@ import {
 } from "@/components/ui/collapsible";
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/i18n";
-import { ROLE_ARABIC_NAMES, type UserRole, normalizeRole, isPlatformAdmin } from "@shared/models/auth";
+import { type UserRole, normalizeRole, isPlatformAdmin } from "@shared/models/auth";
 import { useQuery } from "@tanstack/react-query";
 
 const isAdmin = (role: string | null | undefined): boolean => {
@@ -64,18 +64,27 @@ export function AppSidebar() {
   const { user } = useAuth();
   const { t, isRTL } = useLanguage();
   const userRole = user?.role ? normalizeRole(user.role) : undefined;
+  const roleDisplayNames: Record<UserRole, string> = {
+    platform_admin: t.roleLabPlatformAdmin,
+    super_admin: t.roleLabSuperAdmin,
+    company_owner: t.roleLabCompanyOwner,
+    sales_admin: t.roleLabSalesAdmin,
+    team_leader: t.roleLabTeamLeader,
+    sales_agent: t.roleLabSalesAgent,
+    admin: t.roleLabAdmin,
+    sales_manager: t.roleLabSalesManager,
+  };
   const { openTour } = useTour();
   const isEcommerce = user?.companyBusinessType === "ecommerce";
-  // Adaptive Arabic labels: ecommerce uses order terminology, service uses lead terminology
   const lbl = {
-    group: isEcommerce ? "الطلبات" : "الليدز",
-    pipeline: isEcommerce ? "خط سير الطلبات" : "خط سير الليدز",
-    all: isEcommerce ? "جميع الطلبات" : "جميع الليدز",
-    mgmt: isEcommerce ? "إدارة الطلبات" : "إدارة الليدز",
-    upload: isEcommerce ? "رفع الطلبات" : "رفع الليدز",
-    add: isEcommerce ? "إضافة طلب" : "إضافة ليد",
-    duplicates: isEcommerce ? "الطلبات المكررة" : "الليدز المكررة",
-    withdrawn: isEcommerce ? "الطلبات المنسحبة" : "الليدز المنسحبة",
+    group: isEcommerce ? t.navOrdersGroup : t.navLeadsGroup,
+    pipeline: isEcommerce ? t.navOrderPipeline : t.navPipeline,
+    all: isEcommerce ? t.navAllOrders : t.navAllLeads,
+    mgmt: isEcommerce ? t.navOrdersAdmin : t.navLeadsAdmin,
+    upload: isEcommerce ? t.navUploadOrders : t.navUploadLeads,
+    add: isEcommerce ? t.navAddOrder : t.navAddLead,
+    duplicates: isEcommerce ? t.navDuplicateOrders : t.navDuplicates,
+    withdrawn: isEcommerce ? t.navWithdrawnOrders : t.navWithdrawn,
   };
 
   const { data: unreadData } = useQuery<{ count: number }>({
@@ -106,7 +115,7 @@ export function AppSidebar() {
                 <SidebarMenuButton asChild isActive={location === "/"}>
                   <Link href="/" data-testid="link-nav-home">
                     <LayoutDashboard className="h-4 w-4" />
-                    <span>لوحة التحكم</span>
+                    <span>{t.navDashboard}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -115,7 +124,7 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild isActive={isActive("/leaderboard")}>
                     <Link href="/leaderboard" data-testid="link-nav-leaderboard">
                       <Trophy className="h-4 w-4" />
-                      <span>المتصدرين</span>
+                      <span>{t.navLeaderboard}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -124,7 +133,7 @@ export function AppSidebar() {
                 <SidebarMenuButton asChild isActive={isActive("/analytics")}>
                   <Link href="/analytics" data-testid="link-nav-analytics">
                     <BarChart3 className="h-4 w-4" />
-                    <span>التقارير</span>
+                    <span>{t.navAnalytics}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -141,7 +150,7 @@ export function AppSidebar() {
                     <SidebarMenuButton asChild isActive={isActive("/products")}>
                       <Link href="/products" data-testid="link-nav-products">
                         <Package className="h-4 w-4" />
-                        <span>المنتجات</span>
+                        <span>{t.navProducts}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -149,7 +158,7 @@ export function AppSidebar() {
                     <SidebarMenuButton asChild isActive={isActive("/orders")}>
                       <Link href="/orders" data-testid="link-nav-orders">
                         <ShoppingBag className="h-4 w-4" />
-                        <span>الطلبات</span>
+                        <span>{t.navOrders}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -157,7 +166,7 @@ export function AppSidebar() {
                     <SidebarMenuButton asChild isActive={isActive("/activity-log")}>
                       <Link href="/activity-log" data-testid="link-nav-activity-log">
                         <History className="h-4 w-4" />
-                        <span>سجل الإجراءات</span>
+                        <span>{t.navActivityLog}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -198,7 +207,7 @@ export function AppSidebar() {
                         <SidebarMenuButton asChild isActive={isActive("/follow-ups")}>
                           <Link href="/follow-ups" data-testid="link-nav-follow-ups">
                             <CalendarCheck className="h-4 w-4" />
-                            <span>متابعات اليوم</span>
+                            <span>{t.navFollowUpsToday}</span>
                           </Link>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
@@ -257,7 +266,7 @@ export function AppSidebar() {
                         <SidebarMenuButton asChild isActive={isActive("/activity-log")}>
                           <Link href="/activity-log" data-testid="link-nav-activity-log">
                             <History className="h-4 w-4" />
-                            <span>سجل الإجراءات</span>
+                            <span>{t.navActivityLog}</span>
                           </Link>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
@@ -276,7 +285,7 @@ export function AppSidebar() {
                 <SidebarMenuButton asChild isActive={isActive("/knowledge-base")}>
                   <Link href="/knowledge-base" data-testid="link-nav-knowledge-base">
                     <BookOpen className="h-4 w-4" />
-                    <span>قاعدة المعرفة</span>
+                    <span>{t.navKnowledgeBase}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -288,7 +297,7 @@ export function AppSidebar() {
           <Collapsible className="group/collapsible">
             <SidebarGroupLabel asChild>
               <CollapsibleTrigger className="flex w-full items-center justify-between">
-                التواصل
+                {t.navGroupComms}
                 <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
               </CollapsibleTrigger>
             </SidebarGroupLabel>
@@ -299,7 +308,7 @@ export function AppSidebar() {
                     <SidebarMenuButton asChild isActive={isActive("/conversations")}>
                       <Link href="/conversations" data-testid="link-nav-conversations">
                         <MessageSquare className="h-4 w-4" />
-                        <span>واتساب</span>
+                        <span>{t.navConversations}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -307,7 +316,7 @@ export function AppSidebar() {
                     <SidebarMenuButton asChild isActive={isActive("/chatbot-config")}>
                       <Link href="/chatbot-config" data-testid="link-nav-chatbot-config">
                         <BotMessageSquare className="h-4 w-4" />
-                        <span>إعدادات الشات بوت</span>
+                        <span>{t.navChatbot}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -322,7 +331,7 @@ export function AppSidebar() {
             <Collapsible className="group/collapsible">
               <SidebarGroupLabel asChild>
                 <CollapsibleTrigger className="flex w-full items-center justify-between">
-                  الإدارة
+                  {t.navGroupAdmin}
                   <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
                 </CollapsibleTrigger>
               </SidebarGroupLabel>
@@ -333,7 +342,7 @@ export function AppSidebar() {
                       <SidebarMenuButton asChild isActive={isActive("/integrations")}>
                         <Link href="/integrations" data-testid="link-nav-integrations">
                           <Plug className="h-4 w-4" />
-                          <span>التكاملات</span>
+                          <span>{t.navIntegrations}</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -341,7 +350,7 @@ export function AppSidebar() {
                       <SidebarMenuButton asChild isActive={isActive("/settings/users")}>
                         <Link href="/settings/users" data-testid="link-nav-settings-users">
                           <UsersRound className="h-4 w-4" />
-                          <span>المستخدمين</span>
+                          <span>{t.navUsers}</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -349,7 +358,7 @@ export function AppSidebar() {
                       <SidebarMenuButton asChild isActive={isActive("/settings")}>
                         <Link href="/settings" data-testid="link-nav-settings">
                           <Settings className="h-4 w-4" />
-                          <span>الإعدادات</span>
+                          <span>{t.navSettings}</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -368,7 +377,7 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild isActive={isActive("/support/tickets")}>
                     <Link href="/support/tickets" data-testid="link-nav-support">
                       <LifeBuoy className="h-4 w-4" />
-                      <span>الدعم الفني</span>
+                      <span>{t.navSupport}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -382,7 +391,7 @@ export function AppSidebar() {
             <Collapsible defaultOpen className="group/collapsible">
               <SidebarGroupLabel asChild>
                 <CollapsibleTrigger className="flex w-full items-center justify-between">
-                  Sales CRM المنصة
+                  {t.navGroupPlatform}
                   <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
                 </CollapsibleTrigger>
               </SidebarGroupLabel>
@@ -393,7 +402,7 @@ export function AppSidebar() {
                       <SidebarMenuButton asChild isActive={location === "/platform"}>
                         <Link href="/platform" data-testid="link-nav-platform-dashboard">
                           <LayoutDashboard className="h-4 w-4" />
-                          <span>لوحة تحكم المنصة</span>
+                          <span>{t.navPlatformDashboard}</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -401,7 +410,7 @@ export function AppSidebar() {
                       <SidebarMenuButton asChild isActive={isActive("/platform/leads/pipeline")}>
                         <Link href="/platform/leads/pipeline" data-testid="link-nav-platform-pipeline">
                           <Kanban className="h-4 w-4" />
-                          <span>Pipeline المبيعات</span>
+                          <span>{t.navPlatformPipeline}</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -409,7 +418,7 @@ export function AppSidebar() {
                       <SidebarMenuButton asChild isActive={location === "/platform/leads"}>
                         <Link href="/platform/leads" data-testid="link-nav-platform-leads">
                           <Building2 className="h-4 w-4" />
-                          <span>ليدز المنصة</span>
+                          <span>{t.navPlatformLeads}</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -417,7 +426,7 @@ export function AppSidebar() {
                       <SidebarMenuButton asChild isActive={isActive("/analytics")}>
                         <Link href="/analytics" data-testid="link-nav-platform-analytics">
                           <TrendingUp className="h-4 w-4" />
-                          <span>التقارير</span>
+                          <span>{t.navAnalytics}</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -437,11 +446,11 @@ export function AppSidebar() {
                 {user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.username}
               </span>
               <span className="text-xs text-muted-foreground" data-testid="text-sidebar-role">
-                {userRole ? (ROLE_ARABIC_NAMES[userRole] ?? user.role) : user.role}
+                {userRole ? (roleDisplayNames[userRole] ?? user.role) : user.role}
               </span>
             </div>
             {unreadCount > 0 && (
-              <div className="relative flex-shrink-0" title="Unread notifications" data-testid="badge-unread-notifications">
+              <div className="relative flex-shrink-0" title={t.unreadNotificationsTitle} data-testid="badge-unread-notifications">
                 <Bell className="h-5 w-5 text-amber-500" />
                 <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">
                   {unreadCount > 9 ? "9+" : unreadCount}
@@ -457,7 +466,7 @@ export function AppSidebar() {
             data-testid="button-replay-tour"
           >
             <PlayCircle className="h-3.5 w-3.5" />
-            <span>جولة تعريفية</span>
+            <span>{t.navTour}</span>
           </button>
         </div>
         <div className="text-xs text-muted-foreground">SalesBot AI v1.0</div>

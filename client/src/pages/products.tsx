@@ -12,14 +12,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Plus, Package, Pencil, Trash2, Search } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/lib/i18n";
 import type { Product } from "@shared/schema";
 import { format } from "date-fns";
 
-function ProductForm({ initial, onSave, onCancel, isPending }: {
+function ProductForm({ initial, onSave, onCancel, isPending, t }: {
   initial?: Partial<Product>;
   onSave: (data: Partial<Product>) => void;
   onCancel: () => void;
   isPending: boolean;
+  t: Record<string, string>;
 }) {
   const [form, setForm] = useState({
     name: initial?.name ?? "",
@@ -34,28 +36,28 @@ function ProductForm({ initial, onSave, onCancel, isPending }: {
   return (
     <div className="space-y-4">
       <div>
-        <Label htmlFor="product-name">اسم المنتج *</Label>
+        <Label htmlFor="product-name">{t.productName} *</Label>
         <Input
           id="product-name"
           data-testid="input-product-name"
           value={form.name}
           onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-          placeholder="اسم المنتج"
+          placeholder={t.productName}
         />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="product-category">الفئة</Label>
+          <Label htmlFor="product-category">{t.productCategory}</Label>
           <Input
             id="product-category"
             data-testid="input-product-category"
             value={form.category}
             onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-            placeholder="مثال: ملابس، إلكترونيات"
+            placeholder={t.productCategory}
           />
         </div>
         <div>
-          <Label htmlFor="product-price">السعر *</Label>
+          <Label htmlFor="product-price">{t.productPrice} *</Label>
           <Input
             id="product-price"
             data-testid="input-product-price"
@@ -70,7 +72,7 @@ function ProductForm({ initial, onSave, onCancel, isPending }: {
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="product-stock">المخزون</Label>
+          <Label htmlFor="product-stock">{t.productStock}</Label>
           <Input
             id="product-stock"
             data-testid="input-product-stock"
@@ -82,7 +84,7 @@ function ProductForm({ initial, onSave, onCancel, isPending }: {
           />
         </div>
         <div>
-          <Label htmlFor="product-image-url">رابط الصورة</Label>
+          <Label htmlFor="product-image-url">{t.productImageUrl}</Label>
           <Input
             id="product-image-url"
             data-testid="input-product-image-url"
@@ -93,13 +95,13 @@ function ProductForm({ initial, onSave, onCancel, isPending }: {
         </div>
       </div>
       <div>
-        <Label htmlFor="product-description">الوصف</Label>
+        <Label htmlFor="product-description">{t.productDescription}</Label>
         <Textarea
           id="product-description"
           data-testid="input-product-description"
           value={form.description}
           onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-          placeholder="وصف المنتج..."
+          placeholder={t.productDescription}
           rows={3}
         />
       </div>
@@ -110,10 +112,10 @@ function ProductForm({ initial, onSave, onCancel, isPending }: {
           checked={form.isActive}
           onCheckedChange={v => setForm(f => ({ ...f, isActive: v }))}
         />
-        <Label htmlFor="product-active">نشط</Label>
+        <Label htmlFor="product-active">{t.productActive}</Label>
       </div>
       <DialogFooter>
-        <Button variant="outline" onClick={onCancel} data-testid="button-cancel-product">إلغاء</Button>
+        <Button variant="outline" onClick={onCancel} data-testid="button-cancel-product">{t.cancel}</Button>
         <Button
           onClick={() => onSave({
             ...form,
@@ -126,7 +128,7 @@ function ProductForm({ initial, onSave, onCancel, isPending }: {
           disabled={!form.name || isPending}
           data-testid="button-save-product"
         >
-          {isPending ? "جارٍ الحفظ..." : "حفظ"}
+          {isPending ? t.saving : t.save}
         </Button>
       </DialogFooter>
     </div>
@@ -135,6 +137,7 @@ function ProductForm({ initial, onSave, onCancel, isPending }: {
 
 export default function ProductsPage() {
   const { toast } = useToast();
+  const { t, isRTL } = useLanguage();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [search, setSearch] = useState("");
@@ -146,9 +149,9 @@ export default function ProductsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       setDialogOpen(false);
-      toast({ title: "تم إضافة المنتج" });
+      toast({ title: t.productCreatedSuccess });
     },
-    onError: () => toast({ title: "فشل إضافة المنتج", variant: "destructive" }),
+    onError: () => toast({ title: t.productCreatedError, variant: "destructive" }),
   });
 
   const updateMutation = useMutation({
@@ -156,18 +159,18 @@ export default function ProductsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       setEditProduct(null);
-      toast({ title: "تم تحديث المنتج" });
+      toast({ title: t.productUpdatedSuccess });
     },
-    onError: () => toast({ title: "فشل تحديث المنتج", variant: "destructive" }),
+    onError: () => toast({ title: t.productUpdatedError, variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => apiRequest("DELETE", `/api/products/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      toast({ title: "تم حذف المنتج" });
+      toast({ title: t.productDeletedSuccess });
     },
-    onError: () => toast({ title: "فشل حذف المنتج", variant: "destructive" }),
+    onError: () => toast({ title: t.productDeletedError, variant: "destructive" }),
   });
 
   const toggleActive = (product: Product) => {
@@ -181,30 +184,30 @@ export default function ProductsPage() {
   });
 
   return (
-    <div className="space-y-6" dir="rtl" data-testid="page-products">
+    <div className="space-y-6" dir={isRTL ? "rtl" : "ltr"} data-testid="page-products">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">المنتجات</h1>
-          <p className="text-muted-foreground">إدارة منتجات متجرك الإلكتروني</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t.productsTitle}</h1>
+          <p className="text-muted-foreground">{t.productsSubtitle}</p>
         </div>
         <Button onClick={() => setDialogOpen(true)} data-testid="button-add-product">
-          <Plus className="h-4 w-4 ml-2" />
-          إضافة منتج
+          <Plus className="h-4 w-4 me-2" />
+          {t.addProduct}
         </Button>
       </div>
 
       <div className="flex items-center gap-3">
         <div className="relative max-w-xs w-full">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="بحث في المنتجات..."
-            className="pr-9"
+            placeholder={t.searchProducts}
+            className="ps-9"
             data-testid="input-search-products"
           />
         </div>
-        <span className="text-sm text-muted-foreground">{filtered.length} منتج</span>
+        <span className="text-sm text-muted-foreground">{filtered.length} {t.productCount}</span>
       </div>
 
       {isLoading ? (
@@ -214,20 +217,20 @@ export default function ProductsPage() {
           <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
             <Package className="h-12 w-12 text-muted-foreground" />
             <div className="text-center">
-              <p className="font-medium">لا توجد منتجات بعد</p>
-              <p className="text-sm text-muted-foreground">أضف منتجاتك لتظهر في قائمة الشات بوت</p>
+              <p className="font-medium">{t.noProductsYet}</p>
+              <p className="text-sm text-muted-foreground">{t.productsSubtitle}</p>
             </div>
             <Button onClick={() => setDialogOpen(true)} data-testid="button-add-first-product">
-              <Plus className="h-4 w-4 ml-2" />
-              أضف أول منتج
+              <Plus className="h-4 w-4 me-2" />
+              {t.addFirstProduct}
             </Button>
           </CardContent>
         </Card>
       ) : filtered.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 gap-2">
-            <p className="font-medium text-muted-foreground">لا توجد نتائج</p>
-            <Button variant="ghost" size="sm" onClick={() => setSearch("")}>مسح البحث</Button>
+            <p className="font-medium text-muted-foreground">{t.noProductsFound}</p>
+            <Button variant="ghost" size="sm" onClick={() => setSearch("")}>{t.clearSearch}</Button>
           </CardContent>
         </Card>
       ) : (
@@ -237,13 +240,13 @@ export default function ProductsPage() {
               <table className="w-full text-sm">
                 <thead className="border-b">
                   <tr>
-                    <th className="text-right py-3 px-4 font-medium">المنتج</th>
-                    <th className="text-right py-3 px-4 font-medium hidden md:table-cell">الفئة</th>
-                    <th className="text-right py-3 px-4 font-medium">السعر</th>
-                    <th className="text-right py-3 px-4 font-medium hidden md:table-cell">المخزون</th>
-                    <th className="text-right py-3 px-4 font-medium">الحالة</th>
-                    <th className="text-right py-3 px-4 font-medium hidden lg:table-cell">تاريخ الإضافة</th>
-                    <th className="text-left py-3 px-4 font-medium">إجراءات</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.productName}</th>
+                    <th className="text-start py-3 px-4 font-medium hidden md:table-cell">{t.productCategory}</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.productPrice}</th>
+                    <th className="text-start py-3 px-4 font-medium hidden md:table-cell">{t.productStock}</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.status}</th>
+                    <th className="text-start py-3 px-4 font-medium hidden lg:table-cell">{t.date}</th>
+                    <th className="text-end py-3 px-4 font-medium">{t.actions}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -274,7 +277,7 @@ export default function ProductsPage() {
                         {product.category ?? "—"}
                       </td>
                       <td className="py-3 px-4 font-medium">
-                        {Number(product.price).toLocaleString("ar-EG")} ر.س
+                        {Number(product.price).toLocaleString()} {t.currencySymbol}
                       </td>
                       <td className="py-3 px-4 text-muted-foreground hidden md:table-cell" data-testid={`text-stock-${product.id}`}>
                         {product.stock}
@@ -290,7 +293,7 @@ export default function ProductsPage() {
                             ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                             : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
                           }>
-                            {product.isActive ? "نشط" : "غير نشط"}
+                            {product.isActive ? t.productActive : t.productInactive}
                           </Badge>
                         </div>
                       </td>
@@ -298,7 +301,7 @@ export default function ProductsPage() {
                         {product.createdAt ? format(new Date(product.createdAt), "dd/MM/yyyy") : "—"}
                       </td>
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 justify-end">
                           <Button
                             size="icon"
                             variant="ghost"
@@ -311,7 +314,7 @@ export default function ProductsPage() {
                             size="icon"
                             variant="ghost"
                             onClick={() => {
-                              if (confirm("هل تريد حذف هذا المنتج؟")) {
+                              if (confirm(t.deleteProduct + "?")) {
                                 deleteMutation.mutate(product.id);
                               }
                             }}
@@ -331,11 +334,12 @@ export default function ProductsPage() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg" dir="rtl">
+        <DialogContent className="max-w-lg" dir={isRTL ? "rtl" : "ltr"}>
           <DialogHeader>
-            <DialogTitle>إضافة منتج جديد</DialogTitle>
+            <DialogTitle>{t.addProduct}</DialogTitle>
           </DialogHeader>
           <ProductForm
+            t={t}
             onSave={data => createMutation.mutate(data)}
             onCancel={() => setDialogOpen(false)}
             isPending={createMutation.isPending}
@@ -344,12 +348,13 @@ export default function ProductsPage() {
       </Dialog>
 
       <Dialog open={!!editProduct} onOpenChange={open => !open && setEditProduct(null)}>
-        <DialogContent className="max-w-lg" dir="rtl">
+        <DialogContent className="max-w-lg" dir={isRTL ? "rtl" : "ltr"}>
           <DialogHeader>
-            <DialogTitle>تعديل المنتج</DialogTitle>
+            <DialogTitle>{t.editProduct}</DialogTitle>
           </DialogHeader>
           {editProduct && (
             <ProductForm
+              t={t}
               initial={editProduct}
               onSave={data => updateMutation.mutate({ id: editProduct.id, data })}
               onCancel={() => setEditProduct(null)}

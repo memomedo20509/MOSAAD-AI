@@ -10,6 +10,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { PlatformLead } from "@shared/schema";
 import { PLATFORM_LEAD_STAGES, PLATFORM_LEAD_STAGE_LABELS, PLATFORM_LEAD_SOURCES } from "@shared/schema";
+import { useLanguage } from "@/lib/i18n";
 
 const STAGE_COLORS: Record<string, string> = {
   new_lead: "#6366f1",
@@ -22,14 +23,11 @@ const STAGE_COLORS: Record<string, string> = {
   lost: "#ef4444",
 };
 
-const SOURCE_LABELS: Record<string, string> = {
-  website: "الموقع",
-  referral: "إحالة",
-  social: "سوشيال",
-  cold_outreach: "تواصل بارد",
-};
-
-function PlatformLeadCard({ lead, onDragStart }: { lead: PlatformLead; onDragStart: (e: React.DragEvent, leadId: string) => void }) {
+function PlatformLeadCard({ lead, onDragStart, sourceLabels }: {
+  lead: PlatformLead;
+  onDragStart: (e: React.DragEvent, leadId: string) => void;
+  sourceLabels: Record<string, string>;
+}) {
   return (
     <div
       draggable
@@ -55,7 +53,7 @@ function PlatformLeadCard({ lead, onDragStart }: { lead: PlatformLead; onDragSta
       )}
       {lead.source && (
         <Badge variant="outline" className="text-[10px] px-1.5 py-0 mt-1.5">
-          {SOURCE_LABELS[lead.source] ?? lead.source}
+          {sourceLabels[lead.source] ?? lead.source}
         </Badge>
       )}
     </div>
@@ -64,9 +62,17 @@ function PlatformLeadCard({ lead, onDragStart }: { lead: PlatformLead; onDragSta
 
 export default function PlatformLeadPipelinePage() {
   const { toast } = useToast();
+  const { t, isRTL } = useLanguage();
   const [search, setSearch] = useState("");
   const [filterSource, setFilterSource] = useState("all");
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+
+  const SOURCE_LABELS: Record<string, string> = {
+    website: t.sourceWebsite,
+    referral: t.sourceReferral,
+    social: t.sourceSocial,
+    cold_outreach: t.sourceColdOutreach,
+  };
 
   const { data: leads = [], isLoading } = useQuery<PlatformLead[]>({ queryKey: ["/api/platform/leads"] });
 
@@ -76,7 +82,7 @@ export default function PlatformLeadPipelinePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/platform/leads"] });
     },
-    onError: () => toast({ title: "فشل في تحديث المرحلة", variant: "destructive" }),
+    onError: () => toast({ title: t.pipelineUpdateFail, variant: "destructive" }),
   });
 
   const filteredLeads = leads.filter(l => {
@@ -120,15 +126,15 @@ export default function PlatformLeadPipelinePage() {
     .reduce((sum, l) => sum + (Number(l.dealValue) || 0), 0);
 
   return (
-    <div className="space-y-4" data-testid="page-platform-pipeline">
+    <div className="space-y-4" data-testid="page-platform-pipeline" dir={isRTL ? "rtl" : "ltr"}>
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Pipeline المبيعات</h1>
-        <p className="text-muted-foreground">تتبع ليدز المنصة بالسحب والإفلات</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.platformPipelineTitle}</h1>
+        <p className="text-muted-foreground">{t.pipelineDesc}</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <Input
-          placeholder="بحث بالشركة أو الاسم..."
+          placeholder={t.pipelineSearchPlaceholder}
           value={search}
           onChange={e => setSearch(e.target.value)}
           className="max-w-xs"
@@ -139,12 +145,12 @@ export default function PlatformLeadPipelinePage() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">جميع المصادر</SelectItem>
+            <SelectItem value="all">{t.pipelineAllSources}</SelectItem>
             {PLATFORM_LEAD_SOURCES.map(s => <SelectItem key={s} value={s}>{SOURCE_LABELS[s]}</SelectItem>)}
           </SelectContent>
         </Select>
         {totalPipelineValue > 0 && (
-          <span className="text-sm text-muted-foreground mr-auto">
+          <span className="text-sm text-muted-foreground ms-auto">
             Pipeline: <strong>${totalPipelineValue.toLocaleString()}</strong>
           </span>
         )}
@@ -186,10 +192,10 @@ export default function PlatformLeadPipelinePage() {
                   data-testid={`column-platform-stage-${stage}`}
                 >
                   {stageLeads.length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center py-8">لا يوجد ليدز</p>
+                    <p className="text-xs text-muted-foreground text-center py-8">{t.pipelineNoLeads}</p>
                   ) : (
                     stageLeads.map(lead => (
-                      <PlatformLeadCard key={lead.id} lead={lead} onDragStart={handleDragStart} />
+                      <PlatformLeadCard key={lead.id} lead={lead} onDragStart={handleDragStart} sourceLabels={SOURCE_LABELS} />
                     ))
                   )}
                 </div>
@@ -202,7 +208,7 @@ export default function PlatformLeadPipelinePage() {
       {leads.length === 0 && !isLoading && (
         <Card>
           <CardContent className="py-16 text-center text-muted-foreground">
-            لا يوجد ليدز. أضف ليدك الأول من صفحة قائمة الليدز.
+            {t.pipelineEmptyMsg}
           </CardContent>
         </Card>
       )}

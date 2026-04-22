@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,9 +10,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Ticket, Clock, Plus, ChevronLeft, AlertTriangle } from "lucide-react";
+import { Ticket, Clock, Plus, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/lib/i18n";
 
 interface TicketItem {
   id: string;
@@ -24,25 +25,11 @@ interface TicketItem {
   updatedAt: string;
 }
 
-const PRIORITY_LABELS: Record<string, string> = {
-  low: "منخفض",
-  medium: "متوسط",
-  high: "عالي",
-  urgent: "عاجل",
-};
-
 const PRIORITY_COLORS: Record<string, string> = {
   low: "bg-gray-100 text-gray-600",
   medium: "bg-blue-100 text-blue-600",
   high: "bg-orange-100 text-orange-600",
   urgent: "bg-red-100 text-red-600",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  open: "مفتوح",
-  in_progress: "قيد المعالجة",
-  resolved: "تم الحل",
-  closed: "مغلق",
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -52,21 +39,36 @@ const STATUS_COLORS: Record<string, string> = {
   closed: "bg-gray-100 text-gray-600",
 };
 
-const CATEGORY_OPTIONS = [
-  { value: "technical", label: "مشكلة تقنية" },
-  { value: "billing", label: "فوترة ومدفوعات" },
-  { value: "feature_request", label: "طلب ميزة" },
-  { value: "account", label: "إدارة الحساب" },
-  { value: "other", label: "أخرى" },
-];
-
 export default function SupportTicketsPage() {
+  const { t, isRTL, language } = useLanguage();
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [subject, setSubject] = useState("");
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("medium");
+
+  const PRIORITY_LABELS: Record<string, string> = {
+    low: t.ticketPriorityLow,
+    medium: t.ticketPriorityMedium,
+    high: t.ticketPriorityHigh,
+    urgent: t.ticketPriorityUrgent,
+  };
+
+  const STATUS_LABELS: Record<string, string> = {
+    open: t.ticketStatusOpen,
+    in_progress: t.ticketStatusInProgress,
+    resolved: t.ticketStatusResolved,
+    closed: t.ticketStatusClosed,
+  };
+
+  const CATEGORY_OPTIONS = [
+    { value: "technical", label: t.ticketCategoryTech },
+    { value: "billing", label: t.ticketCategoryBilling },
+    { value: "feature_request", label: t.ticketCategoryFeature },
+    { value: "account", label: t.ticketCategoryAccount },
+    { value: "other", label: t.ticketCategoryOther },
+  ];
 
   const { data: tickets = [], isLoading } = useQuery<TicketItem[]>({
     queryKey: ["/api/company/tickets"],
@@ -82,7 +84,7 @@ export default function SupportTicketsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/company/tickets"] });
-      toast({ title: "تم إرسال التذكرة", description: "سيتواصل معك فريق الدعم في أقرب وقت" });
+      toast({ title: t.ticketSuccessTitle, description: t.ticketSuccessDesc });
       setIsDialogOpen(false);
       setSubject("");
       setCategory("");
@@ -90,37 +92,39 @@ export default function SupportTicketsPage() {
       setPriority("medium");
     },
     onError: () => {
-      toast({ title: "خطأ", description: "فشل إرسال التذكرة، حاول مرة أخرى", variant: "destructive" });
+      toast({ title: t.ticketErrTitle, description: t.ticketErrDesc, variant: "destructive" });
     },
   });
 
   const formatDate = (d: string) =>
-    new Date(d).toLocaleDateString("ar-EG", { day: "numeric", month: "short", year: "numeric" });
+    new Date(d).toLocaleDateString(isRTL ? "ar-EG" : "en-US", { day: "numeric", month: "short", year: "numeric" });
+
+  const ViewIcon = isRTL ? ChevronLeft : ChevronRight;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isRTL ? "rtl" : "ltr"}>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">الدعم الفني</h1>
-          <p className="text-muted-foreground">تذاكر الدعم وطلبات المساعدة</p>
+          <h1 className="text-2xl font-bold">{t.supportTechTitle}</h1>
+          <p className="text-muted-foreground">{t.supportTechDesc}</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button data-testid="button-new-ticket">
-              <Plus className="h-4 w-4 ml-2" />
-              تذكرة جديدة
+              <Plus className={`h-4 w-4 ${isRTL ? "ms-2" : "me-2"}`} />
+              {t.ticketNewBtn}
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-lg">
+          <DialogContent className="sm:max-w-lg" dir={isRTL ? "rtl" : "ltr"}>
             <DialogHeader>
-              <DialogTitle>إرسال تذكرة دعم جديدة</DialogTitle>
+              <DialogTitle>{t.ticketDialogTitle}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-2">
               <div className="space-y-1.5">
-                <Label htmlFor="ticket-category">التصنيف</Label>
+                <Label htmlFor="ticket-category">{t.ticketCategoryLabel}</Label>
                 <Select value={category} onValueChange={setCategory}>
                   <SelectTrigger id="ticket-category" data-testid="select-ticket-category">
-                    <SelectValue placeholder="اختر التصنيف" />
+                    <SelectValue placeholder={t.ticketCategoryPlaceholder} />
                   </SelectTrigger>
                   <SelectContent>
                     {CATEGORY_OPTIONS.map((opt) => (
@@ -130,34 +134,34 @@ export default function SupportTicketsPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="ticket-subject">الموضوع</Label>
+                <Label htmlFor="ticket-subject">{t.ticketSubjectLabel}</Label>
                 <Input
                   id="ticket-subject"
-                  placeholder="وصف موجز للمشكلة"
+                  placeholder={t.ticketSubjectPlaceholder}
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
                   data-testid="input-ticket-subject"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="ticket-priority">الأولوية</Label>
+                <Label htmlFor="ticket-priority">{t.ticketPriorityLabel}</Label>
                 <Select value={priority} onValueChange={setPriority}>
                   <SelectTrigger id="ticket-priority" data-testid="select-ticket-priority">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="low">منخفض</SelectItem>
-                    <SelectItem value="medium">متوسط</SelectItem>
-                    <SelectItem value="high">عالي</SelectItem>
-                    <SelectItem value="urgent">عاجل</SelectItem>
+                    <SelectItem value="low">{t.ticketPriorityLow}</SelectItem>
+                    <SelectItem value="medium">{t.ticketPriorityMedium}</SelectItem>
+                    <SelectItem value="high">{t.ticketPriorityHigh}</SelectItem>
+                    <SelectItem value="urgent">{t.ticketPriorityUrgent}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="ticket-description">التفاصيل</Label>
+                <Label htmlFor="ticket-description">{t.ticketDescLabel}</Label>
                 <Textarea
                   id="ticket-description"
-                  placeholder="اشرح المشكلة بالتفصيل..."
+                  placeholder={t.ticketDescPlaceholder}
                   rows={4}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -166,14 +170,14 @@ export default function SupportTicketsPage() {
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)} data-testid="button-cancel-ticket">
-                  إلغاء
+                  {t.ticketCancelBtn}
                 </Button>
                 <Button
                   onClick={() => createMutation.mutate()}
                   disabled={!subject.trim() || !description.trim() || createMutation.isPending}
                   data-testid="button-submit-ticket"
                 >
-                  {createMutation.isPending ? "جاري الإرسال..." : "إرسال التذكرة"}
+                  {createMutation.isPending ? t.ticketSubmitting : t.ticketSubmitBtn}
                 </Button>
               </div>
             </div>
@@ -191,10 +195,10 @@ export default function SupportTicketsPage() {
         <Card>
           <CardContent className="py-16 text-center">
             <Ticket className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground mb-4">لا توجد تذاكر بعد</p>
+            <p className="text-muted-foreground mb-4">{t.ticketEmptyMsg}</p>
             <Button variant="outline" onClick={() => setIsDialogOpen(true)} data-testid="button-new-ticket-empty">
-              <Plus className="h-4 w-4 ml-2" />
-              أرسل تذكرتك الأولى
+              <Plus className={`h-4 w-4 ${isRTL ? "ms-2" : "me-2"}`} />
+              {t.ticketFirstBtn}
             </Button>
           </CardContent>
         </Card>
@@ -231,8 +235,8 @@ export default function SupportTicketsPage() {
                   </div>
                   <Link href={`/support/tickets/${ticket.id}`}>
                     <Button variant="ghost" size="sm" data-testid={`button-view-ticket-${ticket.id}`}>
-                      <ChevronLeft className="h-4 w-4" />
-                      عرض
+                      <ViewIcon className="h-4 w-4" />
+                      {t.ticketViewBtn}
                     </Button>
                   </Link>
                 </div>

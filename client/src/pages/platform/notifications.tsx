@@ -1,11 +1,12 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Bell, Check, Building2, CreditCard, AlertTriangle, UserPlus, Wifi, LifeBuoy } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/lib/i18n";
 
 interface PlatformNotification {
   id: string;
@@ -27,16 +28,6 @@ const TYPE_ICONS: Record<string, React.ElementType> = {
   new_support_ticket: LifeBuoy,
 };
 
-const TYPE_LABELS: Record<string, string> = {
-  new_registration: "تسجيل جديد",
-  trial_ending: "تجربة منتهية",
-  payment_overdue: "دفعة متأخرة",
-  whatsapp_disconnect: "واتساب منفصل",
-  subscription_cancelled: "اشتراك ملغي",
-  plan_upgraded: "ترقية الباقة",
-  new_support_ticket: "تذكرة دعم جديدة",
-};
-
 const TYPE_COLORS: Record<string, string> = {
   new_registration: "text-green-500",
   trial_ending: "text-yellow-500",
@@ -49,6 +40,17 @@ const TYPE_COLORS: Record<string, string> = {
 
 export default function PlatformNotificationsPage() {
   const { toast } = useToast();
+  const { t, isRTL } = useLanguage();
+
+  const TYPE_LABELS: Record<string, string> = {
+    new_registration: t.notifTypeNewReg,
+    trial_ending: t.notifTypeTrialEnding,
+    payment_overdue: t.notifTypePaymentOverdue,
+    whatsapp_disconnect: t.notifTypeWaDisconnect,
+    subscription_cancelled: t.notifTypeSubCancelled,
+    plan_upgraded: t.notifTypePlanUpgraded,
+    new_support_ticket: t.notifTypeNewTicket,
+  };
 
   const { data: notifications = [], isLoading } = useQuery<PlatformNotification[]>({
     queryKey: ["/api/platform/notifications"],
@@ -71,21 +73,21 @@ export default function PlatformNotificationsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/platform/notifications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/platform/notifications/unread-count"] });
-      toast({ title: "تم تحديد الكل كمقروء" });
+      toast({ title: t.notifMarkAllRead });
     },
   });
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   const formatDate = (d: string) =>
-    new Date(d).toLocaleDateString("ar-EG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    new Date(d).toLocaleDateString(isRTL ? "ar-EG" : "en-US", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isRTL ? "rtl" : "ltr"}>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">مركز الإشعارات</h1>
-          <p className="text-muted-foreground">أحداث المنصة والتنبيهات المهمة</p>
+          <h1 className="text-2xl font-bold">{t.notifTitle}</h1>
+          <p className="text-muted-foreground">{t.notifDesc}</p>
         </div>
         {unreadCount > 0 && (
           <Button
@@ -95,8 +97,8 @@ export default function PlatformNotificationsPage() {
             disabled={markAllReadMutation.isPending}
             data-testid="button-mark-all-read"
           >
-            <Check className="h-4 w-4 ml-1" />
-            تحديد الكل كمقروء ({unreadCount})
+            <Check className="h-4 w-4 me-1" />
+            {t.notifMarkAllBtn} ({unreadCount})
           </Button>
         )}
       </div>
@@ -109,7 +111,7 @@ export default function PlatformNotificationsPage() {
         <Card>
           <CardContent className="py-16 text-center">
             <Bell className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground">لا توجد إشعارات</p>
+            <p className="text-muted-foreground">{t.notifEmpty}</p>
           </CardContent>
         </Card>
       ) : (

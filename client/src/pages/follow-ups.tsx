@@ -8,8 +8,9 @@ import { CheckCircle, Clock, AlertTriangle, Bell, Phone, ClipboardList } from "l
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useLanguage } from "@/lib/i18n";
 import { format } from "date-fns";
-import { ar } from "date-fns/locale";
+import { ar, enUS } from "date-fns/locale";
 import type { Lead, Reminder, Task } from "@shared/schema";
 
 type ReminderWithLead = Reminder & { lead: Lead | null };
@@ -24,7 +25,9 @@ type MyDayData = {
 export default function FollowUpsPage() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { t, isRTL } = useLanguage();
   const isEcommerce = user?.companyBusinessType === "ecommerce";
+  const dateLocale = isRTL ? ar : enUS;
 
   const { data, isLoading } = useQuery<MyDayData>({
     queryKey: ["/api/my-day"],
@@ -40,9 +43,9 @@ export default function FollowUpsPage() {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    return allTasks.filter((t) => {
-      if (t.completed) return false;
-      const due = t.endDate ? new Date(t.endDate) : t.startDate ? new Date(t.startDate) : null;
+    return allTasks.filter((task) => {
+      if (task.completed) return false;
+      const due = task.endDate ? new Date(task.endDate) : task.startDate ? new Date(task.startDate) : null;
       if (!due) return false;
       return due >= today && due < tomorrow;
     });
@@ -53,9 +56,9 @@ export default function FollowUpsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/my-day"] });
       queryClient.invalidateQueries({ queryKey: ["/api/reminders"] });
-      toast({ title: "تم إكمال التذكير" });
+      toast({ title: t.reminderCompletedSuccess });
     },
-    onError: () => toast({ title: "فشل في تحديث التذكير", variant: "destructive" }),
+    onError: () => toast({ title: t.reminderCompletedError, variant: "destructive" }),
   });
 
   const completeTaskMutation = useMutation({
@@ -63,9 +66,9 @@ export default function FollowUpsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/my-day"] });
-      toast({ title: "تم إكمال المهمة" });
+      toast({ title: t.taskCompletedSuccess });
     },
-    onError: () => toast({ title: "فشل في تحديث المهمة", variant: "destructive" }),
+    onError: () => toast({ title: t.taskCompletedError, variant: "destructive" }),
   });
 
   const todayFollowUps = data?.todayFollowUps ?? [];
@@ -74,16 +77,16 @@ export default function FollowUpsPage() {
   const newLeads = data?.newLeads ?? [];
 
   return (
-    <div className="space-y-6" data-testid="page-follow-ups">
+    <div className="space-y-6" data-testid="page-follow-ups" dir={isRTL ? "rtl" : "ltr"}>
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">متابعات اليوم</h1>
-        <p className="text-muted-foreground">التذكيرات والمهام المطلوبة اليوم</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.followUpsTitle}</h1>
+        <p className="text-muted-foreground">{t.followUpsSubtitle}</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">متأخرة</CardTitle>
+            <CardTitle className="text-sm font-medium">{t.overdueSection}</CardTitle>
             <AlertTriangle className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
@@ -94,7 +97,7 @@ export default function FollowUpsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">مطلوبة اليوم</CardTitle>
+            <CardTitle className="text-sm font-medium">{t.todayFollowUps}</CardTitle>
             <Clock className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
@@ -105,7 +108,7 @@ export default function FollowUpsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">مكتملة اليوم</CardTitle>
+            <CardTitle className="text-sm font-medium">{t.completedSection}</CardTitle>
             <CheckCircle className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
@@ -116,7 +119,7 @@ export default function FollowUpsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{isEcommerce ? "طلبات جديدة" : "ليدز جديدة"}</CardTitle>
+            <CardTitle className="text-sm font-medium">{isEcommerce ? t.navOrdersGroup : t.newLeadsSection}</CardTitle>
             <Bell className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
@@ -136,13 +139,13 @@ export default function FollowUpsPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-red-600">
                   <AlertTriangle className="h-5 w-5" />
-                  متابعات متأخرة ({overdueFollowUps.length})
+                  {t.overdueFollowUpsTitle} ({overdueFollowUps.length})
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   {overdueFollowUps.map((r) => (
-                    <ReminderRow key={r.id} reminder={r} onComplete={() => completeMutation.mutate(r.id)} isPending={completeMutation.isPending} variant="overdue" />
+                    <ReminderRow key={r.id} reminder={r} onComplete={() => completeMutation.mutate(r.id)} isPending={completeMutation.isPending} variant="overdue" dateLocale={dateLocale} t={t} />
                   ))}
                 </div>
               </CardContent>
@@ -153,16 +156,16 @@ export default function FollowUpsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5 text-amber-500" />
-                متابعات اليوم ({todayFollowUps.length})
+                {t.todayFollowUps} ({todayFollowUps.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
               {todayFollowUps.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">لا توجد متابعات مطلوبة اليوم</p>
+                <p className="text-center text-muted-foreground py-8">{t.noFollowUpsToday}</p>
               ) : (
                 <div className="space-y-3">
                   {todayFollowUps.map((r) => (
-                    <ReminderRow key={r.id} reminder={r} onComplete={() => completeMutation.mutate(r.id)} isPending={completeMutation.isPending} variant="today" />
+                    <ReminderRow key={r.id} reminder={r} onComplete={() => completeMutation.mutate(r.id)} isPending={completeMutation.isPending} variant="today" dateLocale={dateLocale} t={t} />
                   ))}
                 </div>
               )}
@@ -174,7 +177,7 @@ export default function FollowUpsPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <ClipboardList className="h-5 w-5 text-indigo-500" />
-                  مهام اليوم ({todayTasks.length})
+                  {t.todayTasksTitle} ({todayTasks.length})
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -187,7 +190,7 @@ export default function FollowUpsPage() {
                           <p className="text-xs text-muted-foreground mt-0.5 truncate">{task.description}</p>
                         )}
                         <p className="text-xs text-muted-foreground mt-1" data-testid={`text-task-due-${task.id}`}>
-                          {(task.endDate || task.startDate) ? format(new Date((task.endDate ?? task.startDate)!), "d MMMM yyyy - hh:mm a", { locale: ar }) : "—"}
+                          {(task.endDate || task.startDate) ? format(new Date((task.endDate ?? task.startDate)!), "d MMMM yyyy - hh:mm a", { locale: dateLocale }) : "—"}
                         </p>
                       </div>
                       <Button
@@ -197,8 +200,8 @@ export default function FollowUpsPage() {
                         disabled={completeTaskMutation.isPending}
                         data-testid={`button-complete-task-${task.id}`}
                       >
-                        <CheckCircle className="h-4 w-4 mr-1" />
-                        إكمال
+                        <CheckCircle className="h-4 w-4 me-1" />
+                        {t.done}
                       </Button>
                     </div>
                   ))}
@@ -212,13 +215,13 @@ export default function FollowUpsPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-green-600">
                   <CheckCircle className="h-5 w-5" />
-                  مكتملة اليوم ({doneToday.length})
+                  {t.completedTodayTitle} ({doneToday.length})
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   {doneToday.map((r) => (
-                    <ReminderRow key={r.id} reminder={r} variant="done" />
+                    <ReminderRow key={r.id} reminder={r} variant="done" dateLocale={dateLocale} t={t} />
                   ))}
                 </div>
               </CardContent>
@@ -230,11 +233,13 @@ export default function FollowUpsPage() {
   );
 }
 
-function ReminderRow({ reminder, onComplete, isPending, variant }: {
+function ReminderRow({ reminder, onComplete, isPending, variant, dateLocale, t }: {
   reminder: ReminderWithLead;
   onComplete?: () => void;
   isPending?: boolean;
   variant: "overdue" | "today" | "done";
+  dateLocale: typeof ar;
+  t: Record<string, string>;
 }) {
   const borderColor = variant === "overdue" ? "border-l-red-500" : variant === "done" ? "border-l-green-500" : "border-l-amber-500";
 
@@ -249,7 +254,7 @@ function ReminderRow({ reminder, onComplete, isPending, variant }: {
         </div>
         {reminder.lead && (
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span data-testid={`text-lead-name-${reminder.id}`}>{reminder.lead.name ?? "بدون اسم"}</span>
+            <span data-testid={`text-lead-name-${reminder.id}`}>{reminder.lead.name ?? "—"}</span>
             {reminder.lead.phone && (
               <span className="flex items-center gap-1" dir="ltr">
                 <Phone className="h-3 w-3" />
@@ -259,17 +264,17 @@ function ReminderRow({ reminder, onComplete, isPending, variant }: {
           </div>
         )}
         <p className="text-xs text-muted-foreground mt-1" data-testid={`text-due-date-${reminder.id}`}>
-          {reminder.dueDate ? format(new Date(reminder.dueDate), "d MMMM yyyy - hh:mm a", { locale: ar }) : "—"}
+          {reminder.dueDate ? format(new Date(reminder.dueDate), "d MMMM yyyy - hh:mm a", { locale: dateLocale }) : "—"}
         </p>
       </div>
       {variant !== "done" && onComplete && (
         <Button size="sm" variant="outline" onClick={onComplete} disabled={isPending} data-testid={`button-complete-${reminder.id}`}>
-          <CheckCircle className="h-4 w-4 mr-1" />
-          إكمال
+          <CheckCircle className="h-4 w-4 me-1" />
+          {t.done as string}
         </Button>
       )}
       {variant === "done" && (
-        <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" data-testid={`badge-done-${reminder.id}`}>مكتمل</Badge>
+        <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" data-testid={`badge-done-${reminder.id}`}>{t.done as string}</Badge>
       )}
     </div>
   );

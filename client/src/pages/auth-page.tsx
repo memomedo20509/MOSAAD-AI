@@ -10,16 +10,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Zap, Shield, Clock, Languages } from "lucide-react";
 import { WAChatMockup } from "@/components/public-mockups";
 
-const BENEFITS = [
-  { icon: Zap, title: "إعداد في 30 دقيقة", desc: "ابدأ فوراً بدون خبرة تقنية" },
-  { icon: Shield, title: "14 يوماً مجاناً", desc: "بدون بطاقة ائتمانية" },
-  { icon: Clock, title: "رد فوري 24/7", desc: "البوت يعمل بينما أنت نائم" },
-];
-
 export default function AuthPage() {
   const [, navigate] = useLocation();
   const { user, loginMutation, registerMutation } = useAuth();
   const { t, language, setLanguage } = useLanguage();
+
+  const BENEFITS = [
+    { icon: Zap, title: t.authBenefit1Title, desc: t.authBenefit1Desc },
+    { icon: Shield, title: t.authBenefit2Title, desc: t.authBenefit2Desc },
+    { icon: Clock, title: t.authBenefit3Title, desc: t.authBenefit3Desc },
+  ];
   const [loginData, setLoginData] = useState({ username: "", password: "" });
   const [registerData, setRegisterData] = useState({
     username: "",
@@ -70,26 +70,23 @@ export default function AuthPage() {
 
   return (
     <>
-      <title>تسجيل الدخول - SalesBot AI</title>
-      <meta name="description" content="سجّل دخولك إلى SalesBot AI وتابع محادثاتك ومبيعاتك عبر واتساب." />
+      <title>{t.authPageTitle}</title>
+      <meta name="description" content={t.authPageMeta} />
 
       <section className="min-h-screen pt-16 grid lg:grid-cols-2">
-        {/* Left column — dark gradient brand side */}
         <div className="relative hidden lg:flex flex-col justify-between bg-gradient-to-br from-indigo-950 via-indigo-900 to-purple-900 px-12 py-16 overflow-hidden">
-          {/* Background glow orbs */}
           <div className="absolute top-1/4 right-1/4 h-64 w-64 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute bottom-1/4 left-1/4 h-48 w-48 bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
 
-          {/* Top: headline & benefits */}
           <div className="relative z-10">
             <h2 className="text-3xl font-extrabold text-white leading-snug mb-3">
-              حوّل محادثاتك إلى{" "}
+              {t.authHeroHeadline}{" "}
               <span className="bg-gradient-to-r from-indigo-300 to-purple-300 bg-clip-text text-transparent">
-                صفقات مغلقة
+                {t.authHeroHighlight}
               </span>
             </h2>
             <p className="text-indigo-200 text-base mb-10 leading-relaxed">
-              انضم إلى آلاف الشركات التي تستخدم SalesBot AI لأتمتة مبيعاتها عبر واتساب.
+              {t.authHeroDesc}
             </p>
 
             <div className="space-y-5">
@@ -106,10 +103,9 @@ export default function AuthPage() {
               ))}
             </div>
 
-            {/* Social proof strip */}
             <div className="mt-10 flex items-center gap-3">
               <div className="flex -space-x-2 rtl:space-x-reverse">
-                {["أس", "سأ", "مع", "نز"].map((initials, i) => (
+                {["AS", "SA", "ME", "NZ"].map((initials, i) => (
                   <div
                     key={i}
                     className={`h-8 w-8 rounded-full border-2 border-indigo-900 flex items-center justify-center text-white text-[10px] font-bold ${
@@ -121,12 +117,11 @@ export default function AuthPage() {
                 ))}
               </div>
               <div className="text-indigo-200 text-xs leading-relaxed">
-                <span className="text-white font-semibold">+2,400 شركة</span> تثق بنا
+                <span className="text-white font-semibold">{t.authSocialProofCount}</span> {t.authSocialProofLabel}
               </div>
             </div>
           </div>
 
-          {/* Bottom: WA chat mockup */}
           <div className="relative z-10 mt-10">
             <WAChatMockup />
           </div>

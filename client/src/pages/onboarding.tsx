@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useLanguage } from "@/lib/i18n";
+import { normalizeIndustry } from "@/lib/legacy-normalizers";
 import {
   Building2,
   Users,
@@ -32,28 +34,6 @@ import {
 
 const TOTAL_STEPS = 5;
 
-const INDUSTRIES = [
-  "عقارات",
-  "سيارات",
-  "تأمين",
-  "تعليم",
-  "رعاية صحية",
-  "تقنية",
-  "تجزئة",
-  "ضيافة",
-  "مالية",
-  "أخرى",
-];
-
-const TIMEZONES = [
-  { value: "Africa/Cairo", label: "القاهرة (GMT+2)" },
-  { value: "Asia/Riyadh", label: "الرياض (GMT+3)" },
-  { value: "Asia/Dubai", label: "دبي (GMT+4)" },
-  { value: "Asia/Kuwait", label: "الكويت (GMT+3)" },
-  { value: "Africa/Casablanca", label: "الدار البيضاء (GMT+1)" },
-  { value: "Africa/Tunis", label: "تونس (GMT+1)" },
-  { value: "UTC", label: "UTC (GMT+0)" },
-];
 
 type OnboardingStatus = {
   onboardingStep: number;
@@ -63,11 +43,12 @@ type OnboardingStatus = {
 };
 
 function StepIndicator({ current, total }: { current: number; total: number }) {
+  const { t, isRTL } = useLanguage();
   const pct = Math.round(((current - 1) / total) * 100);
   return (
-    <div className="space-y-2" dir="rtl">
+    <div className="space-y-2" dir={isRTL ? "rtl" : "ltr"}>
       <div className="flex items-center justify-between text-sm">
-        <span className="text-muted-foreground">الخطوة {current} من {total}</span>
+        <span className="text-muted-foreground">{t.onboardingStepOf} {current} {t.onboardingStepFrom} {total}</span>
         <span className="text-muted-foreground">{pct}%</span>
       </div>
       <Progress value={pct} className="h-2" />
@@ -76,8 +57,9 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
 }
 
 function StepCard({ icon: Icon, title, children }: { icon: typeof Building2; title: string; children: React.ReactNode }) {
+  const { isRTL } = useLanguage();
   return (
-    <div className="space-y-6" dir="rtl">
+    <div className="space-y-6" dir={isRTL ? "rtl" : "ltr"}>
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
           <Icon className="h-5 w-5 text-primary" />
@@ -93,11 +75,33 @@ function Step1({ data, onChange }: {
   data: { name: string; industry: string; workingHours: string; timezone: string; businessType: string };
   onChange: (d: Partial<typeof data>) => void;
 }) {
+  const { t } = useLanguage();
+  const industries = [
+    { value: "real_estate", label: t.onboardingIndustryRealEstate },
+    { value: "automotive", label: t.onboardingIndustryCars },
+    { value: "insurance", label: t.onboardingIndustryInsurance },
+    { value: "education", label: t.onboardingIndustryEducation },
+    { value: "healthcare", label: t.onboardingIndustryHealthcare },
+    { value: "technology", label: t.onboardingIndustryTech },
+    { value: "retail", label: t.onboardingIndustryRetail },
+    { value: "hospitality", label: t.onboardingIndustryHospitality },
+    { value: "finance", label: t.onboardingIndustryFinance },
+    { value: "other", label: t.onboardingIndustryOther },
+  ];
+  const timezones = [
+    { value: "Africa/Cairo", label: t.onboardingTzCairo },
+    { value: "Asia/Riyadh", label: t.onboardingTzRiyadh },
+    { value: "Asia/Dubai", label: t.onboardingTzDubai },
+    { value: "Asia/Kuwait", label: t.onboardingTzKuwait },
+    { value: "Africa/Casablanca", label: t.onboardingTzCasablanca },
+    { value: "Africa/Tunis", label: t.onboardingTzTunis },
+    { value: "UTC", label: "UTC (GMT+0)" },
+  ];
   return (
-    <StepCard icon={Building2} title="ملف الشركة">
+    <StepCard icon={Building2} title={t.onboardingCompanyProfile}>
       <div className="space-y-4">
         <div className="space-y-2">
-          <Label>نوع النشاط التجاري *</Label>
+          <Label>{t.onboardingBusinessType}</Label>
           <div className="grid grid-cols-2 gap-3">
             <button
               type="button"
@@ -113,8 +117,8 @@ function Step1({ data, onChange }: {
                 <Briefcase className={`h-5 w-5 ${data.businessType === "service" ? "text-primary" : "text-muted-foreground"}`} />
               </div>
               <div className="text-center">
-                <p className="font-semibold text-sm">خدمات / مبيعات</p>
-                <p className="text-xs text-muted-foreground">ليدز ومواعيد</p>
+                <p className="font-semibold text-sm">{t.onboardingServiceSales}</p>
+                <p className="text-xs text-muted-foreground">{t.onboardingServiceSalesDesc}</p>
               </div>
             </button>
             <button
@@ -131,53 +135,53 @@ function Step1({ data, onChange }: {
                 <ShoppingCart className={`h-5 w-5 ${data.businessType === "ecommerce" ? "text-primary" : "text-muted-foreground"}`} />
               </div>
               <div className="text-center">
-                <p className="font-semibold text-sm">متجر إلكتروني</p>
-                <p className="text-xs text-muted-foreground">منتجات وطلبات</p>
+                <p className="font-semibold text-sm">{t.onboardingEcommerce}</p>
+                <p className="text-xs text-muted-foreground">{t.onboardingEcommerceDesc}</p>
               </div>
             </button>
           </div>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="company-name">اسم الشركة *</Label>
+          <Label htmlFor="company-name">{t.onboardingCompanyName}</Label>
           <Input
             id="company-name"
             value={data.name}
             onChange={e => onChange({ name: e.target.value })}
-            placeholder="شركة المتميزون العقارية"
+            placeholder={t.onboardingCompanyNamePlaceholder}
             data-testid="input-company-name"
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="industry">المجال</Label>
+          <Label htmlFor="industry">{t.onboardingIndustry}</Label>
           <Select value={data.industry} onValueChange={v => onChange({ industry: v })}>
             <SelectTrigger id="industry" data-testid="select-industry">
-              <SelectValue placeholder="اختر مجال الشركة" />
+              <SelectValue placeholder={t.onboardingIndustryPlaceholder} />
             </SelectTrigger>
             <SelectContent>
-              {INDUSTRIES.map(i => (
-                <SelectItem key={i} value={i}>{i}</SelectItem>
+              {industries.map(ind => (
+                <SelectItem key={ind.value} value={ind.value}>{ind.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="working-hours">ساعات العمل</Label>
+          <Label htmlFor="working-hours">{t.onboardingWorkingHours}</Label>
           <Input
             id="working-hours"
             value={data.workingHours}
             onChange={e => onChange({ workingHours: e.target.value })}
-            placeholder="مثال: 9 ص – 5 م"
+            placeholder={t.onboardingWorkingHoursPlaceholder}
             data-testid="input-working-hours"
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="timezone">المنطقة الزمنية</Label>
+          <Label htmlFor="timezone">{t.onboardingTimezone}</Label>
           <Select value={data.timezone} onValueChange={v => onChange({ timezone: v })}>
             <SelectTrigger id="timezone" data-testid="select-timezone">
-              <SelectValue placeholder="اختر المنطقة الزمنية" />
+              <SelectValue placeholder={t.onboardingTimezonePlaceholder} />
             </SelectTrigger>
             <SelectContent>
-              {TIMEZONES.map(tz => (
+              {timezones.map(tz => (
                 <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
               ))}
             </SelectContent>
@@ -194,24 +198,23 @@ function Step2({ members, onAdd, onRemove, onUpdate }: {
   onRemove: (i: number) => void;
   onUpdate: (i: number, field: string, value: string) => void;
 }) {
+  const { t } = useLanguage();
   return (
-    <StepCard icon={Users} title="إضافة أعضاء الفريق">
+    <StepCard icon={Users} title={t.onboardingTeamTitle}>
       <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          أضف أعضاء فريق المبيعات. يمكنك إضافة المزيد لاحقاً من صفحة المستخدمين.
-        </p>
+        <p className="text-sm text-muted-foreground">{t.onboardingTeamDesc}</p>
         <div className="space-y-3">
           {members.map((m, i) => (
             <div key={i} className="flex gap-2 items-start border rounded-lg p-3 bg-muted/30">
               <div className="flex-1 space-y-2">
                 <Input
-                  placeholder="الاسم"
+                  placeholder={t.onboardingMemberName}
                   value={m.name}
                   onChange={e => onUpdate(i, "name", e.target.value)}
                   data-testid={`input-member-name-${i}`}
                 />
                 <Input
-                  placeholder="البريد الإلكتروني"
+                  placeholder={t.onboardingMemberEmail}
                   value={m.email}
                   onChange={e => onUpdate(i, "email", e.target.value)}
                   data-testid={`input-member-email-${i}`}
@@ -221,9 +224,9 @@ function Step2({ members, onAdd, onRemove, onUpdate }: {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="sales_agent">سيلز</SelectItem>
-                    <SelectItem value="team_leader">تيم ليدر</SelectItem>
-                    <SelectItem value="sales_admin">سيلز أدمن</SelectItem>
+                    <SelectItem value="sales_agent">{t.onboardingRoleSales}</SelectItem>
+                    <SelectItem value="team_leader">{t.onboardingRoleLeader}</SelectItem>
+                    <SelectItem value="sales_admin">{t.onboardingRoleAdmin}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -235,11 +238,9 @@ function Step2({ members, onAdd, onRemove, onUpdate }: {
         </div>
         <Button variant="outline" onClick={onAdd} className="w-full gap-2" data-testid="button-add-member">
           <Plus className="h-4 w-4" />
-          إضافة عضو
+          {t.onboardingAddMember}
         </Button>
-        <p className="text-xs text-muted-foreground text-center">
-          ملاحظة: سيتم إنشاء الحسابات بكلمة مرور مؤقتة ويمكن تعديلها لاحقاً.
-        </p>
+        <p className="text-xs text-muted-foreground text-center">{t.onboardingPasswordNote}</p>
       </div>
     </StepCard>
   );
@@ -251,31 +252,30 @@ function Step3({ items, onAdd, onRemove, onUpdate }: {
   onRemove: (i: number) => void;
   onUpdate: (i: number, field: string, value: string) => void;
 }) {
+  const { t } = useLanguage();
   return (
-    <StepCard icon={BookOpen} title="إعداد قاعدة المعرفة">
+    <StepCard icon={BookOpen} title={t.onboardingKbTitle}>
       <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          أضف منتجاتك أو خدماتك الأساسية. البوت الذكي سيستخدم هذه المعلومات للرد على استفسارات العملاء.
-        </p>
+        <p className="text-sm text-muted-foreground">{t.onboardingKbDesc}</p>
         <div className="space-y-3">
           {items.map((item, i) => (
             <div key={i} className="flex gap-2 items-start border rounded-lg p-3 bg-muted/30">
               <div className="flex-1 space-y-2">
                 <Input
-                  placeholder="اسم المنتج / الخدمة"
+                  placeholder={t.onboardingProductName}
                   value={item.name}
                   onChange={e => onUpdate(i, "name", e.target.value)}
                   data-testid={`input-kb-name-${i}`}
                 />
                 <Textarea
-                  placeholder="وصف مختصر (السعر، المميزات، ...)"
+                  placeholder={t.onboardingProductDesc}
                   value={item.description}
                   onChange={e => onUpdate(i, "description", e.target.value)}
                   rows={2}
                   data-testid={`input-kb-description-${i}`}
                 />
                 <Input
-                  placeholder="التصنيف (مثال: شقق، فيلات، ...)"
+                  placeholder={t.onboardingProductCategory}
                   value={item.category}
                   onChange={e => onUpdate(i, "category", e.target.value)}
                   data-testid={`input-kb-category-${i}`}
@@ -289,7 +289,7 @@ function Step3({ items, onAdd, onRemove, onUpdate }: {
         </div>
         <Button variant="outline" onClick={onAdd} className="w-full gap-2" data-testid="button-add-kb-item">
           <Plus className="h-4 w-4" />
-          إضافة منتج / خدمة
+          {t.onboardingAddProduct}
         </Button>
       </div>
     </StepCard>
@@ -297,26 +297,23 @@ function Step3({ items, onAdd, onRemove, onUpdate }: {
 }
 
 function Step4({ onSkip }: { onSkip: () => void }) {
+  const { t } = useLanguage();
   return (
-    <StepCard icon={MessageSquare} title="ربط واتساب">
+    <StepCard icon={MessageSquare} title={t.onboardingWhatsappTitle}>
       <div className="space-y-6">
-        <p className="text-sm text-muted-foreground">
-          اربط واتساب بيزنس لتفعيل الرد التلقائي وإرسال الرسائل مباشرة من المنصة.
-        </p>
+        <p className="text-sm text-muted-foreground">{t.onboardingWhatsappDesc}</p>
         <div className="flex flex-col items-center gap-4 py-6 border rounded-lg bg-muted/20">
           <div className="flex h-24 w-24 items-center justify-center rounded-xl border-2 border-dashed border-primary/40 bg-primary/5">
             <QrCode className="h-12 w-12 text-primary/40" />
           </div>
           <div className="text-center space-y-1">
-            <p className="font-medium">QR Code واتساب</p>
-            <p className="text-sm text-muted-foreground">
-              اذهب إلى <strong>التكاملات</strong> بعد إتمام الإعداد لربط واتساب بيزنس API
-            </p>
+            <p className="font-medium">{t.onboardingWhatsappQR}</p>
+            <p className="text-sm text-muted-foreground">{t.onboardingWhatsappSkipNote}</p>
           </div>
         </div>
         <div className="text-center">
           <Button variant="ghost" onClick={onSkip} className="text-muted-foreground text-sm" data-testid="button-skip-whatsapp">
-            تخطي هذه الخطوة في الوقت الحالي
+            {t.onboardingSkipStep}
           </Button>
         </div>
       </div>
@@ -326,57 +323,56 @@ function Step4({ onSkip }: { onSkip: () => void }) {
 
 function Step5({ onGoToDashboard }: { onGoToDashboard: () => void }) {
   const { user } = useAuth();
+  const { t, isRTL } = useLanguage();
   const isEcommerce = user?.companyBusinessType === "ecommerce";
   return (
-    <div className="flex flex-col items-center gap-6 py-4 text-center" dir="rtl">
+    <div className="flex flex-col items-center gap-6 py-4 text-center" dir={isRTL ? "rtl" : "ltr"}>
       <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
         <PartyPopper className="h-10 w-10 text-green-600 dark:text-green-400" />
       </div>
       <div className="space-y-2">
-        <h2 className="text-2xl font-bold">🎉 أهلاً بك في SalesBot AI!</h2>
-        <p className="text-muted-foreground max-w-md">
-          تم إعداد حسابك بنجاح. أنت الآن جاهز لتحقيق أقصى استفادة من المنصة.
-        </p>
+        <h2 className="text-2xl font-bold">{t.onboardingSuccessTitle}</h2>
+        <p className="text-muted-foreground max-w-md">{t.onboardingSuccessDesc}</p>
       </div>
       <div className="grid gap-3 w-full max-w-sm">
-        <h3 className="font-medium text-sm text-muted-foreground">ابدأ بـ:</h3>
+        <h3 className="font-medium text-sm text-muted-foreground">{t.onboardingStartWith}</h3>
         <a
           href="/leads?action=add"
-          className="flex items-center gap-3 rounded-lg border p-3 hover:bg-muted/50 transition-colors text-right"
+          className="flex items-center gap-3 rounded-lg border p-3 hover:bg-muted/50 transition-colors text-start"
           data-testid="link-add-first-lead"
         >
           <UserPlus className="h-5 w-5 text-primary flex-shrink-0" />
           <div>
-            <p className="font-medium text-sm">{isEcommerce ? "أضف أول طلب" : "أضف أول ليد"}</p>
-            <p className="text-xs text-muted-foreground">ابدأ ببناء قاعدة بيانات عملائك</p>
+            <p className="font-medium text-sm">{isEcommerce ? t.onboardingAddFirstOrder : t.onboardingAddFirstLead}</p>
+            <p className="text-xs text-muted-foreground">{t.onboardingAddFirstDesc}</p>
           </div>
         </a>
         <a
           href="/chatbot-config"
-          className="flex items-center gap-3 rounded-lg border p-3 hover:bg-muted/50 transition-colors text-right"
+          className="flex items-center gap-3 rounded-lg border p-3 hover:bg-muted/50 transition-colors text-start"
           data-testid="link-configure-chatbot"
         >
           <MessageSquare className="h-5 w-5 text-primary flex-shrink-0" />
           <div>
-            <p className="font-medium text-sm">اضبط البوت الذكي</p>
-            <p className="text-xs text-muted-foreground">خصص ردود وشخصية البوت</p>
+            <p className="font-medium text-sm">{t.onboardingSetupBot}</p>
+            <p className="text-xs text-muted-foreground">{t.onboardingSetupBotDesc}</p>
           </div>
         </a>
         <a
           href="/leads/upload"
-          className="flex items-center gap-3 rounded-lg border p-3 hover:bg-muted/50 transition-colors text-right"
+          className="flex items-center gap-3 rounded-lg border p-3 hover:bg-muted/50 transition-colors text-start"
           data-testid="link-import-leads"
         >
           <BookOpen className="h-5 w-5 text-primary flex-shrink-0" />
           <div>
-            <p className="font-medium text-sm">{isEcommerce ? "استورد الطلبات" : "استورد الليدز"}</p>
-            <p className="text-xs text-muted-foreground">رفع ملف Excel بقائمة عملائك</p>
+            <p className="font-medium text-sm">{isEcommerce ? t.onboardingImportOrders : t.onboardingImportLeads}</p>
+            <p className="text-xs text-muted-foreground">{t.onboardingImportDesc}</p>
           </div>
         </a>
       </div>
       <Button onClick={onGoToDashboard} size="lg" className="w-full max-w-sm gap-2" data-testid="button-go-to-dashboard">
         <CheckCircle className="h-5 w-5" />
-        الذهاب للوحة التحكم
+        {t.onboardingGoToDashboard}
       </Button>
     </div>
   );
@@ -386,6 +382,7 @@ export default function OnboardingPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
+  const { t, isRTL } = useLanguage();
   const qc = useQueryClient();
 
   const { data: status } = useQuery<OnboardingStatus>({
@@ -398,7 +395,7 @@ export default function OnboardingPage() {
 
   const [companyData, setCompanyData] = useState({
     name: status?.company?.name ?? user?.firstName ?? "",
-    industry: status?.company?.industry ?? "",
+    industry: normalizeIndustry(status?.company?.industry),
     workingHours: status?.company?.workingHours ?? "",
     timezone: status?.company?.timezone ?? "Africa/Cairo",
     businessType: status?.company?.businessType ?? "service",
@@ -476,7 +473,7 @@ export default function OnboardingPage() {
     try {
       if (currentStep === 1) {
         if (!companyData.name.trim()) {
-          toast({ title: "اسم الشركة مطلوب", variant: "destructive" });
+          toast({ title: t.onboardingCompanyRequired, variant: "destructive" });
           setIsSaving(false);
           return;
         }
@@ -496,7 +493,7 @@ export default function OnboardingPage() {
       }
       setCurrentStep(s => Math.min(s + 1, TOTAL_STEPS));
     } catch (err) {
-      toast({ title: "حدث خطأ", variant: "destructive" });
+      toast({ title: t.onboardingError, variant: "destructive" });
     } finally {
       setIsSaving(false);
     }
@@ -526,8 +523,8 @@ export default function OnboardingPage() {
       <div className="w-full max-w-xl">
         <Card>
           <CardHeader className="pb-4">
-            <div className="flex items-center justify-between mb-2">
-              <CardTitle className="text-lg font-semibold" dir="rtl">إعداد حسابك</CardTitle>
+            <div className="flex items-center justify-between mb-2" dir={isRTL ? "rtl" : "ltr"}>
+              <CardTitle className="text-lg font-semibold">{t.onboardingTitle}</CardTitle>
               {currentStep < TOTAL_STEPS && (
                 <Button
                   variant="ghost"
@@ -537,7 +534,7 @@ export default function OnboardingPage() {
                   className="text-muted-foreground text-xs"
                   data-testid="button-skip-setup"
                 >
-                  تخطي الإعداد
+                  {t.onboardingSkip}
                 </Button>
               )}
             </div>
@@ -576,7 +573,7 @@ export default function OnboardingPage() {
             )}
 
             {currentStep < TOTAL_STEPS && (
-              <div className="flex items-center justify-between pt-2" dir="rtl">
+              <div className="flex items-center justify-between pt-2" dir={isRTL ? "rtl" : "ltr"}>
                 <Button
                   variant="outline"
                   onClick={handleBack}
@@ -584,8 +581,8 @@ export default function OnboardingPage() {
                   className="gap-2"
                   data-testid="button-step-back"
                 >
-                  <ChevronRight className="h-4 w-4" />
-                  السابق
+                  {isRTL ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+                  {t.onboardingBack}
                 </Button>
                 <Button
                   onClick={handleNext}
@@ -597,8 +594,8 @@ export default function OnboardingPage() {
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <>
-                      التالي
-                      <ChevronLeft className="h-4 w-4" />
+                      {t.onboardingNext}
+                      {isRTL ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                     </>
                   )}
                 </Button>
@@ -607,7 +604,7 @@ export default function OnboardingPage() {
           </CardContent>
         </Card>
 
-        <div className="flex items-center justify-center gap-2 mt-4" dir="rtl">
+        <div className="flex items-center justify-center gap-2 mt-4" dir={isRTL ? "rtl" : "ltr"}>
           {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
             <div
               key={i}

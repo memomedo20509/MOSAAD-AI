@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Trophy, Medal, Award, TrendingUp, Users, Clock } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useLanguage } from "@/lib/i18n";
 
 type LeaderboardEntry = {
   userId: string;
@@ -31,29 +32,32 @@ const RANK_ICONS = [
   <Award className="h-5 w-5 text-amber-600" />,
 ];
 
-function getPeriodOptions() {
-  const now = new Date();
-  const options: { value: string; label: string }[] = [];
-  for (let i = 0; i < 6; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const label = d.toLocaleDateString("ar-EG", { year: "numeric", month: "long" });
-    options.push({ value, label });
-  }
-  return options;
-}
-
 function formatResponseTime(minutes: number | null): string {
   if (minutes === null || minutes === undefined) return "—";
-  if (minutes < 60) return `${Math.round(minutes)} د`;
+  if (minutes < 60) return `${Math.round(minutes)}m`;
   const hours = Math.floor(minutes / 60);
   const mins = Math.round(minutes % 60);
-  return mins > 0 ? `${hours} س ${mins} د` : `${hours} س`;
+  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
 }
 
 export default function LeaderboardPage() {
   const { user } = useAuth();
+  const { t, isRTL } = useLanguage();
   const isEcommerce = user?.companyBusinessType === "ecommerce";
+
+  function getPeriodOptions() {
+    const now = new Date();
+    const options: { value: string; label: string }[] = [];
+    const locale = isRTL ? "ar-EG" : "en-US";
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleDateString(locale, { year: "numeric", month: "long" });
+      options.push({ value, label });
+    }
+    return options;
+  }
+
   const periodOptions = getPeriodOptions();
   const [period, setPeriod] = useState(periodOptions[0].value);
 
@@ -82,11 +86,11 @@ export default function LeaderboardPage() {
   const totalLeads = sorted.reduce((s, e) => s + e.leadsCount, 0);
 
   return (
-    <div className="space-y-6" data-testid="page-leaderboard">
+    <div className="space-y-6" data-testid="page-leaderboard" dir={isRTL ? "rtl" : "ltr"}>
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">لوحة المتصدرين</h1>
-          <p className="text-muted-foreground">ترتيب أداء فريق المبيعات</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t.leaderboardTitle}</h1>
+          <p className="text-muted-foreground">{t.leaderboardSubtitleAlt}</p>
         </div>
         <Select value={period} onValueChange={setPeriod}>
           <SelectTrigger className="w-48" data-testid="select-leaderboard-period">
@@ -103,7 +107,7 @@ export default function LeaderboardPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">إجمالي الصفقات</CardTitle>
+            <CardTitle className="text-sm font-medium">{t.totalDeals}</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -112,7 +116,7 @@ export default function LeaderboardPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{isEcommerce ? "إجمالي الطلبات" : "إجمالي الليدز"}</CardTitle>
+            <CardTitle className="text-sm font-medium">{isEcommerce ? t.ordersTitle : t.totalLeads}</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -121,7 +125,7 @@ export default function LeaderboardPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">عدد السيلز</CardTitle>
+            <CardTitle className="text-sm font-medium">{t.totalAgents}</CardTitle>
             <Trophy className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -130,7 +134,7 @@ export default function LeaderboardPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">تم التواصل اليوم</CardTitle>
+            <CardTitle className="text-sm font-medium">{t.contactedToday}</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -145,7 +149,7 @@ export default function LeaderboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>ترتيب السيلز</CardTitle>
+          <CardTitle>{t.agentsRanking}</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -153,7 +157,7 @@ export default function LeaderboardPage() {
           ) : sorted.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <Trophy className="h-10 w-10 mb-2" />
-              <p>لا توجد بيانات للفترة المحددة</p>
+              <p>{t.noLeaderboardDataForPeriod}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -161,13 +165,13 @@ export default function LeaderboardPage() {
                 <thead className="border-b">
                   <tr>
                     <th className="text-start py-3 px-4 font-medium w-12">#</th>
-                    <th className="text-start py-3 px-4 font-medium">السيلز</th>
-                    <th className="text-start py-3 px-4 font-medium">الفريق</th>
-                    <th className="text-center py-3 px-4 font-medium">الصفقات</th>
-                    <th className="text-center py-3 px-4 font-medium">{isEcommerce ? "الطلبات" : "الليدز"}</th>
-                    <th className="text-center py-3 px-4 font-medium">نسبة التحويل</th>
-                    <th className="text-center py-3 px-4 font-medium">وقت الاستجابة</th>
-                    <th className="text-center py-3 px-4 font-medium">تم التواصل اليوم</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.agent}</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.team}</th>
+                    <th className="text-center py-3 px-4 font-medium">{t.totalDeals}</th>
+                    <th className="text-center py-3 px-4 font-medium">{isEcommerce ? t.ordersTitle : t.leads}</th>
+                    <th className="text-center py-3 px-4 font-medium">{t.conversionRateLabel}</th>
+                    <th className="text-center py-3 px-4 font-medium">{t.responseTimeLabel}</th>
+                    <th className="text-center py-3 px-4 font-medium">{t.contactedTodayLabel}</th>
                   </tr>
                 </thead>
                 <tbody>

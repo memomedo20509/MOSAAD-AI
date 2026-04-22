@@ -9,12 +9,14 @@ import { ArchiveRestore, Search, UserX } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useLanguage } from "@/lib/i18n";
 import type { Lead, LeadState } from "@shared/schema";
 import { format } from "date-fns";
 
 export default function WithdrawnLeadsPage() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { t, isRTL } = useLanguage();
   const isEcommerce = user?.companyBusinessType === "ecommerce";
   const [search, setSearch] = useState("");
 
@@ -49,9 +51,9 @@ export default function WithdrawnLeadsPage() {
     mutationFn: (id: string) => apiRequest("PATCH", `/api/leads/${id}`, { stateId: firstActiveStateId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
-      toast({ title: "تم استعادة الليد" });
+      toast({ title: t.restoreSuccess });
     },
-    onError: () => toast({ title: "فشل في استعادة الليد", variant: "destructive" }),
+    onError: () => toast({ title: t.restoreError, variant: "destructive" }),
   });
 
   const getStateName = (stateId: string | null) => {
@@ -62,24 +64,24 @@ export default function WithdrawnLeadsPage() {
   const isLoading = leadsLoading || statesLoading;
 
   return (
-    <div className="space-y-6" data-testid="page-withdrawn-leads">
+    <div className="space-y-6" data-testid="page-withdrawn-leads" dir={isRTL ? "rtl" : "ltr"}>
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{isEcommerce ? "الطلبات المنسحبة" : "الليدز المنسحبة"}</h1>
-        <p className="text-muted-foreground">{isEcommerce ? "الطلبات في حالات الإلغاء أو الرفض" : "الليدز في حالات الخسارة أو الإلغاء"}</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{isEcommerce ? t.navWithdrawnOrders : t.withdrawnLeadsTitle}</h1>
+        <p className="text-muted-foreground">{isEcommerce ? t.withdrawnLeadsSubtitle : t.withdrawnLeadsSubtitle}</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative max-w-xs flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="بحث بالاسم أو الهاتف..."
+            placeholder={t.searchWithdrawn}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="ps-9"
             data-testid="input-search-withdrawn"
           />
         </div>
-        <span className="text-sm text-muted-foreground ml-auto">{filtered.length} ليد</span>
+        <span className="text-sm text-muted-foreground ms-auto">{filtered.length} {t.withdrawnCount}</span>
       </div>
 
       {isLoading ? (
@@ -89,11 +91,11 @@ export default function WithdrawnLeadsPage() {
           <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
             <UserX className="h-12 w-12 text-muted-foreground" />
             <div className="text-center">
-              <p className="font-medium">{isEcommerce ? "لا يوجد طلبات منسحبة" : "لا يوجد ليدز منسحبة"}</p>
+              <p className="font-medium">{t.noWithdrawnLeads}</p>
               <p className="text-sm text-muted-foreground">
                 {lostStates.length === 0
-                  ? "لا توجد حالات من فئة 'خسارة' في النظام"
-                  : (isEcommerce ? "لا يوجد طلبات في حالات الإلغاء حالياً" : "لا يوجد ليدز في حالات الخسارة حالياً")}
+                  ? t.noLostStates
+                  : t.noWithdrawnLeadsNow}
               </p>
             </div>
           </CardContent>
@@ -105,18 +107,18 @@ export default function WithdrawnLeadsPage() {
               <table className="w-full text-sm">
                 <thead className="border-b">
                   <tr>
-                    <th className="text-start py-3 px-4 font-medium">الاسم</th>
-                    <th className="text-start py-3 px-4 font-medium">الهاتف</th>
-                    <th className="text-start py-3 px-4 font-medium">الحالة</th>
-                    <th className="text-start py-3 px-4 font-medium">القناة</th>
-                    <th className="text-start py-3 px-4 font-medium">تاريخ الإنشاء</th>
-                    <th className="text-end py-3 px-4 font-medium">إجراءات</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.name}</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.phone}</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.status}</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.channel}</th>
+                    <th className="text-start py-3 px-4 font-medium">{t.date}</th>
+                    <th className="text-end py-3 px-4 font-medium">{t.actions}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((lead) => (
                     <tr key={lead.id} className="border-b last:border-0 hover:bg-muted/50" data-testid={`row-withdrawn-${lead.id}`}>
-                      <td className="py-3 px-4 font-medium">{lead.name ?? "بدون اسم"}</td>
+                      <td className="py-3 px-4 font-medium">{lead.name ?? "—"}</td>
                       <td className="py-3 px-4 text-muted-foreground" dir="ltr">{lead.phone ?? "—"}</td>
                       <td className="py-3 px-4">
                         <Badge variant="destructive" className="text-xs">{getStateName(lead.stateId)}</Badge>
@@ -133,8 +135,8 @@ export default function WithdrawnLeadsPage() {
                           disabled={restoreMutation.isPending || !firstActiveStateId}
                           data-testid={`button-restore-${lead.id}`}
                         >
-                          <ArchiveRestore className="h-4 w-4 mr-1" />
-                          استعادة
+                          <ArchiveRestore className="h-4 w-4 me-1" />
+                          {t.restoreLead}
                         </Button>
                       </td>
                     </tr>

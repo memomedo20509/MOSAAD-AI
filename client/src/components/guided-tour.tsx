@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { X, ChevronRight, ChevronLeft } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useLanguage } from "@/lib/i18n";
 
 export type TourStep = {
   target: string;
@@ -12,56 +13,59 @@ export type TourStep = {
   position?: "top" | "bottom" | "left" | "right";
 };
 
-export const TOUR_STEPS: TourStep[] = [
-  {
-    target: "[data-testid='text-app-name']",
-    title: "القائمة الجانبية",
-    description: "هنا تجد كل أقسام المنصة. يمكنك التنقل بسهولة بين الليدز، المحادثات، التقارير، والإعدادات.",
-    position: "right",
-  },
-  {
-    target: "[data-testid='text-kpi-value']",
-    title: "مؤشرات الأداء (KPIs)",
-    description: "هذه البطاقات تعرض أهم أرقام أداء فريقك: عدد الليدز، المحادثات، ومعدل التحويل – كلها في نظرة واحدة.",
-    position: "bottom",
-  },
-  {
-    target: "[data-testid='link-nav-add-lead']",
-    title: "إضافة ليد جديد",
-    description: "اضغط هنا لإضافة ليد جديد يدوياً. يمكنك أيضاً رفع ملف Excel لاستيراد الليدز دفعة واحدة.",
-    position: "right",
-  },
-  {
-    target: "[data-testid='link-nav-conversations']",
-    title: "المحادثات (واتساب)",
-    description: "كل محادثات واتساب مع العملاء متاحة هنا. يمكن للبوت الذكي الرد تلقائياً أو يمكنك الرد يدوياً.",
-    position: "right",
-  },
-  {
-    target: "[data-testid='link-nav-knowledge-base']",
-    title: "قاعدة المعرفة",
-    description: "أضف منتجاتك وخدماتك هنا. البوت الذكي يستخدم هذه المعلومات للرد بدقة على استفسارات العملاء.",
-    position: "right",
-  },
-  {
-    target: "[data-testid='link-nav-chatbot-config']",
-    title: "إعدادات الشات بوت",
-    description: "خصص شخصية البوت وساعات العمل ورسائل الترحيب. كل شيء قابل للتعديل حسب احتياجاتك.",
-    position: "right",
-  },
-  {
-    target: "[data-testid='link-nav-analytics']",
-    title: "التقارير والتحليلات",
-    description: "تابع أداء فريقك بالتفصيل: مصادر الليدز، معدلات التحويل، ونشاط كل عضو في الفريق.",
-    position: "right",
-  },
-  {
-    target: "[data-testid='button-logout']",
-    title: "اكتملت الجولة! 🎉",
-    description: "أنت الآن تعرف المنصة جيداً. يمكنك إعادة تشغيل هذه الجولة في أي وقت من قائمة المساعدة في الأسفل.",
-    position: "left",
-  },
-];
+export function useTourSteps(): TourStep[] {
+  const { t } = useLanguage();
+  return [
+    {
+      target: "[data-testid='text-app-name']",
+      title: t.tourSidebarTitle,
+      description: t.tourSidebarDesc,
+      position: "right",
+    },
+    {
+      target: "[data-testid='text-kpi-value']",
+      title: t.tourKpisTitle,
+      description: t.tourKpisDesc,
+      position: "bottom",
+    },
+    {
+      target: "[data-testid='link-nav-add-lead']",
+      title: t.tourAddLeadTitle,
+      description: t.tourAddLeadDesc,
+      position: "right",
+    },
+    {
+      target: "[data-testid='link-nav-conversations']",
+      title: t.tourConversationsTitle,
+      description: t.tourConversationsDesc,
+      position: "right",
+    },
+    {
+      target: "[data-testid='link-nav-knowledge-base']",
+      title: t.tourKbTitle,
+      description: t.tourKbDesc,
+      position: "right",
+    },
+    {
+      target: "[data-testid='link-nav-chatbot-config']",
+      title: t.tourChatbotTitle,
+      description: t.tourChatbotDesc,
+      position: "right",
+    },
+    {
+      target: "[data-testid='link-nav-analytics']",
+      title: t.tourAnalyticsTitle,
+      description: t.tourAnalyticsDesc,
+      position: "right",
+    },
+    {
+      target: "[data-testid='button-logout']",
+      title: t.tourDoneTitle,
+      description: t.tourDoneDesc,
+      position: "left",
+    },
+  ];
+}
 
 type Rect = { top: number; left: number; width: number; height: number };
 
@@ -89,6 +93,7 @@ function TourTooltip({
   onPrev: () => void;
   onClose: () => void;
 }) {
+  const { t, isRTL } = useLanguage();
   const TOOLTIP_WIDTH = 300;
   const TOOLTIP_GAP = 14;
   const TOOLTIP_HEIGHT_ESTIMATE = 160;
@@ -130,13 +135,13 @@ function TourTooltip({
       <div
         className="fixed z-[9999] rounded-xl border bg-card shadow-2xl p-4 flex flex-col gap-3"
         style={{ width: TOOLTIP_WIDTH, top, left }}
-        dir="rtl"
+        dir={isRTL ? "rtl" : "ltr"}
         data-testid="guided-tour-tooltip"
       >
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1">
             <span className="text-xs text-muted-foreground block mb-1">
-              {stepIndex + 1} من {totalSteps}
+              {stepIndex + 1} {t.tourStepOf} {totalSteps}
             </span>
             <h3 className="font-semibold text-sm leading-tight">{step.title}</h3>
           </div>
@@ -154,8 +159,8 @@ function TourTooltip({
             className="gap-1 text-xs"
             data-testid="button-tour-prev"
           >
-            <ChevronRight className="h-3.5 w-3.5" />
-            السابق
+            {isRTL ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+            {t.tourPrev}
           </Button>
           <div className="flex gap-1">
             {Array.from({ length: totalSteps }).map((_, i) => (
@@ -173,8 +178,8 @@ function TourTooltip({
             className="gap-1 text-xs"
             data-testid={isLast ? "button-tour-finish" : "button-tour-next"}
           >
-            {isLast ? "إنهاء" : "التالي"}
-            {!isLast && <ChevronLeft className="h-3.5 w-3.5" />}
+            {isLast ? t.tourFinish : t.tourNext}
+            {!isLast && (isRTL ? <ChevronLeft className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />)}
           </Button>
         </div>
       </div>
@@ -197,7 +202,9 @@ type GuidedTourProps = {
   steps?: TourStep[];
 };
 
-export function GuidedTour({ open, onClose, steps = TOUR_STEPS }: GuidedTourProps) {
+export function GuidedTour({ open, onClose, steps }: GuidedTourProps) {
+  const defaultSteps = useTourSteps();
+  const tourSteps = steps ?? defaultSteps;
   const [stepIndex, setStepIndex] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
   const qc = useQueryClient();
@@ -214,11 +221,11 @@ export function GuidedTour({ open, onClose, steps = TOUR_STEPS }: GuidedTourProp
   });
 
   const updateRect = useCallback(() => {
-    if (!open || stepIndex >= steps.length) return;
-    const r = getElementRect(steps[stepIndex].target);
+    if (!open || stepIndex >= tourSteps.length) return;
+    const r = getElementRect(tourSteps[stepIndex].target);
     if (r) setRect(r);
     else setRect({ top: window.innerHeight / 2 - 80, left: window.innerWidth / 2 - 150, width: 0, height: 0 });
-  }, [open, stepIndex, steps]);
+  }, [open, stepIndex, tourSteps]);
 
   useEffect(() => {
     if (!open) return;
@@ -243,7 +250,7 @@ export function GuidedTour({ open, onClose, steps = TOUR_STEPS }: GuidedTourProp
   };
 
   const handleNext = () => {
-    if (stepIndex < steps.length - 1) {
+    if (stepIndex < tourSteps.length - 1) {
       setStepIndex(i => i + 1);
     } else {
       handleClose();
@@ -258,9 +265,9 @@ export function GuidedTour({ open, onClose, steps = TOUR_STEPS }: GuidedTourProp
 
   return createPortal(
     <TourTooltip
-      step={steps[stepIndex]}
+      step={tourSteps[stepIndex]}
       stepIndex={stepIndex}
-      totalSteps={steps.length}
+      totalSteps={tourSteps.length}
       rect={rect}
       onNext={handleNext}
       onPrev={handlePrev}

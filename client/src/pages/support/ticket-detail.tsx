@@ -6,10 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, MessageSquare, Send, Clock } from "lucide-react";
+import { ArrowRight, ArrowLeft, MessageSquare, Send, Clock } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useLanguage } from "@/lib/i18n";
 
 interface TicketDetail {
   id: string;
@@ -37,20 +38,6 @@ const PRIORITY_COLORS: Record<string, string> = {
   urgent: "bg-red-100 text-red-600",
 };
 
-const PRIORITY_LABELS: Record<string, string> = {
-  low: "منخفض",
-  medium: "متوسط",
-  high: "عالي",
-  urgent: "عاجل",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  open: "مفتوح",
-  in_progress: "قيد المعالجة",
-  resolved: "تم الحل",
-  closed: "مغلق",
-};
-
 const STATUS_COLORS: Record<string, string> = {
   open: "bg-yellow-100 text-yellow-700",
   in_progress: "bg-blue-100 text-blue-700",
@@ -62,7 +49,22 @@ export default function SupportTicketDetailPage() {
   const params = useParams<{ id: string }>();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { t, isRTL } = useLanguage();
   const [replyContent, setReplyContent] = useState("");
+
+  const PRIORITY_LABELS: Record<string, string> = {
+    low: t.ticketPriorityLow,
+    medium: t.ticketPriorityMedium,
+    high: t.ticketPriorityHigh,
+    urgent: t.ticketPriorityUrgent,
+  };
+
+  const STATUS_LABELS: Record<string, string> = {
+    open: t.ticketStatusOpen,
+    in_progress: t.ticketStatusInProgress,
+    resolved: t.ticketStatusResolved,
+    closed: t.ticketStatusClosed,
+  };
 
   const { data: ticket, isLoading } = useQuery<TicketDetail>({
     queryKey: ["/api/company/tickets", params.id],
@@ -83,15 +85,15 @@ export default function SupportTicketDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/company/tickets", params.id] });
       setReplyContent("");
-      toast({ title: "تم إرسال الرد" });
+      toast({ title: t.ticketReplySent });
     },
     onError: () => {
-      toast({ title: "خطأ", description: "فشل إرسال الرد", variant: "destructive" });
+      toast({ title: t.ticketErrTitle, description: t.ticketReplyFail, variant: "destructive" });
     },
   });
 
   const formatDate = (d: string) =>
-    new Date(d).toLocaleString("ar-EG", {
+    new Date(d).toLocaleString(isRTL ? "ar-EG" : "en-US", {
       day: "numeric",
       month: "short",
       year: "numeric",
@@ -100,16 +102,16 @@ export default function SupportTicketDetailPage() {
     });
 
   const isClosed = ticket?.status === "closed" || ticket?.status === "resolved";
-
   const currentUserId = user?.id;
+  const BackIcon = isRTL ? ArrowLeft : ArrowRight;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isRTL ? "rtl" : "ltr"}>
       <div className="flex items-center gap-2">
         <Link href="/support/tickets">
           <Button variant="ghost" size="sm" data-testid="button-back-to-tickets">
-            <ArrowRight className="h-4 w-4 ml-1" />
-            العودة للتذاكر
+            <BackIcon className={`h-4 w-4 ${isRTL ? "ms-1" : "me-1"}`} />
+            {t.ticketBackBtn}
           </Button>
         </Link>
       </div>
@@ -122,7 +124,7 @@ export default function SupportTicketDetailPage() {
       ) : !ticket ? (
         <Card>
           <CardContent className="py-16 text-center">
-            <p className="text-muted-foreground">التذكرة غير موجودة</p>
+            <p className="text-muted-foreground">{t.ticketNotFound}</p>
           </CardContent>
         </Card>
       ) : (
@@ -154,7 +156,7 @@ export default function SupportTicketDetailPage() {
           <div className="space-y-3">
             <h2 className="font-semibold flex items-center gap-2">
               <MessageSquare className="h-4 w-4" />
-              المحادثة
+              {t.ticketConvTitle}
               {ticket.replies.length > 0 && (
                 <Badge variant="outline" className="text-xs">{ticket.replies.length}</Badge>
               )}
@@ -163,7 +165,7 @@ export default function SupportTicketDetailPage() {
             {ticket.replies.length === 0 ? (
               <Card>
                 <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                  لا توجد ردود بعد. سيتواصل معك فريق الدعم قريبًا.
+                  {t.ticketNoRepliesDesc}
                 </CardContent>
               </Card>
             ) : (
@@ -184,10 +186,10 @@ export default function SupportTicketDetailPage() {
                         }`}
                       >
                         <div className="text-xs opacity-70 font-medium">
-                          {isOwnReply ? "أنت" : reply.userName ?? "فريق الدعم"}
+                          {isOwnReply ? t.ticketYouLabel : reply.userName ?? t.ticketSupportTeam}
                         </div>
                         <p className="text-sm whitespace-pre-wrap">{reply.content}</p>
-                        <div className="text-xs opacity-60 text-left">
+                        <div className={`text-xs opacity-60 ${isRTL ? "text-right" : "text-left"}`}>
                           {formatDate(reply.createdAt)}
                         </div>
                       </div>
@@ -201,7 +203,7 @@ export default function SupportTicketDetailPage() {
               <Card data-testid="card-reply-form">
                 <CardContent className="p-4 space-y-3">
                   <Textarea
-                    placeholder="اكتب ردك هنا..."
+                    placeholder={t.ticketReplyPlaceholder}
                     rows={3}
                     value={replyContent}
                     onChange={(e) => setReplyContent(e.target.value)}
@@ -213,8 +215,8 @@ export default function SupportTicketDetailPage() {
                       disabled={!replyContent.trim() || replyMutation.isPending}
                       data-testid="button-send-reply"
                     >
-                      <Send className="h-4 w-4 ml-2" />
-                      {replyMutation.isPending ? "جاري الإرسال..." : "إرسال الرد"}
+                      <Send className={`h-4 w-4 ${isRTL ? "ms-2" : "me-2"}`} />
+                      {replyMutation.isPending ? t.ticketSending : t.ticketSendBtn}
                     </Button>
                   </div>
                 </CardContent>
@@ -224,7 +226,7 @@ export default function SupportTicketDetailPage() {
             {isClosed && (
               <Card className="border-dashed">
                 <CardContent className="py-6 text-center text-sm text-muted-foreground">
-                  هذه التذكرة {STATUS_LABELS[ticket.status]} ولا يمكن الرد عليها
+                  {t.ticketClosedPrefix} {STATUS_LABELS[ticket.status]} {t.ticketClosedNote}
                 </CardContent>
               </Card>
             )}

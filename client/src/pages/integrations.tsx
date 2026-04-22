@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { SiFacebook, SiInstagram, SiWhatsapp } from "react-icons/si";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/lib/i18n";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -49,11 +50,12 @@ function TokenField({ label, placeholder, helpText, value, onChange }: {
 }
 
 function ConnectionStatus({ state }: { state: ConnectionState }) {
+  const { t } = useLanguage();
   if (state === "connected") {
     return (
       <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 gap-1">
         <CheckCircle2 className="h-3.5 w-3.5" />
-        Connected
+        {t.intLegacyConnected}
       </Badge>
     );
   }
@@ -61,14 +63,14 @@ function ConnectionStatus({ state }: { state: ConnectionState }) {
     return (
       <Badge className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 gap-1">
         <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-        Testing...
+        {t.connTesting}
       </Badge>
     );
   }
   return (
     <Badge className="bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 gap-1">
       <XCircle className="h-3.5 w-3.5" />
-      Not Connected
+      {t.connNotConnected}
     </Badge>
   );
 }
@@ -83,6 +85,7 @@ interface WaStatusResponse {
 
 function WhatsAppQRTab() {
   const { toast } = useToast();
+  const { t, isRTL } = useLanguage();
   const queryClient = useQueryClient();
 
   const { data: waData } = useQuery<WaStatusResponse>({
@@ -100,7 +103,7 @@ function WhatsAppQRTab() {
       queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/status"] });
     },
     onError: () => {
-      toast({ title: "فشل الاتصال", variant: "destructive" });
+      toast({ title: t.waConnFailed, variant: "destructive" });
     },
   });
 
@@ -108,7 +111,7 @@ function WhatsAppQRTab() {
     mutationFn: () => apiRequest("POST", "/api/whatsapp/disconnect"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/status"] });
-      toast({ title: "تم قطع الاتصال بـ WhatsApp" });
+      toast({ title: t.waDisconnectedToast });
     },
   });
 
@@ -116,7 +119,7 @@ function WhatsAppQRTab() {
     mutationFn: () => apiRequest("POST", "/api/whatsapp/reset"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/status"] });
-      toast({ title: "تمت إعادة الضبط، امسح الـ QR مجدداً" });
+      toast({ title: t.waResetToast });
     },
   });
 
@@ -124,28 +127,28 @@ function WhatsAppQRTab() {
   const qrDataUrl = waData?.qrDataUrl;
 
   return (
-    <div className="space-y-5 pt-4">
+    <div className="space-y-5 pt-4" dir={isRTL ? "rtl" : "ltr"}>
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">حالة الاتصال</p>
+        <p className="text-sm text-muted-foreground">{t.waConnStatus}</p>
         <div className="flex items-center gap-2">
           {status === "connected" && (
             <Badge className="bg-green-100 text-green-700 gap-1">
-              <Wifi className="h-3.5 w-3.5" /> متصل
+              <Wifi className="h-3.5 w-3.5" /> {t.waConnected}
             </Badge>
           )}
           {status === "qr" && (
             <Badge className="bg-blue-100 text-blue-700 gap-1 animate-pulse">
-              <Smartphone className="h-3.5 w-3.5" /> امسح الـ QR
+              <Smartphone className="h-3.5 w-3.5" /> {t.waScanQR}
             </Badge>
           )}
           {status === "connecting" && (
             <Badge className="bg-yellow-100 text-yellow-700 gap-1">
-              <RefreshCw className="h-3.5 w-3.5 animate-spin" /> جاري الاتصال...
+              <RefreshCw className="h-3.5 w-3.5 animate-spin" /> {t.waConnecting}
             </Badge>
           )}
           {status === "disconnected" && (
             <Badge className="bg-gray-100 text-gray-500 gap-1">
-              <WifiOff className="h-3.5 w-3.5" /> غير متصل
+              <WifiOff className="h-3.5 w-3.5" /> {t.waDisconnected}
             </Badge>
           )}
         </div>
@@ -157,13 +160,11 @@ function WhatsAppQRTab() {
             <img src={qrDataUrl} alt="WhatsApp QR Code" className="w-56 h-56" data-testid="img-whatsapp-qr" />
           </div>
           <div className="text-center space-y-1">
-            <p className="text-sm font-medium">افتح WhatsApp على تليفونك</p>
-            <p className="text-xs text-muted-foreground">
-              الإعدادات ← الأجهزة المرتبطة ← ربط جهاز ← امسح الكود
-            </p>
+            <p className="text-sm font-medium">{t.waScanInstruct}</p>
+            <p className="text-xs text-muted-foreground">{t.waScanInstructStep}</p>
           </div>
           <Button variant="outline" size="sm" onClick={() => resetMutation.mutate()} disabled={resetMutation.isPending} data-testid="button-refresh-qr">
-            <RefreshCw className="h-4 w-4 mr-2" /> تجديد الـ QR
+            <RefreshCw className="h-4 w-4 me-2" /> {t.waRefreshQR}
           </Button>
         </div>
       )}
@@ -174,8 +175,8 @@ function WhatsAppQRTab() {
             <CheckCircle2 className="h-8 w-8 text-green-600" />
           </div>
           <div className="text-center">
-            <p className="font-medium text-green-700">WhatsApp متصل بنجاح!</p>
-            <p className="text-sm text-muted-foreground mt-1">البوت جاهز للرد على الرسايل أوتوماتيك</p>
+            <p className="font-medium text-green-700">{t.waConnectedMsg}</p>
+            <p className="text-sm text-muted-foreground mt-1">{t.waBotReady}</p>
           </div>
         </div>
       )}
@@ -186,8 +187,8 @@ function WhatsAppQRTab() {
             <SiWhatsapp className="h-8 w-8 text-[#25D366]" />
           </div>
           <div className="text-center">
-            <p className="font-medium">اربط حساب WhatsApp</p>
-            <p className="text-sm text-muted-foreground mt-1">اضغط "اتصال" وامسح الـ QR بتليفونك</p>
+            <p className="font-medium">{t.waConnect}</p>
+            <p className="text-sm text-muted-foreground mt-1">{t.waConnectHint}</p>
           </div>
         </div>
       )}
@@ -195,24 +196,22 @@ function WhatsAppQRTab() {
       <div className="flex gap-2 pt-2">
         {status === "connected" ? (
           <Button variant="destructive" onClick={() => disconnectMutation.mutate()} disabled={disconnectMutation.isPending} data-testid="button-disconnect-whatsapp">
-            {disconnectMutation.isPending ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <WifiOff className="h-4 w-4 mr-2" />}
-            قطع الاتصال
+            {disconnectMutation.isPending ? <RefreshCw className="h-4 w-4 me-2 animate-spin" /> : <WifiOff className="h-4 w-4 me-2" />}
+            {t.waDisconnectBtn}
           </Button>
         ) : (
           <Button onClick={() => connectMutation.mutate()} disabled={connectMutation.isPending || status === "connecting" || status === "qr"} data-testid="button-connect-whatsapp">
-            {connectMutation.isPending || status === "connecting" ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <SiWhatsapp className="h-4 w-4 mr-2" />}
-            {status === "qr" ? "في انتظار المسح..." : "اتصال بـ WhatsApp"}
+            {connectMutation.isPending || status === "connecting" ? <RefreshCw className="h-4 w-4 me-2 animate-spin" /> : <SiWhatsapp className="h-4 w-4 me-2" />}
+            {status === "qr" ? t.waWaitingQR : t.waConnectBtn}
           </Button>
         )}
         {(status === "qr" || status === "connecting") && (
           <Button variant="outline" onClick={() => resetMutation.mutate()} disabled={resetMutation.isPending} data-testid="button-reset-whatsapp">
-            إعادة المحاولة
+            {t.waRetry}
           </Button>
         )}
       </div>
-      <p className="text-xs text-muted-foreground">
-        ملاحظة: يستخدم هذا النظام WhatsApp Web (QR) — تأكد إن تليفونك متصل بالنت.
-      </p>
+      <p className="text-xs text-muted-foreground">{t.waNote}</p>
     </div>
   );
 }
@@ -237,13 +236,14 @@ interface MetaPage {
 
 function MetaSettingsTab() {
   const { toast } = useToast();
+  const { t, isRTL } = useLanguage();
   const queryClient = useQueryClient();
   const [showManual, setShowManual] = useState(false);
   const [manualForm, setManualForm] = useState({ pageId: "", pageName: "", pageAccessToken: "", instagramAccountId: "" });
   const [oauthLoading, setOauthLoading] = useState(false);
   const [selectedPages, setSelectedPages] = useState<MetaPage[]>([]);
   const [commentBotEnabled, setCommentBotEnabled] = useState(false);
-  const [commentAutoReply, setCommentAutoReply] = useState("شكراً على تعليقك! راسلتك على الخاص 📩");
+  const [commentAutoReply, setCommentAutoReply] = useState(t.metaDefaultCommentReply);
   const [commentSettingsLoaded, setCommentSettingsLoaded] = useState(false);
 
   const { data: connection } = useQuery<MetaConnection>({
@@ -253,22 +253,22 @@ function MetaSettingsTab() {
   useEffect(() => {
     if (connection?.connected && !commentSettingsLoaded) {
       setCommentBotEnabled(connection.commentBotEnabled ?? false);
-      setCommentAutoReply(connection.commentAutoReply ?? "شكراً على تعليقك! راسلتك على الخاص 📩");
+      setCommentAutoReply(connection.commentAutoReply ?? t.metaDefaultCommentReply);
       setCommentSettingsLoaded(true);
     }
     if (!connection?.connected) {
       setCommentSettingsLoaded(false);
     }
-  }, [connection, commentSettingsLoaded]);
+  }, [connection, commentSettingsLoaded, t.metaDefaultCommentReply]);
 
   const updateCommentSettingsMutation = useMutation({
     mutationFn: (data: { commentBotEnabled: boolean; commentAutoReply: string }) =>
       apiRequest("PATCH", "/api/meta/connection", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/meta/connection"] });
-      toast({ title: "تم حفظ إعدادات ردود التعليقات" });
+      toast({ title: t.metaCommentSaved });
     },
-    onError: () => toast({ title: "فشل حفظ الإعدادات", variant: "destructive" }),
+    onError: () => toast({ title: t.metaSettingsFail, variant: "destructive" }),
   });
 
   const { data: verifyTokenData } = useQuery<{ verifyToken: string }>({
@@ -285,9 +285,9 @@ function MetaSettingsTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/meta/connection"] });
       setSelectedPages([]);
-      toast({ title: "تم ربط الصفحة بنجاح!" });
+      toast({ title: t.metaConnectedToast });
     },
-    onError: () => toast({ title: "فشل ربط الصفحة", variant: "destructive" }),
+    onError: () => toast({ title: t.metaConnFail, variant: "destructive" }),
   });
 
   const connectManualMutation = useMutation({
@@ -297,24 +297,24 @@ function MetaSettingsTab() {
       queryClient.invalidateQueries({ queryKey: ["/api/meta/connection"] });
       setManualForm({ pageId: "", pageName: "", pageAccessToken: "", instagramAccountId: "" });
       setShowManual(false);
-      toast({ title: "تم ربط الصفحة يدوياً!" });
+      toast({ title: t.metaConnManualToast });
     },
-    onError: () => toast({ title: "فشل ربط الصفحة", variant: "destructive" }),
+    onError: () => toast({ title: t.metaConnFail, variant: "destructive" }),
   });
 
   const disconnectMutation = useMutation({
     mutationFn: () => apiRequest("DELETE", "/api/meta/connection"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/meta/connection"] });
-      toast({ title: "تم فصل الصفحة" });
+      toast({ title: t.metaDisconnectToast });
     },
-    onError: () => toast({ title: "فشل فصل الصفحة", variant: "destructive" }),
+    onError: () => toast({ title: t.metaDisconnFail, variant: "destructive" }),
   });
 
   const handleOAuthLogin = async () => {
     const appId = appConfigData?.appId;
     if (!appId) {
-      toast({ title: "Meta App ID غير مُعد", description: "يرجى إعداد META_APP_ID في المتغيرات البيئية", variant: "destructive" });
+      toast({ title: t.metaAppIdMissing, description: t.metaAppIdMissingDesc, variant: "destructive" });
       return;
     }
 
@@ -352,7 +352,7 @@ function MetaSettingsTab() {
       }, 500);
     } catch {
       setOauthLoading(false);
-      toast({ title: "فشل فتح نافذة تسجيل الدخول", variant: "destructive" });
+      toast({ title: t.metaLoginFail, variant: "destructive" });
     }
   };
 
@@ -361,7 +361,7 @@ function MetaSettingsTab() {
       const res = await apiRequest("POST", "/api/meta/list-pages", { userAccessToken: token });
       const data = (await res.json()) as { pages: MetaPage[] };
       if (data.pages.length === 0) {
-        toast({ title: "لم يتم العثور على صفحات", description: "تأكد إن حسابك مدير لصفحة فيسبوك" });
+        toast({ title: t.metaNoPages, description: t.metaNoPagesDesc });
       } else if (data.pages.length === 1) {
         connectMutation.mutate({ userAccessToken: token, pageId: data.pages[0].id });
       } else {
@@ -369,7 +369,7 @@ function MetaSettingsTab() {
         (window as any).__metaOAuthToken = token;
       }
     } catch {
-      toast({ title: "فشل جلب الصفحات", variant: "destructive" });
+      toast({ title: t.metaFetchPagesFail, variant: "destructive" });
     }
     setOauthLoading(false);
   };
@@ -387,23 +387,23 @@ function MetaSettingsTab() {
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text).then(() => {
-      toast({ title: `تم نسخ ${label}` });
+      toast({ title: `${t.metaCopied} ${label}` });
     });
   };
 
   const isConnected = connection?.connected === true;
 
   return (
-    <div className="space-y-5 pt-4">
+    <div className="space-y-5 pt-4" dir={isRTL ? "rtl" : "ltr"}>
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">حالة الاتصال</p>
+        <p className="text-sm text-muted-foreground">{t.metaConnStatus}</p>
         {isConnected ? (
           <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 gap-1">
-            <CheckCircle2 className="h-3.5 w-3.5" /> متصل
+            <CheckCircle2 className="h-3.5 w-3.5" /> {t.metaConnected}
           </Badge>
         ) : (
           <Badge className="bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 gap-1">
-            <XCircle className="h-3.5 w-3.5" /> غير متصل
+            <XCircle className="h-3.5 w-3.5" /> {t.metaDisconnected}
           </Badge>
         )}
       </div>
@@ -414,7 +414,7 @@ function MetaSettingsTab() {
             <SiFacebook className="h-5 w-5 text-[#1877F2]" />
             <span className="font-semibold">{connection.pageName}</span>
           </div>
-          <p className="text-sm text-muted-foreground">Page ID: {connection.pageId}</p>
+          <p className="text-sm text-muted-foreground">{t.metaPageIdLabel}: {connection.pageId}</p>
           {connection.instagramAccountId && (
             <div className="flex items-center gap-2 text-sm">
               <SiInstagram className="h-4 w-4 text-[#E4405F]" />
@@ -422,21 +422,21 @@ function MetaSettingsTab() {
             </div>
           )}
           <Button variant="destructive" size="sm" onClick={() => disconnectMutation.mutate()} disabled={disconnectMutation.isPending} data-testid="button-disconnect-meta">
-            <Trash2 className="h-4 w-4 mr-2" /> فصل الصفحة
+            <Trash2 className="h-4 w-4 me-2" /> {t.metaDisconnectPage}
           </Button>
         </div>
       )}
 
       {isConnected && (
-        <div className="rounded-lg border p-4 space-y-4" dir="rtl">
+        <div className="rounded-lg border p-4 space-y-4">
           <div className="flex items-center gap-2">
             <MessageSquareReply className="h-4 w-4 text-blue-600" />
-            <span className="font-semibold text-sm">ردود التعليقات التلقائية</span>
+            <span className="font-semibold text-sm">{t.metaCommentSettings}</span>
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">تفعيل ردود التعليقات</p>
-              <p className="text-xs text-muted-foreground">عند التفعيل، سيرد البوت تلقائياً على تعليقات منشورات الصفحة ويرسل رسالة خاصة للمعلق</p>
+              <p className="text-sm font-medium">{t.metaCommentEnabled}</p>
+              <p className="text-xs text-muted-foreground">{t.metaCommentEnabledDesc}</p>
             </div>
             <Switch
               checked={commentBotEnabled}
@@ -445,21 +445,21 @@ function MetaSettingsTab() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-sm">نص الرد التلقائي على التعليق (عام)</Label>
+            <Label className="text-sm">{t.metaCommentReplyLabel}</Label>
             <Textarea
               value={commentAutoReply}
               onChange={e => setCommentAutoReply(e.target.value)}
-              placeholder="شكراً على تعليقك! راسلتك على الخاص 📩"
+              placeholder={t.metaDefaultCommentReply}
               rows={2}
               data-testid="input-comment-auto-reply"
             />
-            <p className="text-xs text-muted-foreground">هذا النص سيظهر كرد عام على التعليق على المنشور</p>
+            <p className="text-xs text-muted-foreground">{t.metaCommentReplyHint}</p>
           </div>
           {commentBotEnabled && (
             <div className="rounded-md bg-blue-50 dark:bg-blue-900/10 border border-blue-200 p-3 text-xs text-blue-700 dark:text-blue-400 space-y-1">
-              <p className="font-medium">معاينة الرد التلقائي:</p>
-              <p className="italic">"{commentAutoReply || "شكراً على تعليقك! راسلتك على الخاص 📩"}"</p>
-              <p className="text-muted-foreground mt-1">سيتلقى المعلق أيضاً رسالة خاصة على الماسنجر/إنستجرام لبدء محادثة مع البوت</p>
+              <p className="font-medium">{t.metaCommentPreview}</p>
+              <p className="italic">"{commentAutoReply || t.metaDefaultCommentReply}"</p>
+              <p className="text-muted-foreground mt-1">{t.metaCommentPreviewNote}</p>
             </div>
           )}
           <Button
@@ -468,15 +468,15 @@ function MetaSettingsTab() {
             disabled={updateCommentSettingsMutation.isPending}
             data-testid="button-save-comment-settings"
           >
-            {updateCommentSettingsMutation.isPending ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-            حفظ إعدادات التعليقات
+            {updateCommentSettingsMutation.isPending ? <RefreshCw className="h-4 w-4 me-2 animate-spin" /> : <Save className="h-4 w-4 me-2" />}
+            {t.metaSaveCommentBtn}
           </Button>
         </div>
       )}
 
       {!isConnected && selectedPages.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm font-medium">اختر الصفحة:</p>
+          <p className="text-sm font-medium">{t.metaSelectPage}</p>
           {selectedPages.map(page => (
             <button
               key={page.id}
@@ -490,7 +490,7 @@ function MetaSettingsTab() {
                   <p className="text-xs text-muted-foreground">ID: {page.id}</p>
                   {page.instagramAccountId && (
                     <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                      <SiInstagram className="h-3 w-3 text-[#E4405F]" /> Instagram متصل
+                      <SiInstagram className="h-3 w-3 text-[#E4405F]" /> {t.metaInstagramConnected}
                     </p>
                   )}
                 </div>
@@ -508,20 +508,18 @@ function MetaSettingsTab() {
               <SiFacebook className="h-8 w-8 text-[#1877F2]" />
             </div>
             <div className="text-center">
-              <p className="font-medium">اربط صفحة فيسبوك</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                سجل دخول بفيسبوك واختر الصفحة لاستقبال رسائل ماسنجر وإنستجرام
-              </p>
+              <p className="font-medium">{t.metaConnectPage}</p>
+              <p className="text-sm text-muted-foreground mt-1">{t.metaConnectPageDesc}</p>
             </div>
           </div>
 
           <div className="flex gap-2">
             <Button onClick={handleOAuthLogin} disabled={oauthLoading || connectMutation.isPending} data-testid="button-connect-facebook">
-              {oauthLoading ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <SiFacebook className="h-4 w-4 mr-2" />}
-              تسجيل الدخول بفيسبوك
+              {oauthLoading ? <RefreshCw className="h-4 w-4 me-2 animate-spin" /> : <SiFacebook className="h-4 w-4 me-2" />}
+              {t.metaFbLoginBtn}
             </Button>
             <Button variant="outline" onClick={() => setShowManual(s => !s)} data-testid="button-toggle-manual">
-              {showManual ? "إخفاء" : "ربط يدوي"}
+              {showManual ? t.metaHideManual : t.metaManualLink}
             </Button>
           </div>
         </>
@@ -531,26 +529,26 @@ function MetaSettingsTab() {
         <div className="rounded-lg border p-4 space-y-3 bg-muted/30">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <AlertCircle className="h-4 w-4" />
-            <span>للمطورين: أدخل بيانات الصفحة يدوياً من لوحة تحكم Meta</span>
+            <span>{t.metaManualNote}</span>
           </div>
           <div className="space-y-3">
             <div>
-              <Label>Page ID</Label>
+              <Label>{t.metaPageIdLabel}</Label>
               <Input value={manualForm.pageId} onChange={e => setManualForm(f => ({ ...f, pageId: e.target.value }))} placeholder="123456789" data-testid="input-manual-page-id" className="mt-1" />
             </div>
             <div>
-              <Label>Page Name</Label>
-              <Input value={manualForm.pageName} onChange={e => setManualForm(f => ({ ...f, pageName: e.target.value }))} placeholder="اسم الصفحة" data-testid="input-manual-page-name" className="mt-1" />
+              <Label>{t.metaPageName}</Label>
+              <Input value={manualForm.pageName} onChange={e => setManualForm(f => ({ ...f, pageName: e.target.value }))} placeholder={t.metaPageNamePlaceholder} data-testid="input-manual-page-name" className="mt-1" />
             </div>
             <TokenField
-              label="Page Access Token"
+              label={t.metaPageAccessToken}
               placeholder="EAAxxxxxxxx..."
-              helpText="Long-lived page access token من Graph API Explorer"
+              helpText={t.metaPageAccessTokenHelp}
               value={manualForm.pageAccessToken}
               onChange={v => setManualForm(f => ({ ...f, pageAccessToken: v }))}
             />
             <div>
-              <Label>Instagram Account ID (اختياري)</Label>
+              <Label>{t.metaInstagramOptional}</Label>
               <Input value={manualForm.instagramAccountId} onChange={e => setManualForm(f => ({ ...f, instagramAccountId: e.target.value }))} placeholder="17841400000000" data-testid="input-manual-ig-id" className="mt-1" />
             </div>
             <Button
@@ -563,45 +561,45 @@ function MetaSettingsTab() {
               disabled={!manualForm.pageId || !manualForm.pageName || !manualForm.pageAccessToken || connectManualMutation.isPending}
               data-testid="button-save-manual-meta"
             >
-              {connectManualMutation.isPending ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : null}
-              حفظ الاتصال
+              {connectManualMutation.isPending ? <RefreshCw className="h-4 w-4 me-2 animate-spin" /> : null}
+              {t.metaSaveConnection}
             </Button>
           </div>
         </div>
       )}
 
       <div className="rounded-lg border p-4 space-y-3">
-        <h3 className="font-semibold text-sm">إعداد Webhook في Meta Developer Dashboard</h3>
+        <h3 className="font-semibold text-sm">{t.metaWebhookDashTitle}</h3>
         <div className="space-y-2">
           <div>
-            <Label className="text-xs text-muted-foreground">Callback URL</Label>
+            <Label className="text-xs text-muted-foreground">{t.metaCallbackUrl}</Label>
             <div className="flex gap-2 mt-1">
               <Input value={webhookUrl} readOnly className="text-xs font-mono" data-testid="input-webhook-url" />
-              <Button variant="outline" size="icon" onClick={() => copyToClipboard(webhookUrl, "Webhook URL")} data-testid="button-copy-webhook-url">
+              <Button variant="outline" size="icon" onClick={() => copyToClipboard(webhookUrl, t.metaCallbackUrl)} data-testid="button-copy-webhook-url">
                 <Copy className="h-4 w-4" />
               </Button>
             </div>
           </div>
           <div>
-            <Label className="text-xs text-muted-foreground">Verify Token</Label>
+            <Label className="text-xs text-muted-foreground">{t.intLegacyWaVerifyLabel}</Label>
             <div className="flex gap-2 mt-1">
               <Input value={verifyToken} readOnly className="text-xs font-mono" data-testid="input-verify-token" />
-              <Button variant="outline" size="icon" onClick={() => copyToClipboard(verifyToken, "Verify Token")} data-testid="button-copy-verify-token">
+              <Button variant="outline" size="icon" onClick={() => copyToClipboard(verifyToken, t.intLegacyWaVerifyLabel)} data-testid="button-copy-verify-token">
                 <Copy className="h-4 w-4" />
               </Button>
             </div>
           </div>
         </div>
         <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium">خطوات الإعداد:</p>
+          <p className="font-medium">{t.metaWebhookSteps}</p>
           <ol className="list-decimal list-inside space-y-0.5">
-            <li>افتح <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer" className="underline text-primary inline-flex items-center gap-0.5">Meta Developer Dashboard <ExternalLink className="h-3 w-3" /></a></li>
-            <li>اختر التطبيق ← Webhooks</li>
-            <li>اختر "Page" واضغط Subscribe</li>
-            <li>الصق Callback URL و Verify Token أعلاه</li>
-            <li>اشترك في: messages, messaging_postbacks, feed</li>
-            <li>لإنستجرام: اشترك أيضاً في Instagram ← messages, comments</li>
-            <li>لردود التعليقات: تأكد من الاشتراك في <strong>feed</strong> (أو comments لإنستجرام)</li>
+            <li><a href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer" className="underline text-primary inline-flex items-center gap-0.5">{t.metaWebhookStep1} <ExternalLink className="h-3 w-3" /></a></li>
+            <li>{t.metaWebhookStep2}</li>
+            <li>{t.metaWebhookStep3}</li>
+            <li>{t.metaWebhookStep4}</li>
+            <li>{t.metaWebhookStep5}</li>
+            <li>{t.metaWebhookStep6}</li>
+            <li>{t.metaWebhookStep7}</li>
           </ol>
         </div>
       </div>
@@ -619,6 +617,7 @@ interface AISettingsData {
 
 function AIProviderTab() {
   const { toast } = useToast();
+  const { t, isRTL } = useLanguage();
   const queryClient = useQueryClient();
 
   const [provider, setProvider] = useState<"openrouter" | "openai">("openrouter");
@@ -658,9 +657,9 @@ function AIProviderTab() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/integration-settings"] });
-      toast({ title: "تم حفظ إعدادات الذكاء الاصطناعي" });
+      toast({ title: t.integrationsAiSaved });
     },
-    onError: () => toast({ title: "فشل حفظ الإعدادات", variant: "destructive" }),
+    onError: () => toast({ title: t.integrationsAiFail, variant: "destructive" }),
   });
 
   const testMutation = useMutation({
@@ -668,7 +667,7 @@ function AIProviderTab() {
       const apiKey = provider === "openrouter" ? orApiKey : oaiApiKey;
       const model = provider === "openrouter" ? orModel : oaiModel;
       if (!apiKey || apiKey === "••••••••") {
-        throw new Error("أدخل مفتاح API أولاً");
+        throw new Error(t.integrationsAiEnterKey);
       }
       const res = await apiRequest("POST", "/api/integration-settings/test-ai", {
         provider,
@@ -681,36 +680,36 @@ function AIProviderTab() {
     onSuccess: (data) => {
       setTestStatus("connected");
       toast({
-        title: "الاتصال ناجح!",
-        description: data.reply ? `رد النموذج: "${data.reply}"` : undefined,
+        title: t.integrationsAiConnSuccess,
+        description: data.reply ? `${t.integrationsAiModelReply}: "${data.reply}"` : undefined,
       });
     },
     onError: (err) => {
       setTestStatus("disconnected");
       toast({
-        title: "فشل الاتصال",
-        description: err instanceof Error ? err.message : "تحقق من المفتاح",
+        title: t.integrationsAiConnFail,
+        description: err instanceof Error ? err.message : t.integrationsAiCheckKey,
         variant: "destructive",
       });
     },
   });
 
   return (
-    <div className="space-y-4 pt-4">
+    <div className="space-y-4 pt-4" dir={isRTL ? "rtl" : "ltr"}>
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">حالة الاتصال</p>
+        <p className="text-sm text-muted-foreground">{t.integrationsAiConnStatus}</p>
         <ConnectionStatus state={testStatus} />
       </div>
 
       <div>
-        <Label>مزود الذكاء الاصطناعي</Label>
+        <Label>{t.integrationsAiProvider}</Label>
         <select
           value={provider}
           onChange={e => { setProvider(e.target.value as "openrouter" | "openai"); setTestStatus("disconnected"); }}
           className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           data-testid="select-ai-provider"
         >
-          <option value="openrouter">OpenRouter (أرخص — موصى به)</option>
+          <option value="openrouter">OpenRouter</option>
           <option value="openai">OpenAI</option>
         </select>
       </div>
@@ -718,27 +717,27 @@ function AIProviderTab() {
       {provider === "openrouter" && (
         <>
           <div className="rounded-md bg-muted/50 border p-3 text-sm text-muted-foreground">
-            OpenRouter يوفر وصول لعدة نماذج ذكاء اصطناعي بأسعار منخفضة. احصل على مفتاح من{" "}
+            {t.integrationsOrDesc}{" "}
             <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="underline text-primary inline-flex items-center gap-0.5">
               openrouter.ai/keys <ExternalLink className="h-3 w-3" />
             </a>
           </div>
           <TokenField
-            label="OpenRouter API Key"
+            label={t.openrouterApiKey}
             placeholder="sk-or-v1-xxxxxxxxxxxxxxxx"
-            helpText="مفتاح API من OpenRouter"
+            helpText={t.integrationsOrKey}
             value={orApiKey}
             onChange={setOrApiKey}
           />
           <div>
-            <Label>النموذج</Label>
+            <Label>{t.integrationsAiModel}</Label>
             <select
               value={orModel}
               onChange={e => setOrModel(e.target.value)}
               className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               data-testid="select-openrouter-model"
             >
-              <option value="google/gemini-flash-1.5">Google Gemini Flash 1.5 (موصى به)</option>
+              <option value="google/gemini-flash-1.5">Google Gemini Flash 1.5</option>
               <option value="google/gemini-2.0-flash-001">Google Gemini 2.0 Flash</option>
               <option value="deepseek/deepseek-chat">DeepSeek Chat</option>
               <option value="meta-llama/llama-3-8b-instruct">Meta Llama 3 8B</option>
@@ -753,27 +752,27 @@ function AIProviderTab() {
       {provider === "openai" && (
         <>
           <div className="rounded-md bg-muted/50 border p-3 text-sm text-muted-foreground">
-            اربط حساب OpenAI لتشغيل الردود الذكية. احصل على مفتاح من{" "}
+            {t.integrationsOaiDesc}{" "}
             <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline text-primary inline-flex items-center gap-0.5">
               platform.openai.com <ExternalLink className="h-3 w-3" />
             </a>
           </div>
           <TokenField
-            label="OpenAI API Key"
+            label={t.openaiApiKey}
             placeholder="sk-xxxxxxxxxxxxxxxx"
-            helpText="مفتاح OpenAI السري"
+            helpText={t.integrationsOaiKey}
             value={oaiApiKey}
             onChange={setOaiApiKey}
           />
           <div>
-            <Label>النموذج</Label>
+            <Label>{t.integrationsAiModel}</Label>
             <select
               value={oaiModel}
               onChange={e => setOaiModel(e.target.value)}
               className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               data-testid="select-openai-model"
             >
-              <option value="gpt-4o-mini">GPT-4o Mini (موصى به)</option>
+              <option value="gpt-4o-mini">GPT-4o Mini</option>
               <option value="gpt-4o">GPT-4o</option>
               <option value="gpt-4-turbo">GPT-4 Turbo</option>
               <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
@@ -789,15 +788,15 @@ function AIProviderTab() {
           disabled={testStatus === "testing"}
           data-testid="button-test-ai"
         >
-          {testStatus === "testing" ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-          اختبار الاتصال
+          {testStatus === "testing" ? <RefreshCw className="h-4 w-4 me-2 animate-spin" /> : <RefreshCw className="h-4 w-4 me-2" />}
+          {t.integrationsAiTestConn}
         </Button>
         <Button
           onClick={() => saveMutation.mutate()}
           disabled={saveMutation.isPending}
           data-testid="button-save-ai"
         >
-          {saveMutation.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
+          {saveMutation.isPending ? t.integrationsAiSaving : t.integrationsAiSave}
         </Button>
       </div>
     </div>
@@ -805,17 +804,18 @@ function AIProviderTab() {
 }
 
 export default function IntegrationsPage() {
+  const { t, isRTL } = useLanguage();
   return (
-    <div className="space-y-6 max-w-2xl" data-testid="page-integrations">
+    <div className="space-y-6 max-w-2xl" data-testid="page-integrations" dir={isRTL ? "rtl" : "ltr"}>
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">الإنتيجريشن</h1>
-        <p className="text-muted-foreground">اربط البوت بمنصات المراسلة والذكاء الاصطناعي</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t.integrationsTitle}</h1>
+        <p className="text-muted-foreground">{t.integrationsDesc}</p>
       </div>
 
       <Card>
         <CardHeader className="pb-0">
-          <CardTitle>Platform Settings</CardTitle>
-          <CardDescription>Configure your API keys and tokens for each integration</CardDescription>
+          <CardTitle>{t.platformSettingsTitle}</CardTitle>
+          <CardDescription>{t.integrationsPlatformDesc}</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="whatsapp">
@@ -830,7 +830,7 @@ export default function IntegrationsPage() {
               </TabsTrigger>
               <TabsTrigger value="ai-provider" data-testid="tab-ai-provider" className="gap-2">
                 <Bot className="h-4 w-4" />
-                الذكاء الاصطناعي
+                {t.integrationsAiTab}
               </TabsTrigger>
             </TabsList>
 

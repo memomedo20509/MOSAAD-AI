@@ -7,6 +7,7 @@ import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Download, RotateCcw,
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useLanguage } from "@/lib/i18n";
 
 type ImportResult = {
   imported: number;
@@ -17,6 +18,7 @@ type ImportResult = {
 export default function UploadLeadsPage() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { t, isRTL } = useLanguage();
   const isEcommerce = user?.companyBusinessType === "ecommerce";
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -31,12 +33,12 @@ export default function UploadLeadsPage() {
       "text/csv",
     ];
     if (!validTypes.includes(f.type) && !f.name.endsWith(".csv") && !f.name.endsWith(".xlsx") && !f.name.endsWith(".xls")) {
-      toast({ title: "نوع الملف غير مدعوم. يرجى استخدام Excel أو CSV", variant: "destructive" });
+      toast({ title: t.fileInvalidType, variant: "destructive" });
       return;
     }
     setFile(f);
     setResult(null);
-  }, [toast]);
+  }, [toast, t]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -66,13 +68,13 @@ export default function UploadLeadsPage() {
           } else {
             try {
               const errData = JSON.parse(xhr.responseText);
-              reject(new Error(errData.error || "فشل الرفع"));
+              reject(new Error(errData.error || "Upload failed"));
             } catch {
-              reject(new Error("فشل الرفع"));
+              reject(new Error("Upload failed"));
             }
           }
         });
-        xhr.addEventListener("error", () => reject(new Error("فشل الاتصال")));
+        xhr.addEventListener("error", () => reject(new Error("Connection failed")));
         xhr.open("POST", "/api/leads/import");
         xhr.withCredentials = true;
         xhr.send(formData);
@@ -81,9 +83,9 @@ export default function UploadLeadsPage() {
       const data = await uploadPromise;
       setResult(data);
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
-      toast({ title: `تم استيراد ${data.imported} من ${data.total} ليد` });
+      toast({ title: `${t.importedCount}: ${data.imported} / ${data.total}` });
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "فشل في رفع الملف";
+      const message = error instanceof Error ? error.message : "Upload failed";
       toast({ title: message, variant: "destructive" });
     } finally {
       setUploading(false);
@@ -92,7 +94,7 @@ export default function UploadLeadsPage() {
   };
 
   const downloadTemplate = () => {
-    const headers = ["الاسم", "الهاتف", "هاتف 2", "البريد الإلكتروني", "القناة", "الحملة", "الميزانية", "الملاحظات"];
+    const headers = [t.csvColName, t.csvColPhone, t.csvColPhone2, t.csvColEmail, t.csvColChannel, t.csvColCampaign, t.csvColBudget, t.csvColNotes];
     const csv = headers.join(",") + "\n";
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -109,22 +111,22 @@ export default function UploadLeadsPage() {
   };
 
   return (
-    <div className="space-y-6" data-testid="page-upload-leads">
+    <div className="space-y-6" data-testid="page-upload-leads" dir={isRTL ? "rtl" : "ltr"}>
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{isEcommerce ? "رفع الطلبات" : "رفع الليدز"}</h1>
-          <p className="text-muted-foreground">{isEcommerce ? "رفع ملف Excel أو CSV يحتوي على بيانات الطلبات" : "رفع ملف Excel أو CSV يحتوي على بيانات الليدز"}</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{isEcommerce ? t.navUploadOrders : t.uploadLeadsTitle}</h1>
+          <p className="text-muted-foreground">{isEcommerce ? t.uploadLeadsSubtitle : t.uploadLeadsSubtitle}</p>
         </div>
         <Button variant="outline" onClick={downloadTemplate} data-testid="button-download-template">
-          <Download className="h-4 w-4 mr-2" />
-          تحميل القالب
+          <Download className="h-4 w-4 me-2" />
+          {t.downloadTemplate}
         </Button>
       </div>
 
       <Card className="text-sm text-muted-foreground">
         <CardContent className="pt-4">
-          <p>الأعمدة المطلوبة: <strong>الاسم*</strong> | الهاتف | هاتف 2 | البريد الإلكتروني | القناة | الحملة | الميزانية | الملاحظات</p>
-          <p className="mt-1">يمكن استخدام أسماء الأعمدة بالعربية أو الإنجليزية</p>
+          <p>{t.columnsRequired} <strong>{t.csvColHintRequired}</strong> | {t.csvColHintOptional}</p>
+          <p className="mt-1">{t.columnsNote}</p>
         </CardContent>
       </Card>
 
@@ -148,25 +150,25 @@ export default function UploadLeadsPage() {
                       <Progress value={uploadProgress} className="h-2" />
                       <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>جاري الرفع... {uploadProgress}%</span>
+                        <span>{t.uploadingFile} {uploadProgress}%</span>
                       </div>
                     </div>
                   )}
                   <div className="flex justify-center gap-3">
                     <Button onClick={handleUpload} disabled={uploading} data-testid="button-upload">
-                      <Upload className="h-4 w-4 mr-2" />
-                      {uploading ? "جاري الرفع..." : "رفع الملف"}
+                      <Upload className="h-4 w-4 me-2" />
+                      {uploading ? t.uploadingFile : t.uploadFile}
                     </Button>
-                    <Button variant="outline" onClick={reset} disabled={uploading} data-testid="button-reset-file">إلغاء</Button>
+                    <Button variant="outline" onClick={reset} disabled={uploading} data-testid="button-reset-file">{t.cancel}</Button>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <p className="text-muted-foreground">اسحب الملف هنا أو</p>
+                  <p className="text-muted-foreground">{t.dragFile} {t.orBrowse}</p>
                   <label>
                     <Button variant="outline" asChild>
                       <span>
-                        اختر ملف
+                        {t.chooseFile}
                         <input
                           type="file"
                           className="hidden"
@@ -177,6 +179,7 @@ export default function UploadLeadsPage() {
                       </span>
                     </Button>
                   </label>
+                  <p className="text-xs text-muted-foreground">{t.supportedFormats}</p>
                 </div>
               )}
             </div>
@@ -188,22 +191,22 @@ export default function UploadLeadsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-green-600">
                 <CheckCircle className="h-5 w-5" />
-                نتيجة الاستيراد
+                {t.uploadResult}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="text-center p-4 bg-muted/50 rounded-lg">
                   <div className="text-2xl font-bold text-green-600" data-testid="text-imported-count">{result.imported}</div>
-                  <p className="text-sm text-muted-foreground">تم استيرادهم</p>
+                  <p className="text-sm text-muted-foreground">{t.importedCount}</p>
                 </div>
                 <div className="text-center p-4 bg-muted/50 rounded-lg">
                   <div className="text-2xl font-bold text-red-600" data-testid="text-errors-count">{result.errors.length}</div>
-                  <p className="text-sm text-muted-foreground">أخطاء</p>
+                  <p className="text-sm text-muted-foreground">{t.importErrors}</p>
                 </div>
                 <div className="text-center p-4 bg-muted/50 rounded-lg">
                   <div className="text-2xl font-bold" data-testid="text-total-count">{result.total}</div>
-                  <p className="text-sm text-muted-foreground">إجمالي الصفوف</p>
+                  <p className="text-sm text-muted-foreground">{t.totalRows}</p>
                 </div>
               </div>
             </CardContent>
@@ -214,7 +217,7 @@ export default function UploadLeadsPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-red-600">
                   <AlertCircle className="h-5 w-5" />
-                  أخطاء الاستيراد ({result.errors.length})
+                  {t.importErrors} ({result.errors.length})
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -222,8 +225,8 @@ export default function UploadLeadsPage() {
                   <table className="w-full text-sm">
                     <thead className="border-b">
                       <tr>
-                        <th className="text-start py-2 px-3 font-medium">رقم الصف</th>
-                        <th className="text-start py-2 px-3 font-medium">السبب</th>
+                        <th className="text-start py-2 px-3 font-medium">{t.rowNumber}</th>
+                        <th className="text-start py-2 px-3 font-medium">{t.reason}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -241,8 +244,8 @@ export default function UploadLeadsPage() {
           )}
 
           <Button onClick={reset} variant="outline" data-testid="button-upload-new">
-            <RotateCcw className="h-4 w-4 mr-2" />
-            رفع ملف جديد
+            <RotateCcw className="h-4 w-4 me-2" />
+            {t.uploadNewFile}
           </Button>
         </div>
       )}

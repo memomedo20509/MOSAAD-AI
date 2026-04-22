@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
 import { useEditor, EditorContent } from "@tiptap/react";
@@ -15,10 +15,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, ArrowRight, Bold, Italic, UnderlineIcon, List, ListOrdered, AlignLeft, AlignCenter, AlignRight, Heading2, Heading3, Quote, Code, Link2, Image as ImageIcon, Save, Eye, CheckCircle } from "lucide-react";
+import { useLanguage } from "@/lib/i18n";
+import { Loader2, ArrowRight, Bold, Italic, UnderlineIcon, List, ListOrdered, AlignLeft, AlignCenter, AlignRight, Heading2, Heading3, Quote, Code, Link2, Image as ImageIcon, Save, CheckCircle } from "lucide-react";
 import type { Article, ArticleCategory } from "@shared/schema";
 
 function slugify(text: string) {
@@ -58,24 +58,20 @@ interface SeoCheck {
   weight: number;
 }
 
-function computeSeoScore(title: string, metaDesc: string, body: string): { score: number; checks: SeoCheck[] } {
+function SeoScorePanel({ title, metaDesc, body }: { title: string; metaDesc: string; body: string }) {
+  const { t } = useLanguage();
   const wordCount = countWords(body);
   const metaLen = metaDesc.length;
 
   const checks: SeoCheck[] = [
-    { label: "العنوان لا يقل عن 10 أحرف", passed: title.length >= 10, weight: 15 },
-    { label: `Meta Description بين 120-160 حرف (${metaLen})`, passed: metaLen >= 120 && metaLen <= 160, weight: 20 },
-    { label: `عدد الكلمات أكثر من 800 (${wordCount})`, passed: wordCount >= 800, weight: 20 },
-    { label: "يحتوي على روابط داخلية", passed: hasInternalLinks(body), weight: 15 },
-    { label: "الصور لها نص بديل (alt)", passed: hasAltText(body), weight: 15 },
-    { label: "يحتوي على عناوين H2 أو H3", passed: hasHeadingStructure(body), weight: 15 },
+    { label: t.blogEditorSeoTitleLength, passed: title.length >= 10, weight: 15 },
+    { label: `${t.blogEditorSeoMetaDesc} (${metaLen})`, passed: metaLen >= 120 && metaLen <= 160, weight: 20 },
+    { label: `${t.blogEditorSeoWordCount} (${wordCount})`, passed: wordCount >= 800, weight: 20 },
+    { label: t.blogEditorSeoLinks, passed: hasInternalLinks(body), weight: 15 },
+    { label: t.blogEditorSeoAlt, passed: hasAltText(body), weight: 15 },
+    { label: t.blogEditorSeoHeadings, passed: hasHeadingStructure(body), weight: 15 },
   ];
   const score = checks.reduce((sum, c) => sum + (c.passed ? c.weight : 0), 0);
-  return { score, checks };
-}
-
-function SeoScorePanel({ title, metaDesc, body }: { title: string; metaDesc: string; body: string }) {
-  const { score, checks } = computeSeoScore(title, metaDesc, body);
   const color = score >= 80 ? "text-green-600" : score >= 50 ? "text-yellow-600" : "text-red-600";
   const bgColor = score >= 80 ? "bg-green-500" : score >= 50 ? "bg-yellow-500" : "bg-red-500";
 
@@ -83,7 +79,7 @@ function SeoScorePanel({ title, metaDesc, body }: { title: string; metaDesc: str
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-sm flex items-center justify-between">
-          <span>تقييم SEO</span>
+          <span>{t.blogEditorSeoTitle}</span>
           <span className={`text-2xl font-bold ${color}`} data-testid="text-seo-score">{score}/100</span>
         </CardTitle>
         <div className="w-full bg-muted rounded-full h-2">
@@ -103,6 +99,7 @@ function SeoScorePanel({ title, metaDesc, body }: { title: string; metaDesc: str
 }
 
 function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
+  const { t } = useLanguage();
   if (!editor) return null;
 
   const toolbarBtn = (active: boolean, onClick: () => void, icon: React.ReactNode, title: string) => (
@@ -120,26 +117,26 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
 
   return (
     <div className="flex flex-wrap gap-1 p-2 border-b bg-muted/30 rounded-t-md">
-      {toolbarBtn(editor.isActive("bold"), () => editor.chain().focus().toggleBold().run(), <Bold className="h-3.5 w-3.5" />, "Bold")}
-      {toolbarBtn(editor.isActive("italic"), () => editor.chain().focus().toggleItalic().run(), <Italic className="h-3.5 w-3.5" />, "Italic")}
-      {toolbarBtn(editor.isActive("underline"), () => editor.chain().focus().toggleUnderline().run(), <UnderlineIcon className="h-3.5 w-3.5" />, "Underline")}
+      {toolbarBtn(editor.isActive("bold"), () => editor.chain().focus().toggleBold().run(), <Bold className="h-3.5 w-3.5" />, t.blogToolbarBold)}
+      {toolbarBtn(editor.isActive("italic"), () => editor.chain().focus().toggleItalic().run(), <Italic className="h-3.5 w-3.5" />, t.blogToolbarItalic)}
+      {toolbarBtn(editor.isActive("underline"), () => editor.chain().focus().toggleUnderline().run(), <UnderlineIcon className="h-3.5 w-3.5" />, t.blogToolbarUnderline)}
       <Separator orientation="vertical" className="h-8" />
-      {toolbarBtn(editor.isActive("heading", { level: 2 }), () => editor.chain().focus().toggleHeading({ level: 2 }).run(), <Heading2 className="h-3.5 w-3.5" />, "H2")}
-      {toolbarBtn(editor.isActive("heading", { level: 3 }), () => editor.chain().focus().toggleHeading({ level: 3 }).run(), <Heading3 className="h-3.5 w-3.5" />, "H3")}
+      {toolbarBtn(editor.isActive("heading", { level: 2 }), () => editor.chain().focus().toggleHeading({ level: 2 }).run(), <Heading2 className="h-3.5 w-3.5" />, t.blogToolbarH2)}
+      {toolbarBtn(editor.isActive("heading", { level: 3 }), () => editor.chain().focus().toggleHeading({ level: 3 }).run(), <Heading3 className="h-3.5 w-3.5" />, t.blogToolbarH3)}
       <Separator orientation="vertical" className="h-8" />
-      {toolbarBtn(editor.isActive("bulletList"), () => editor.chain().focus().toggleBulletList().run(), <List className="h-3.5 w-3.5" />, "Bullet List")}
-      {toolbarBtn(editor.isActive("orderedList"), () => editor.chain().focus().toggleOrderedList().run(), <ListOrdered className="h-3.5 w-3.5" />, "Ordered List")}
-      {toolbarBtn(editor.isActive("blockquote"), () => editor.chain().focus().toggleBlockquote().run(), <Quote className="h-3.5 w-3.5" />, "Blockquote")}
-      {toolbarBtn(editor.isActive("codeBlock"), () => editor.chain().focus().toggleCodeBlock().run(), <Code className="h-3.5 w-3.5" />, "Code Block")}
+      {toolbarBtn(editor.isActive("bulletList"), () => editor.chain().focus().toggleBulletList().run(), <List className="h-3.5 w-3.5" />, t.blogToolbarBulletList)}
+      {toolbarBtn(editor.isActive("orderedList"), () => editor.chain().focus().toggleOrderedList().run(), <ListOrdered className="h-3.5 w-3.5" />, t.blogToolbarOrderedList)}
+      {toolbarBtn(editor.isActive("blockquote"), () => editor.chain().focus().toggleBlockquote().run(), <Quote className="h-3.5 w-3.5" />, t.blogToolbarBlockquote)}
+      {toolbarBtn(editor.isActive("codeBlock"), () => editor.chain().focus().toggleCodeBlock().run(), <Code className="h-3.5 w-3.5" />, t.blogToolbarCodeBlock)}
       <Separator orientation="vertical" className="h-8" />
       <Button
         type="button"
         variant="ghost"
         size="icon"
         className="h-8 w-8"
-        title="Link"
+        title={t.blogToolbarLink}
         onClick={() => {
-          const url = window.prompt("URL");
+          const url = window.prompt(t.blogToolbarEnterUrl);
           if (url) editor.chain().focus().setLink({ href: url }).run();
         }}
       >
@@ -150,18 +147,18 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
         variant="ghost"
         size="icon"
         className="h-8 w-8"
-        title="Image"
+        title={t.blogToolbarImage}
         onClick={() => {
-          const url = window.prompt("Image URL");
+          const url = window.prompt(t.blogToolbarEnterImageUrl);
           if (url) editor.chain().focus().setImage({ src: url }).run();
         }}
       >
         <ImageIcon className="h-3.5 w-3.5" />
       </Button>
       <Separator orientation="vertical" className="h-8" />
-      {toolbarBtn(editor.isActive({ textAlign: "left" }), () => editor.chain().focus().setTextAlign("left").run(), <AlignLeft className="h-3.5 w-3.5" />, "Align Left")}
-      {toolbarBtn(editor.isActive({ textAlign: "center" }), () => editor.chain().focus().setTextAlign("center").run(), <AlignCenter className="h-3.5 w-3.5" />, "Align Center")}
-      {toolbarBtn(editor.isActive({ textAlign: "right" }), () => editor.chain().focus().setTextAlign("right").run(), <AlignRight className="h-3.5 w-3.5" />, "Align Right")}
+      {toolbarBtn(editor.isActive({ textAlign: "left" }), () => editor.chain().focus().setTextAlign("left").run(), <AlignLeft className="h-3.5 w-3.5" />, t.blogToolbarAlignLeft)}
+      {toolbarBtn(editor.isActive({ textAlign: "center" }), () => editor.chain().focus().setTextAlign("center").run(), <AlignCenter className="h-3.5 w-3.5" />, t.blogToolbarAlignCenter)}
+      {toolbarBtn(editor.isActive({ textAlign: "right" }), () => editor.chain().focus().setTextAlign("right").run(), <AlignRight className="h-3.5 w-3.5" />, t.blogToolbarAlignRight)}
     </div>
   );
 }
@@ -182,6 +179,7 @@ interface FormState {
 export default function BlogEditorPage({ params }: { params?: { id?: string } }) {
   const articleId = params?.id;
   const { toast } = useToast();
+  const { t, isRTL } = useLanguage();
   const [, setLocation] = useLocation();
   const [form, setForm] = useState<FormState>({
     title: "",
@@ -207,6 +205,24 @@ export default function BlogEditorPage({ params }: { params?: { id?: string } })
     enabled: !!articleId,
   });
 
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Underline,
+      Image,
+      TipTapLink.configure({ openOnClick: false }),
+      Placeholder.configure({ placeholder: t.blogEditorContentPlaceholder }),
+      TextAlign.configure({ types: ["heading", "paragraph"] }),
+    ],
+    content: "",
+    editorProps: {
+      attributes: {
+        class: "prose prose-sm sm:prose dark:prose-invert max-w-none min-h-[400px] p-4 focus:outline-none",
+        dir: isRTL ? "rtl" : "ltr",
+      },
+    },
+  });
+
   useEffect(() => {
     if (existingArticle) {
       setForm({
@@ -222,29 +238,8 @@ export default function BlogEditorPage({ params }: { params?: { id?: string } })
         status: existingArticle.status,
       });
       setSlugManuallyEdited(true);
-      if (existingArticle.body) {
-        editor?.commands.setContent(existingArticle.body);
-      }
     }
   }, [existingArticle]);
-
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Underline,
-      Image,
-      TipTapLink.configure({ openOnClick: false }),
-      Placeholder.configure({ placeholder: "اكتب محتوى مقالك هنا..." }),
-      TextAlign.configure({ types: ["heading", "paragraph"] }),
-    ],
-    content: "",
-    editorProps: {
-      attributes: {
-        class: "prose prose-sm sm:prose dark:prose-invert max-w-none min-h-[400px] p-4 focus:outline-none",
-        dir: "rtl",
-      },
-    },
-  });
 
   useEffect(() => {
     if (existingArticle?.body && editor && !editor.isDestroyed) {
@@ -270,16 +265,16 @@ export default function BlogEditorPage({ params }: { params?: { id?: string } })
     onSuccess: async (res) => {
       queryClient.invalidateQueries({ queryKey: ["/api/platform/blog/articles"] });
       const savedArticle = await res.json();
-      toast({ title: articleId ? "تم حفظ المقال" : "تم إنشاء المقال" });
+      toast({ title: articleId ? t.blogEditorSaved : t.blogEditorCreated });
       if (!articleId) {
         setLocation(`/platform/blog/editor/${savedArticle.id}`);
       }
     },
-    onError: () => toast({ title: "خطأ", description: "فشل حفظ المقال", variant: "destructive" }),
+    onError: () => toast({ title: t.errorGeneric, description: t.blogEditorSaveFail, variant: "destructive" }),
   });
 
   function buildPayload(statusOverride?: string) {
-    const tags = form.tags ? form.tags.split(",").map(t => t.trim()).filter(Boolean) : [];
+    const tags = form.tags ? form.tags.split(",").map(tg => tg.trim()).filter(Boolean) : [];
     return {
       title: form.title,
       slug: form.slug,
@@ -297,14 +292,6 @@ export default function BlogEditorPage({ params }: { params?: { id?: string } })
     };
   }
 
-  function handleSave() {
-    saveMutation.mutate(buildPayload());
-  }
-
-  function handlePublish() {
-    saveMutation.mutate(buildPayload("published"));
-  }
-
   if (loadingArticle) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -314,22 +301,22 @@ export default function BlogEditorPage({ params }: { params?: { id?: string } })
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isRTL ? "rtl" : "ltr"}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" asChild>
             <Link href="/platform/blog"><ArrowRight className="h-4 w-4" /></Link>
           </Button>
-          <h1 className="text-xl font-bold">{articleId ? "تعديل المقال" : "مقال جديد"}</h1>
+          <h1 className="text-xl font-bold">{articleId ? t.blogEditorEditTitle : t.blogEditorNewTitle}</h1>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleSave} disabled={saveMutation.isPending} data-testid="button-save-draft">
-            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Save className="h-4 w-4 ml-2" />}
-            حفظ كمسودة
+          <Button variant="outline" onClick={() => saveMutation.mutate(buildPayload())} disabled={saveMutation.isPending} data-testid="button-save-draft">
+            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin me-2" /> : <Save className="h-4 w-4 me-2" />}
+            {t.blogEditorSaveDraft}
           </Button>
-          <Button onClick={handlePublish} disabled={saveMutation.isPending} data-testid="button-publish">
-            <CheckCircle className="h-4 w-4 ml-2" />
-            نشر
+          <Button onClick={() => saveMutation.mutate(buildPayload("published"))} disabled={saveMutation.isPending} data-testid="button-publish">
+            <CheckCircle className="h-4 w-4 me-2" />
+            {t.blogEditorPublish}
           </Button>
         </div>
       </div>
@@ -339,18 +326,18 @@ export default function BlogEditorPage({ params }: { params?: { id?: string } })
           <Card>
             <CardContent className="pt-5 space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="title">عنوان المقال *</Label>
+                <Label htmlFor="title">{t.blogEditorTitleLabel}</Label>
                 <Input
                   id="title"
                   value={form.title}
                   onChange={e => handleTitleChange(e.target.value)}
-                  placeholder="أدخل عنوان المقال..."
+                  placeholder={t.blogEditorTitlePlaceholder}
                   className="text-lg font-semibold"
                   data-testid="input-article-title"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="slug">Slug</Label>
+                <Label htmlFor="slug">{t.blogSlugLabel}</Label>
                 <Input
                   id="slug"
                   value={form.slug}
@@ -361,13 +348,13 @@ export default function BlogEditorPage({ params }: { params?: { id?: string } })
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="excerpt">المقتطف</Label>
+                <Label htmlFor="excerpt">{t.blogEditorExcerptLabel}</Label>
                 <Textarea
                   id="excerpt"
                   value={form.excerpt}
                   onChange={e => setForm(f => ({ ...f, excerpt: e.target.value }))}
                   rows={2}
-                  placeholder="ملخص قصير للمقال..."
+                  placeholder={t.blogEditorExcerptPlaceholder}
                   data-testid="input-article-excerpt"
                 />
               </div>
@@ -377,8 +364,8 @@ export default function BlogEditorPage({ params }: { params?: { id?: string } })
           <Card>
             <CardHeader className="pb-0">
               <CardTitle className="text-sm flex items-center justify-between">
-                <span>المحتوى</span>
-                <span className="text-xs font-normal text-muted-foreground">{wordCount} كلمة | {readingTime} دقيقة</span>
+                <span>{t.blogEditorContentLabel}</span>
+                <span className="text-xs font-normal text-muted-foreground">{wordCount} {t.blogEditorWordCount} | {readingTime} {t.blogEditorReadTime}</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-2">
@@ -391,36 +378,36 @@ export default function BlogEditorPage({ params }: { params?: { id?: string } })
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm">إعدادات SEO</CardTitle>
+              <CardTitle className="text-sm">{t.blogEditorSeoSettingsTitle}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="meta-title">Meta Title</Label>
+                <Label htmlFor="meta-title">{t.blogMetaTitleLabel}</Label>
                 <Input
                   id="meta-title"
                   value={form.metaTitle}
                   onChange={e => setForm(f => ({ ...f, metaTitle: e.target.value }))}
-                  placeholder="عنوان لمحركات البحث..."
+                  placeholder={t.blogEditorMetaTitlePlaceholder}
                   data-testid="input-meta-title"
                 />
-                <p className="text-xs text-muted-foreground">{form.metaTitle.length}/60 حرف</p>
+                <p className="text-xs text-muted-foreground">{form.metaTitle.length}/60</p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="meta-desc">Meta Description</Label>
+                <Label htmlFor="meta-desc">{t.blogMetaDescLabel}</Label>
                 <Textarea
                   id="meta-desc"
                   value={form.metaDescription}
                   onChange={e => setForm(f => ({ ...f, metaDescription: e.target.value }))}
                   rows={3}
-                  placeholder="وصف لمحركات البحث (120-160 حرف)..."
+                  placeholder={t.blogEditorMetaDescPlaceholder}
                   data-testid="input-meta-description"
                 />
                 <p className={`text-xs ${form.metaDescription.length >= 120 && form.metaDescription.length <= 160 ? "text-green-600" : "text-muted-foreground"}`}>
-                  {form.metaDescription.length}/160 حرف
+                  {form.metaDescription.length}/160
                 </p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="og-image">OG Image URL</Label>
+                <Label htmlFor="og-image">{t.blogOgImageLabel}</Label>
                 <Input
                   id="og-image"
                   value={form.ogImage}
@@ -439,17 +426,17 @@ export default function BlogEditorPage({ params }: { params?: { id?: string } })
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm">إعدادات المقال</CardTitle>
+              <CardTitle className="text-sm">{t.blogEditorArticleSettingsTitle}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label>التصنيف</Label>
+                <Label>{t.blogEditorCategoryLabel}</Label>
                 <Select value={form.categoryId} onValueChange={v => setForm(f => ({ ...f, categoryId: v }))}>
                   <SelectTrigger data-testid="select-category">
-                    <SelectValue placeholder="اختر تصنيفاً..." />
+                    <SelectValue placeholder={t.blogEditorCategoryPlaceholder} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">بدون تصنيف</SelectItem>
+                    <SelectItem value="">{t.blogEditorNoCategory}</SelectItem>
                     {categories.map(c => (
                       <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                     ))}
@@ -457,7 +444,7 @@ export default function BlogEditorPage({ params }: { params?: { id?: string } })
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="tags">الوسوم (مفصولة بفاصلة)</Label>
+                <Label htmlFor="tags">{t.blogEditorTagsLabel}</Label>
                 <Input
                   id="tags"
                   value={form.tags}
@@ -467,7 +454,7 @@ export default function BlogEditorPage({ params }: { params?: { id?: string } })
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="featured-image">الصورة البارزة URL</Label>
+                <Label htmlFor="featured-image">{t.blogEditorFeaturedImageLabel}</Label>
                 <Input
                   id="featured-image"
                   value={form.featuredImage}
@@ -481,15 +468,15 @@ export default function BlogEditorPage({ params }: { params?: { id?: string } })
                 )}
               </div>
               <div className="space-y-2">
-                <Label>الحالة</Label>
+                <Label>{t.blogEditorStatusLabel}</Label>
                 <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
                   <SelectTrigger data-testid="select-status">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="draft">مسودة</SelectItem>
-                    <SelectItem value="published">منشور</SelectItem>
-                    <SelectItem value="archived">مؤرشف</SelectItem>
+                    <SelectItem value="draft">{t.blogStatusDraft}</SelectItem>
+                    <SelectItem value="published">{t.blogStatusPublished}</SelectItem>
+                    <SelectItem value="archived">{t.blogStatusArchived}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

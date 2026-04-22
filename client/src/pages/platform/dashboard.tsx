@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Users, TrendingUp, Ticket, AlertCircle, Calendar, BarChart3 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { useLanguage } from "@/lib/i18n";
 
 interface PlatformStats {
   totalActiveCompanies: number;
@@ -42,6 +43,7 @@ function StatCard({ title, value, icon: Icon, description, color = "text-primary
 }
 
 export default function PlatformDashboard() {
+  const { t, isRTL } = useLanguage();
   const { data: stats, isLoading: statsLoading } = useQuery<PlatformStats>({
     queryKey: ["/api/platform/stats"],
   });
@@ -50,74 +52,72 @@ export default function PlatformDashboard() {
     queryKey: ["/api/platform/revenue"],
   });
 
-  const formatCurrency = (n: number) => `${n.toLocaleString("ar-EG")} ج.م`;
+  const formatCurrency = (n: number) => `${n.toLocaleString(isRTL ? "ar-EG" : "en-US")} ${t.platformCurrencySuffix}`;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isRTL ? "rtl" : "ltr"}>
       <div>
-        <h1 className="text-2xl font-bold">لوحة تحكم المنصة</h1>
-        <p className="text-muted-foreground">نظرة عامة على أداء المنصة والإيرادات</p>
+        <h1 className="text-2xl font-bold">{t.platformDashTitle}</h1>
+        <p className="text-muted-foreground">{t.platformDashDesc}</p>
       </div>
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-3">
         {statsLoading ? (
           Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)
         ) : (
           <>
             <StatCard
-              title="الشركات النشطة"
+              title={t.platformDashActiveCompanies}
               value={stats?.totalActiveCompanies ?? 0}
               icon={Building2}
               color="text-green-500"
-              description="شركة مشتركة نشطة"
+              description={t.platformDashActiveDesc}
             />
             <StatCard
-              title="تجربة مجانية"
+              title={t.platformDashTrial}
               value={stats?.totalTrialCompanies ?? 0}
               icon={Users}
               color="text-blue-500"
-              description="شركة في فترة التجربة"
+              description={t.platformDashTrialDesc}
             />
             <StatCard
-              title="موقوفة"
+              title={t.platformDashSuspended}
               value={stats?.totalSuspendedCompanies ?? 0}
               icon={AlertCircle}
               color="text-red-500"
-              description="شركة موقوفة"
+              description={t.platformDashSuspendedDesc}
             />
             <StatCard
               title="MRR"
               value={formatCurrency(revenue?.mrr ?? 0)}
               icon={TrendingUp}
               color="text-emerald-500"
-              description="الإيراد الشهري المتكرر"
+              description={t.platformDashMrrDesc}
             />
             <StatCard
-              title="تسجيلات هذا الشهر"
+              title={t.platformDashNewReg}
               value={stats?.newRegistrationsThisMonth ?? 0}
               icon={Calendar}
               color="text-purple-500"
-              description="شركة جديدة"
+              description={t.platformDashNewRegDesc}
             />
             <StatCard
-              title="تذاكر مفتوحة"
+              title={t.platformDashOpenTickets}
               value={stats?.openTickets ?? 0}
               icon={Ticket}
               color="text-orange-500"
-              description="تذكرة دعم فني"
+              description={t.platformDashOpenTicketsDesc}
             />
           </>
         )}
       </div>
 
-      {/* ARR Card */}
       {!revenueLoading && revenue && (
         <Card className="bg-primary text-primary-foreground">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-primary-foreground/70 text-sm">ARR - الإيراد السنوي المتكرر</p>
+                <p className="text-primary-foreground/70 text-sm">{t.platformDashArrLabel}</p>
                 <p className="text-3xl font-bold mt-1" data-testid="stat-arr">{formatCurrency(revenue.arr)}</p>
               </div>
               <BarChart3 className="h-12 w-12 text-primary-foreground/30" />
@@ -126,10 +126,9 @@ export default function PlatformDashboard() {
         </Card>
       )}
 
-      {/* MRR Chart */}
       <Card>
         <CardHeader>
-          <CardTitle>تطور MRR - آخر 12 شهر</CardTitle>
+          <CardTitle>{t.platformDashMrrHistory}</CardTitle>
         </CardHeader>
         <CardContent>
           {revenueLoading ? (
@@ -154,11 +153,10 @@ export default function PlatformDashboard() {
         </CardContent>
       </Card>
 
-      {/* Plan Breakdown */}
       {!revenueLoading && revenue?.breakdown && revenue.breakdown.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>توزيع الإيرادات حسب الباقة</CardTitle>
+            <CardTitle>{t.platformDashRevBreakdown}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -166,9 +164,9 @@ export default function PlatformDashboard() {
                 <div key={b.name} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                   <div>
                     <span className="font-medium">{b.name}</span>
-                    <span className="text-sm text-muted-foreground mr-2">({b.count} شركة)</span>
+                    <span className="text-sm text-muted-foreground ms-2">({b.count} {t.platformDashCompaniesSuffix})</span>
                   </div>
-                  <span className="font-bold text-emerald-600">{formatCurrency(b.revenue)}/شهر</span>
+                  <span className="font-bold text-emerald-600">{formatCurrency(b.revenue)}{t.platformDashMonthly}</span>
                 </div>
               ))}
             </div>

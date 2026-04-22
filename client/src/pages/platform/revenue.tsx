@@ -5,6 +5,7 @@ import { TrendingUp, DollarSign, Package, CalendarClock } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from "recharts";
+import { useLanguage } from "@/lib/i18n";
 
 interface RevenueData {
   mrr: number;
@@ -17,20 +18,20 @@ interface RevenueData {
 const COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"];
 
 export default function PlatformRevenuePage() {
+  const { t, isRTL } = useLanguage();
   const { data: revenue, isLoading } = useQuery<RevenueData>({
     queryKey: ["/api/platform/revenue"],
   });
 
-  const formatCurrency = (n: number) => `${n.toLocaleString("ar-EG")} ج.م`;
+  const formatCurrency = (n: number) => `${n.toLocaleString(isRTL ? "ar-EG" : "en-US")} ${t.platformCurrencySuffix}`;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isRTL ? "rtl" : "ltr"}>
       <div>
-        <h1 className="text-2xl font-bold">الإيرادات</h1>
-        <p className="text-muted-foreground">تحليل الإيرادات والاشتراكات</p>
+        <h1 className="text-2xl font-bold">{t.revenueTitle}</h1>
+        <p className="text-muted-foreground">{t.revenueDesc}</p>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
         <Card className="bg-primary text-primary-foreground">
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
@@ -41,7 +42,7 @@ export default function PlatformRevenuePage() {
             {isLoading ? <Skeleton className="h-8 w-32 bg-primary-foreground/20" /> : (
               <p className="text-2xl font-bold" data-testid="stat-mrr">{formatCurrency(revenue?.mrr ?? 0)}</p>
             )}
-            <p className="text-xs text-primary-foreground/60 mt-1">الإيراد الشهري المتكرر</p>
+            <p className="text-xs text-primary-foreground/60 mt-1">{t.revenueMrrDesc}</p>
           </CardContent>
         </Card>
 
@@ -54,28 +55,27 @@ export default function PlatformRevenuePage() {
             {isLoading ? <Skeleton className="h-8 w-32" /> : (
               <p className="text-2xl font-bold" data-testid="stat-arr">{formatCurrency(revenue?.arr ?? 0)}</p>
             )}
-            <p className="text-xs text-muted-foreground mt-1">الإيراد السنوي المتكرر</p>
+            <p className="text-xs text-muted-foreground mt-1">{t.revenueArrDesc}</p>
           </CardContent>
         </Card>
 
         <Card className="col-span-2 md:col-span-1">
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-sm text-muted-foreground">تجديدات خلال 30 يوم</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">{t.revenueRenewals}</CardTitle>
             <CalendarClock className="h-5 w-5 text-orange-500" />
           </CardHeader>
           <CardContent>
             {isLoading ? <Skeleton className="h-8 w-20" /> : (
               <p className="text-2xl font-bold" data-testid="stat-renewals">{revenue?.renewalsNext30Days ?? 0}</p>
             )}
-            <p className="text-xs text-muted-foreground mt-1">اشتراك يحتاج تجديد</p>
+            <p className="text-xs text-muted-foreground mt-1">{t.revenueRenewalsDesc}</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* MRR Chart */}
       <Card>
         <CardHeader>
-          <CardTitle>تطور MRR - آخر 12 شهر</CardTitle>
+          <CardTitle>{t.revenueMrrHistory}</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? <Skeleton className="h-64 w-full" /> : (
@@ -98,12 +98,11 @@ export default function PlatformRevenuePage() {
         </CardContent>
       </Card>
 
-      {/* Plan Breakdown */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
-            توزيع الإيرادات حسب الباقة
+            {t.revenueBreakdown}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -114,7 +113,7 @@ export default function PlatformRevenuePage() {
                   <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(v: number) => [formatCurrency(v), "الإيراد"]} />
+                  <Tooltip formatter={(v: number) => [formatCurrency(v), t.revenueRevLabel]} />
                   <Bar dataKey="revenue" radius={[4, 4, 0, 0]}>
                     {revenue.breakdown.map((_, index) => (
                       <Cell key={index} fill={COLORS[index % COLORS.length]} />
@@ -128,15 +127,15 @@ export default function PlatformRevenuePage() {
                     <div className="flex items-center gap-2">
                       <div className="h-3 w-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
                       <span className="font-medium">{b.name}</span>
-                      <span className="text-sm text-muted-foreground">({b.count} شركة)</span>
+                      <span className="text-sm text-muted-foreground">({b.count} {t.revenueCompaniesSuffix})</span>
                     </div>
-                    <span className="font-bold">{formatCurrency(b.revenue)}/شهر</span>
+                    <span className="font-bold">{formatCurrency(b.revenue)}{t.revenuePerMonth}</span>
                   </div>
                 ))}
               </div>
             </div>
           ) : (
-            <p className="text-muted-foreground text-center py-8">لا توجد بيانات باقات</p>
+            <p className="text-muted-foreground text-center py-8">{t.revenueNoData}</p>
           )}
         </CardContent>
       </Card>
