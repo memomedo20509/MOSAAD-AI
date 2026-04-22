@@ -10,18 +10,32 @@ import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 import { Building2, User, CheckCircle2, Loader2, ChevronRight, ChevronLeft, Zap, Shield, Clock, Smartphone, SlidersHorizontal, Rocket } from "lucide-react";
 import { WAChatMockup } from "@/components/public-mockups";
+import { useLanguage } from "@/lib/i18n";
 
-const INDUSTRIES = [
+const INDUSTRIES_AR = [
   "عقارات", "تجزئة وتجارة إلكترونية", "تعليم", "صحة وطب",
   "سيارات", "سفر وسياحة", "خدمات مالية", "تقنية", "أغذية ومطاعم", "أخرى"
 ];
 
-const SIZES = [
+const INDUSTRIES_EN = [
+  "Real Estate", "Retail & E-commerce", "Education", "Health & Medical",
+  "Automotive", "Travel & Tourism", "Financial Services", "Technology", "Food & Restaurants", "Other"
+];
+
+const SIZES_AR = [
   { value: "1-5", label: "1-5 موظفين" },
   { value: "6-20", label: "6-20 موظفاً" },
   { value: "21-50", label: "21-50 موظفاً" },
   { value: "51-200", label: "51-200 موظفاً" },
   { value: "200+", label: "أكثر من 200 موظف" },
+];
+
+const SIZES_EN = [
+  { value: "1-5", label: "1-5 employees" },
+  { value: "6-20", label: "6-20 employees" },
+  { value: "21-50", label: "21-50 employees" },
+  { value: "51-200", label: "51-200 employees" },
+  { value: "200+", label: "200+ employees" },
 ];
 
 interface FormData {
@@ -36,41 +50,10 @@ interface FormData {
   confirmPassword: string;
 }
 
-const STEPS = ["معلومات الشركة", "معلومات المالك", "التأكيد"];
-
-const BENEFITS = [
-  { icon: Zap, title: "إعداد في 30 دقيقة", desc: "ابدأ فوراً بدون خبرة تقنية" },
-  { icon: Shield, title: "14 يوماً مجاناً", desc: "بدون بطاقة ائتمانية" },
-  { icon: Clock, title: "رد فوري 24/7", desc: "البوت يعمل بينما أنت نائم" },
-];
-
-const ONBOARDING_STEPS = [
-  {
-    icon: Smartphone,
-    number: "١",
-    title: "ربط واتساب",
-    desc: "وصّل رقمك في دقيقة واحدة عبر رمز QR",
-    color: "from-indigo-500 to-indigo-400",
-  },
-  {
-    icon: SlidersHorizontal,
-    number: "٢",
-    title: "ضبط البوت",
-    desc: "خصّص الردود والسيناريوهات لتناسب عملك",
-    color: "from-purple-500 to-purple-400",
-  },
-  {
-    icon: Rocket,
-    number: "٣",
-    title: "ابدأ تحويل العملاء",
-    desc: "البوت يتولى المتابعة وإغلاق الصفقات تلقائياً",
-    color: "from-pink-500 to-purple-500",
-  },
-];
-
 export default function RegisterPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { t, language, isRTL } = useLanguage();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<FormData>({
@@ -85,11 +68,46 @@ export default function RegisterPage() {
     confirmPassword: "",
   });
 
+  const INDUSTRIES = language === "ar" ? INDUSTRIES_AR : INDUSTRIES_EN;
+  const SIZES = language === "ar" ? SIZES_AR : SIZES_EN;
+
+  const STEPS = [t.pub_regStep1, t.pub_regStep2, t.pub_regStep3];
+
+  const BENEFITS = [
+    { icon: Zap, title: t.pub_regBenefit1Title, desc: t.pub_regBenefit1Desc },
+    { icon: Shield, title: t.pub_regBenefit2Title, desc: t.pub_regBenefit2Desc },
+    { icon: Clock, title: t.pub_regBenefit3Title, desc: t.pub_regBenefit3Desc },
+  ];
+
+  const ONBOARDING_STEPS = [
+    {
+      icon: Smartphone,
+      number: t.pub_regOnboarding1Num,
+      title: t.pub_regOnboarding1Title,
+      desc: t.pub_regOnboarding1Desc,
+      color: "from-indigo-500 to-indigo-400",
+    },
+    {
+      icon: SlidersHorizontal,
+      number: t.pub_regOnboarding2Num,
+      title: t.pub_regOnboarding2Title,
+      desc: t.pub_regOnboarding2Desc,
+      color: "from-purple-500 to-purple-400",
+    },
+    {
+      icon: Rocket,
+      number: t.pub_regOnboarding3Num,
+      title: t.pub_regOnboarding3Title,
+      desc: t.pub_regOnboarding3Desc,
+      color: "from-pink-500 to-purple-500",
+    },
+  ];
+
   const update = (key: keyof FormData, value: string) => setForm(f => ({ ...f, [key]: value }));
 
   const validateStep1 = () => {
     if (!form.companyName.trim()) {
-      toast({ title: "خطأ", description: "اسم الشركة مطلوب", variant: "destructive" });
+      toast({ title: t.pub_regErrorTitle, description: t.pub_regValidCompanyName, variant: "destructive" });
       return false;
     }
     return true;
@@ -97,23 +115,23 @@ export default function RegisterPage() {
 
   const validateStep2 = () => {
     if (!form.ownerName.trim()) {
-      toast({ title: "خطأ", description: "اسم المالك مطلوب", variant: "destructive" });
+      toast({ title: t.pub_regErrorTitle, description: t.pub_regValidOwnerName, variant: "destructive" });
       return false;
     }
     if (!form.email.trim() || !form.email.includes("@")) {
-      toast({ title: "خطأ", description: "بريد إلكتروني صحيح مطلوب", variant: "destructive" });
+      toast({ title: t.pub_regErrorTitle, description: t.pub_regValidEmail, variant: "destructive" });
       return false;
     }
     if (!form.username.trim() || form.username.length < 3) {
-      toast({ title: "خطأ", description: "اسم المستخدم يجب أن يكون 3 أحرف على الأقل", variant: "destructive" });
+      toast({ title: t.pub_regErrorTitle, description: t.pub_regValidUsername, variant: "destructive" });
       return false;
     }
     if (form.password.length < 6) {
-      toast({ title: "خطأ", description: "كلمة المرور يجب أن تكون 6 أحرف على الأقل", variant: "destructive" });
+      toast({ title: t.pub_regErrorTitle, description: t.pub_regValidPassword, variant: "destructive" });
       return false;
     }
     if (form.password !== form.confirmPassword) {
-      toast({ title: "خطأ", description: "كلمتا المرور غير متطابقتين", variant: "destructive" });
+      toast({ title: t.pub_regErrorTitle, description: t.pub_regValidPasswordMatch, variant: "destructive" });
       return false;
     }
     return true;
@@ -139,11 +157,11 @@ export default function RegisterPage() {
         password: form.password,
       });
       await queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-      toast({ title: "تم التسجيل بنجاح!", description: "جاري توجيهك..." });
+      toast({ title: t.pub_regSuccess, description: t.pub_regSuccessDesc });
       setTimeout(() => navigate("/"), 1500);
     } catch (err: any) {
-      const msg = err.message || "حدث خطأ أثناء التسجيل";
-      toast({ title: "خطأ في التسجيل", description: msg, variant: "destructive" });
+      const msg = err.message || t.pub_regErrorTitle;
+      toast({ title: t.pub_regErrorTitle, description: msg, variant: "destructive" });
       setStep(2);
     } finally {
       setLoading(false);
@@ -152,26 +170,24 @@ export default function RegisterPage() {
 
   return (
     <>
-      <title>إنشاء حساب - SalesBot AI</title>
-      <meta name="description" content="سجّل شركتك في SalesBot AI وابدأ تجربتك المجانية لمدة 14 يوماً." />
+      <title>{language === "ar" ? "إنشاء حساب - SalesBot AI" : "Create Account - SalesBot AI"}</title>
+      <meta name="description" content={language === "ar" ? "سجّل شركتك في SalesBot AI وابدأ تجربتك المجانية لمدة 14 يوماً." : "Register your company on SalesBot AI and start your 14-day free trial."} />
 
       <section className="min-h-screen pt-16 grid lg:grid-cols-2">
         {/* Left column — dark gradient brand side */}
         <div className="relative hidden lg:flex flex-col justify-between bg-gradient-to-br from-indigo-950 via-indigo-900 to-purple-900 px-12 py-16 overflow-hidden">
-          {/* Background glow orbs */}
           <div className="absolute top-1/4 right-1/4 h-64 w-64 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute bottom-1/4 left-1/4 h-48 w-48 bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
 
-          {/* Top: headline & benefits */}
           <div className="relative z-10">
             <h2 className="text-3xl font-extrabold text-white leading-snug mb-3">
-              حوّل محادثاتك إلى{" "}
+              {t.pub_regHeadline1}{" "}
               <span className="bg-gradient-to-r from-indigo-300 to-purple-300 bg-clip-text text-transparent">
-                صفقات مغلقة
+                {t.pub_regHeadline2}
               </span>
             </h2>
             <p className="text-indigo-200 text-base mb-10 leading-relaxed">
-              انضم إلى آلاف الشركات التي تستخدم SalesBot AI لأتمتة مبيعاتها عبر واتساب.
+              {t.pub_regHeadlineDesc}
             </p>
 
             <div className="space-y-5">
@@ -188,15 +204,13 @@ export default function RegisterPage() {
               ))}
             </div>
 
-            {/* What happens after signup — 3-step visual flow */}
             <div className="mt-10">
               <p className="text-indigo-300 text-xs font-semibold uppercase tracking-widest mb-4">
-                ماذا يحدث بعد التسجيل؟
+                {t.pub_regOnboardingTitle}
               </p>
               <div className="space-y-3" data-testid="onboarding-flow">
                 {ONBOARDING_STEPS.map(({ icon: Icon, number, title, desc, color }, i) => (
                   <div key={i} className="flex items-start gap-3">
-                    {/* Left: icon + connector line */}
                     <div className="flex flex-col items-center">
                       <div className={`h-10 w-10 rounded-xl bg-gradient-to-br ${color} flex items-center justify-center shrink-0 shadow-lg`} data-testid={`onboarding-step-icon-${i + 1}`}>
                         <Icon className="h-5 w-5 text-white" />
@@ -205,7 +219,6 @@ export default function RegisterPage() {
                         <div className="w-px h-5 bg-white/15 mt-1" />
                       )}
                     </div>
-                    {/* Right: text */}
                     <div className="pb-1">
                       <div className="flex items-center gap-1.5">
                         <span className="text-indigo-400 text-xs font-bold">{number}.</span>
@@ -213,16 +226,14 @@ export default function RegisterPage() {
                       </div>
                       <p className="text-indigo-300 text-xs mt-0.5 leading-relaxed">{desc}</p>
                     </div>
-                    {/* Arrow connector between steps (horizontal, hidden on small) */}
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Social proof strip */}
             <div className="mt-8 flex items-center gap-3">
               <div className="flex -space-x-2 rtl:space-x-reverse">
-                {["أس", "سأ", "مع", "نز"].map((initials, i) => (
+                {["AS", "SA", "MO", "NZ"].map((initials, i) => (
                   <div
                     key={i}
                     className={`h-8 w-8 rounded-full border-2 border-indigo-900 flex items-center justify-center text-white text-[10px] font-bold ${
@@ -234,12 +245,11 @@ export default function RegisterPage() {
                 ))}
               </div>
               <div className="text-indigo-200 text-xs leading-relaxed">
-                <span className="text-white font-semibold">+2,400 شركة</span> تثق بنا
+                <span className="text-white font-semibold">{t.pub_regSocialProof}</span>{t.pub_regSocialProofSuffix}
               </div>
             </div>
           </div>
 
-          {/* Bottom: WA chat mockup */}
           <div className="relative z-10 mt-10">
             <WAChatMockup />
           </div>
@@ -248,12 +258,11 @@ export default function RegisterPage() {
         {/* Right column — form */}
         <div className="flex flex-col justify-center items-center px-6 py-12 bg-gray-50 dark:bg-gray-950">
           <div className="w-full max-w-md">
-            {/* Header */}
             <div className="text-center mb-8">
               <h1 className="text-2xl font-bold text-gray-900" data-testid="text-register-headline">
-                ابدأ تجربتك المجانية
+                {t.pub_regTitle}
               </h1>
-              <p className="text-gray-500 mt-1 text-sm">14 يوماً مجاناً — بدون بطاقة ائتمانية</p>
+              <p className="text-gray-500 mt-1 text-sm">{t.pub_regSubtitle}</p>
             </div>
 
             {/* Step indicator */}
@@ -289,23 +298,23 @@ export default function RegisterPage() {
                       <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
                         <Building2 className="h-4 w-4 text-white" />
                       </div>
-                      <h2 className="font-bold text-gray-900">معلومات الشركة</h2>
+                      <h2 className="font-bold text-gray-900">{t.pub_regCompanyInfoTitle}</h2>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="reg-company">اسم الشركة *</Label>
+                      <Label htmlFor="reg-company">{t.pub_regCompanyName}</Label>
                       <Input
                         id="reg-company"
                         value={form.companyName}
                         onChange={e => update("companyName", e.target.value)}
-                        placeholder="مثال: شركة النجاح للعقارات"
+                        placeholder={t.pub_regCompanyPlaceholder}
                         data-testid="input-reg-company"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>القطاع</Label>
+                      <Label>{t.pub_regIndustry}</Label>
                       <Select value={form.industry} onValueChange={v => update("industry", v)}>
                         <SelectTrigger data-testid="select-reg-industry">
-                          <SelectValue placeholder="اختر القطاع..." />
+                          <SelectValue placeholder={t.pub_regIndustryPlaceholder} />
                         </SelectTrigger>
                         <SelectContent>
                           {INDUSTRIES.map(ind => (
@@ -315,10 +324,10 @@ export default function RegisterPage() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>حجم الشركة</Label>
+                      <Label>{t.pub_regSize}</Label>
                       <Select value={form.size} onValueChange={v => update("size", v)}>
                         <SelectTrigger data-testid="select-reg-size">
-                          <SelectValue placeholder="اختر حجم الشركة..." />
+                          <SelectValue placeholder={t.pub_regSizePlaceholder} />
                         </SelectTrigger>
                         <SelectContent>
                           {SIZES.map(s => (
@@ -332,8 +341,8 @@ export default function RegisterPage() {
                       onClick={handleNext}
                       data-testid="button-reg-next-1"
                     >
-                      التالي
-                      <ChevronLeft className="h-4 w-4" />
+                      {t.pub_regNext}
+                      {isRTL ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                     </Button>
                   </div>
                 )}
@@ -345,64 +354,64 @@ export default function RegisterPage() {
                       <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
                         <User className="h-4 w-4 text-white" />
                       </div>
-                      <h2 className="font-bold text-gray-900">معلومات المالك</h2>
+                      <h2 className="font-bold text-gray-900">{t.pub_regOwnerInfoTitle}</h2>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="reg-owner">الاسم الكامل *</Label>
+                      <Label htmlFor="reg-owner">{t.pub_regOwnerName}</Label>
                       <Input
                         id="reg-owner"
                         value={form.ownerName}
                         onChange={e => update("ownerName", e.target.value)}
-                        placeholder="الاسم الأول والأخير"
+                        placeholder={t.pub_regOwnerPlaceholder}
                         data-testid="input-reg-owner"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="reg-email">البريد الإلكتروني *</Label>
+                      <Label htmlFor="reg-email">{t.pub_regEmail}</Label>
                       <Input
                         id="reg-email"
                         type="email"
                         value={form.email}
                         onChange={e => update("email", e.target.value)}
-                        placeholder="example@company.com"
+                        placeholder={t.pub_regEmailPlaceholder}
                         data-testid="input-reg-email"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="reg-phone">رقم الهاتف</Label>
+                      <Label htmlFor="reg-phone">{t.pub_regPhone}</Label>
                       <Input
                         id="reg-phone"
                         type="tel"
                         value={form.phone}
                         onChange={e => update("phone", e.target.value)}
-                        placeholder="+966 5XX XXX XXXX"
+                        placeholder={t.pub_regPhonePlaceholder}
                         data-testid="input-reg-phone"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="reg-username">اسم المستخدم *</Label>
+                      <Label htmlFor="reg-username">{t.pub_regUsername}</Label>
                       <Input
                         id="reg-username"
                         value={form.username}
                         onChange={e => update("username", e.target.value.toLowerCase().replace(/\s/g, ""))}
-                        placeholder="username"
+                        placeholder={t.pub_regUsernamePlaceholder}
                         dir="ltr"
                         data-testid="input-reg-username"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="reg-password">كلمة المرور *</Label>
+                      <Label htmlFor="reg-password">{t.pub_regPassword}</Label>
                       <Input
                         id="reg-password"
                         type="password"
                         value={form.password}
                         onChange={e => update("password", e.target.value)}
-                        placeholder="6 أحرف على الأقل"
+                        placeholder={t.pub_regPasswordPlaceholder}
                         data-testid="input-reg-password"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="reg-confirm">تأكيد كلمة المرور *</Label>
+                      <Label htmlFor="reg-confirm">{t.pub_regConfirmPassword}</Label>
                       <Input
                         id="reg-confirm"
                         type="password"
@@ -413,16 +422,16 @@ export default function RegisterPage() {
                     </div>
                     <div className="flex gap-3">
                       <Button variant="outline" className="flex-1" onClick={() => setStep(1)} data-testid="button-reg-back-2">
-                        <ChevronRight className="h-4 w-4 ml-1" />
-                        السابق
+                        {isRTL ? <ChevronRight className="h-4 w-4 ml-1" /> : <ChevronLeft className="h-4 w-4 mr-1" />}
+                        {t.pub_regBack}
                       </Button>
                       <Button
                         className="flex-1 gap-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
                         onClick={handleNext}
                         data-testid="button-reg-next-2"
                       >
-                        التالي
-                        <ChevronLeft className="h-4 w-4" />
+                        {t.pub_regNext}
+                        {isRTL ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                       </Button>
                     </div>
                   </div>
@@ -435,52 +444,52 @@ export default function RegisterPage() {
                       <div className="h-14 w-14 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mx-auto mb-3">
                         <CheckCircle2 className="h-7 w-7 text-white" />
                       </div>
-                      <h2 className="font-bold text-gray-900 text-xl">تأكيد التسجيل</h2>
-                      <p className="text-gray-500 text-sm">راجع بياناتك قبل إنشاء الحساب</p>
+                      <h2 className="font-bold text-gray-900 text-xl">{t.pub_regConfirmTitle}</h2>
+                      <p className="text-gray-500 text-sm">{t.pub_regConfirmSubtitle}</p>
                     </div>
 
                     <div className="bg-gray-50 rounded-xl p-4 space-y-3 text-sm border border-gray-100">
                       <div className="flex justify-between">
-                        <span className="text-gray-500">اسم الشركة</span>
+                        <span className="text-gray-500">{t.pub_regSummaryCompany}</span>
                         <span className="font-medium text-gray-900" data-testid="summary-company">{form.companyName}</span>
                       </div>
                       {form.industry && (
                         <div className="flex justify-between">
-                          <span className="text-gray-500">القطاع</span>
+                          <span className="text-gray-500">{t.pub_regSummaryIndustry}</span>
                           <span className="font-medium text-gray-900">{form.industry}</span>
                         </div>
                       )}
                       <div className="flex justify-between">
-                        <span className="text-gray-500">الاسم</span>
+                        <span className="text-gray-500">{t.pub_regSummaryName}</span>
                         <span className="font-medium text-gray-900" data-testid="summary-owner">{form.ownerName}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500">البريد الإلكتروني</span>
+                        <span className="text-gray-500">{t.pub_regSummaryEmail}</span>
                         <span className="font-medium text-gray-900" data-testid="summary-email">{form.email}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500">اسم المستخدم</span>
+                        <span className="text-gray-500">{t.pub_regSummaryUsername}</span>
                         <span className="font-medium text-gray-900" dir="ltr">{form.username}</span>
                       </div>
                     </div>
 
                     <div className="bg-indigo-50 rounded-xl p-4 text-sm text-indigo-800 border border-indigo-100 space-y-1">
-                      <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-indigo-500 shrink-0" /> ستحصل على تجربة مجانية 14 يوماً</div>
-                      <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-indigo-500 shrink-0" /> لا بطاقة ائتمانية مطلوبة</div>
-                      <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-indigo-500 shrink-0" /> يمكن الإلغاء في أي وقت</div>
+                      <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-indigo-500 shrink-0" /> {t.pub_regFreeTrialNote1}</div>
+                      <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-indigo-500 shrink-0" /> {t.pub_regFreeTrialNote2}</div>
+                      <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-indigo-500 shrink-0" /> {t.pub_regFreeTrialNote3}</div>
                     </div>
 
                     <p className="text-xs text-gray-400 text-center">
-                      بالتسجيل، أنت توافق على{" "}
-                      <Link href="/terms-of-service" className="text-indigo-600 hover:underline">شروط الاستخدام</Link>
-                      {" "}و{" "}
-                      <Link href="/privacy-policy" className="text-indigo-600 hover:underline">سياسة الخصوصية</Link>
+                      {t.pub_regAgreement}{" "}
+                      <Link href="/terms-of-service" className="text-indigo-600 hover:underline">{t.pub_regTermsLink}</Link>
+                      {" "}{t.pub_regAnd}{" "}
+                      <Link href="/privacy-policy" className="text-indigo-600 hover:underline">{t.pub_regPrivacyLink}</Link>
                     </p>
 
                     <div className="flex gap-3">
                       <Button variant="outline" className="flex-1" onClick={() => setStep(2)} disabled={loading} data-testid="button-reg-back-3">
-                        <ChevronRight className="h-4 w-4 ml-1" />
-                        السابق
+                        {isRTL ? <ChevronRight className="h-4 w-4 ml-1" /> : <ChevronLeft className="h-4 w-4 mr-1" />}
+                        {t.pub_regBack}
                       </Button>
                       <Button
                         className="flex-1 gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
@@ -488,19 +497,14 @@ export default function RegisterPage() {
                         disabled={loading}
                         data-testid="button-reg-submit"
                       >
-                        {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-                        إنشاء الحساب
+                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                        {loading ? t.pub_regSubmitting : t.pub_regSubmit}
                       </Button>
                     </div>
                   </div>
                 )}
               </CardContent>
             </Card>
-
-            <p className="text-center text-sm text-gray-500 mt-5">
-              لديك حساب بالفعل؟{" "}
-              <Link href="/auth" className="text-indigo-600 hover:underline font-medium">تسجيل الدخول</Link>
-            </p>
           </div>
         </div>
       </section>

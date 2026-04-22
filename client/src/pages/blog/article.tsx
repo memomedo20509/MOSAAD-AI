@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import {
-  ArrowRight,
+  ArrowRight, ArrowLeft,
   Clock,
   Calendar,
   Share2,
@@ -19,6 +19,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import type { Article, ArticleCategory } from "@shared/schema";
+import { useLanguage } from "@/lib/i18n";
 
 interface TocItem {
   id: string;
@@ -55,6 +56,7 @@ function injectHeadingIds(html: string): string {
 
 function ShareButtons({ title, url }: { title: string; url: string }) {
   const [copied, setCopied] = useState(false);
+  const { t } = useLanguage();
   const encodedUrl = encodeURIComponent(url);
   const encodedTitle = encodeURIComponent(title);
 
@@ -68,7 +70,7 @@ function ShareButtons({ title, url }: { title: string; url: string }) {
     <div className="flex items-center gap-2 flex-wrap">
       <span className="text-sm text-gray-500 flex items-center gap-1">
         <Share2 className="h-4 w-4" />
-        شارك:
+        {t.pub_shareLabel}
       </span>
       <Button
         variant="outline"
@@ -80,7 +82,7 @@ function ShareButtons({ title, url }: { title: string; url: string }) {
         data-testid="button-share-whatsapp"
       >
         <MessageCircle className="h-4 w-4 text-green-500" />
-        واتساب
+        WhatsApp
       </Button>
       <Button
         variant="outline"
@@ -106,7 +108,7 @@ function ShareButtons({ title, url }: { title: string; url: string }) {
         data-testid="button-share-facebook"
       >
         <Facebook className="h-4 w-4 text-blue-600" />
-        فيسبوك
+        Facebook
       </Button>
       <Button
         variant="outline"
@@ -121,7 +123,7 @@ function ShareButtons({ title, url }: { title: string; url: string }) {
         data-testid="button-share-linkedin"
       >
         <Linkedin className="h-4 w-4 text-blue-700" />
-        لينكدإن
+        LinkedIn
       </Button>
       <Button
         variant="outline"
@@ -135,23 +137,24 @@ function ShareButtons({ title, url }: { title: string; url: string }) {
         ) : (
           <Copy className="h-4 w-4" />
         )}
-        {copied ? "تم النسخ" : "نسخ الرابط"}
+        {copied ? t.pub_copied : t.pub_copyLink}
       </Button>
     </div>
   );
 }
 
 function TableOfContents({ items }: { items: TocItem[] }) {
+  const { t, isRTL } = useLanguage();
   if (items.length === 0) return null;
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sticky top-6">
       <p className="font-bold text-sm text-gray-800 mb-4 flex items-center gap-2">
         <BookOpen className="h-4 w-4 text-indigo-500" />
-        محتويات المقال
+        {t.pub_tableOfContents}
       </p>
       <ul className="space-y-1.5">
         {items.map((item) => (
-          <li key={item.id} className={item.level === 3 ? "mr-4" : ""}>
+          <li key={item.id} className={item.level === 3 ? (isRTL ? "mr-4" : "ml-4") : ""}>
             <a
               href={`#${item.id}`}
               className="text-sm text-gray-500 hover:text-indigo-600 transition-colors block py-0.5 leading-snug"
@@ -171,6 +174,9 @@ function TableOfContents({ items }: { items: TocItem[] }) {
 
 export default function BlogArticlePage({ params }: { params: { slug: string } }) {
   const slug = params.slug;
+  const { t, language, isRTL } = useLanguage();
+  const locale = language === "ar" ? "ar" : "en";
+  const BackArrow = isRTL ? ArrowRight : ArrowLeft;
 
   const { data, isLoading, isError } = useQuery<{
     article: Article & { category?: ArticleCategory };
@@ -191,6 +197,7 @@ export default function BlogArticlePage({ params }: { params: { slug: string } }
   const toc = article?.body ? extractToc(article.body) : [];
   const currentUrl = typeof window !== "undefined" ? window.location.href : "";
   const authorInitials = article?.authorName ? getInitials(article.authorName) : "S";
+  const contentLang = article?.title && /[\u0600-\u06FF]/.test(article.title) ? "ar" : "en";
 
   useEffect(() => {
     if (article) {
@@ -203,7 +210,7 @@ export default function BlogArticlePage({ params }: { params: { slug: string } }
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50" dir="rtl">
+      <div className="min-h-screen bg-gray-50" dir={isRTL ? "rtl" : "ltr"}>
         <div className="bg-gradient-to-br from-indigo-950 via-purple-900 to-blue-950 py-20 px-4">
           <div className="max-w-5xl mx-auto space-y-4">
             <Skeleton className="h-5 w-32 bg-white/10" />
@@ -225,15 +232,15 @@ export default function BlogArticlePage({ params }: { params: { slug: string } }
 
   if (isError || !article) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center" dir="rtl">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center" dir={isRTL ? "rtl" : "ltr"}>
         <div className="text-center">
           <div className="h-20 w-20 rounded-full bg-indigo-50 flex items-center justify-center mx-auto mb-4">
             <BookOpen className="h-10 w-10 text-indigo-300" />
           </div>
-          <p className="text-2xl font-bold text-gray-800 mb-2">المقال غير موجود</p>
-          <p className="text-gray-500 mb-5">لم نتمكن من إيجاد هذا المقال</p>
+          <p className="text-2xl font-bold text-gray-800 mb-2">{t.pub_articleNotFound}</p>
+          <p className="text-gray-500 mb-5">{t.pub_articleNotFoundDesc}</p>
           <Button asChild className="bg-indigo-600 hover:bg-indigo-700 text-white">
-            <Link href="/blog">العودة للمدونة</Link>
+            <Link href="/blog">{t.pub_backToBlog}</Link>
           </Button>
         </div>
       </div>
@@ -241,7 +248,7 @@ export default function BlogArticlePage({ params }: { params: { slug: string } }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50" dir="rtl">
+    <div className="min-h-screen bg-gray-50" dir={isRTL ? "rtl" : "ltr"}>
       {article.metaDescription && (
         <meta name="description" content={article.metaDescription} />
       )}
@@ -274,6 +281,9 @@ export default function BlogArticlePage({ params }: { params: { slug: string } }
             backgroundSize: "32px 32px",
           }}
         />
+        <div className="absolute inset-x-0 top-0 h-40 pointer-events-none"
+          style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 25%)" }}>
+        </div>
         <div className="absolute top-1/3 right-1/4 h-64 w-64 bg-indigo-500/20 rounded-full blur-3xl" />
         <div className="absolute bottom-0 left-1/4 h-48 w-48 bg-purple-500/20 rounded-full blur-3xl" />
 
@@ -282,11 +292,11 @@ export default function BlogArticlePage({ params }: { params: { slug: string } }
             variant="ghost"
             size="sm"
             asChild
-            className="text-indigo-300 hover:text-white hover:bg-white/10 mb-6"
+            className="text-indigo-300 hover:text-white hover:bg-white/10 mb-6 gap-1"
           >
             <Link href="/blog">
-              <ArrowRight className="h-4 w-4 ml-2" />
-              المدونة
+              <BackArrow className="h-4 w-4" />
+              {t.pub_backToBlog}
             </Link>
           </Button>
 
@@ -294,6 +304,13 @@ export default function BlogArticlePage({ params }: { params: { slug: string } }
             {article.category && (
               <Badge className="bg-white/15 text-white border-white/20 px-3 py-1">
                 {(article.category as ArticleCategory).name}
+              </Badge>
+            )}
+            {article && (
+              <Badge className={`text-xs px-2.5 py-0.5 ${contentLang === language ? "bg-white/10 text-indigo-300 border-white/10" : "bg-amber-400/20 text-amber-300 border-amber-400/20"}`} data-testid="badge-article-lang">
+                {contentLang === "ar"
+                  ? (language === "en" ? "Arabic content" : "AR")
+                  : (language === "ar" ? "محتوى إنجليزي" : "EN")}
               </Badge>
             )}
             {article.tags?.map((tag) => (
@@ -325,7 +342,7 @@ export default function BlogArticlePage({ params }: { params: { slug: string } }
             {article.publishedAt && (
               <span className="flex items-center gap-1.5 text-indigo-300 text-sm">
                 <Calendar className="h-4 w-4" />
-                {new Date(article.publishedAt).toLocaleDateString("ar", {
+                {new Date(article.publishedAt).toLocaleDateString(locale, {
                   year: "numeric",
                   month: "long",
                   day: "numeric",
@@ -335,7 +352,7 @@ export default function BlogArticlePage({ params }: { params: { slug: string } }
             {article.readingTimeMinutes && (
               <span className="flex items-center gap-1.5 text-indigo-300 text-sm">
                 <Clock className="h-4 w-4" />
-                {article.readingTimeMinutes} دقيقة للقراءة
+                {article.readingTimeMinutes} {t.pub_readingTime}
               </span>
             )}
           </div>
@@ -358,7 +375,7 @@ export default function BlogArticlePage({ params }: { params: { slug: string } }
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           <article className="lg:col-span-3">
             {article.excerpt && (
-              <p className="text-lg text-gray-600 mb-8 border-r-4 border-indigo-500 pr-4 italic leading-relaxed bg-indigo-50 py-3 rounded-l-lg">
+              <p className={`text-lg text-gray-600 mb-8 ${isRTL ? "border-r-4 pr-4 rounded-l-lg" : "border-l-4 pl-4 rounded-r-lg"} border-indigo-500 italic leading-relaxed bg-indigo-50 py-3`}>
                 {article.excerpt}
               </p>
             )}
@@ -392,14 +409,14 @@ export default function BlogArticlePage({ params }: { params: { slug: string } }
 
             {article.authorName && (
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <p className="font-bold text-sm text-gray-800 mb-4">الكاتب</p>
+                <p className="font-bold text-sm text-gray-800 mb-4">{t.pub_articleAuthor}</p>
                 <div className="flex items-center gap-3">
                   <div className="h-12 w-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0">
                     <span className="text-white text-sm font-bold">{authorInitials}</span>
                   </div>
                   <div>
                     <p className="font-semibold text-gray-800 text-sm">{article.authorName}</p>
-                    <p className="text-xs text-gray-400">كاتب في SalesBot AI</p>
+                    <p className="text-xs text-gray-400">{t.pub_authorAt}</p>
                   </div>
                 </div>
               </div>
@@ -410,11 +427,11 @@ export default function BlogArticlePage({ params }: { params: { slug: string } }
 
       {/* Related Articles */}
       {related.length > 0 && (
-        <section className="bg-white border-t border-gray-100 py-14" dir="rtl">
+        <section className="bg-white border-t border-gray-100 py-14">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-3 mb-8">
               <div className="h-1 w-8 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full" />
-              <h2 className="text-xl font-bold text-gray-900">مقالات ذات صلة</h2>
+              <h2 className="text-xl font-bold text-gray-900">{t.pub_relatedArticles}</h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               {related.map((rel) => {
@@ -451,7 +468,7 @@ export default function BlogArticlePage({ params }: { params: { slug: string } }
                           {rel.readingTimeMinutes && (
                             <p className="text-xs text-gray-400 flex items-center gap-1">
                               <Clock className="h-3 w-3" />
-                              {rel.readingTimeMinutes} دقيقة
+                              {rel.readingTimeMinutes} {t.pub_readingMinutes}
                             </p>
                           )}
                         </div>
