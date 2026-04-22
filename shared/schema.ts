@@ -975,6 +975,8 @@ export const articles = pgTable("articles", {
   slug: text("slug").notNull().unique(),
   excerpt: text("excerpt"),
   body: text("body"),
+  bodyAr: text("body_ar"),
+  bodyEn: text("body_en"),
   featuredImage: text("featured_image"),
   categoryId: varchar("category_id").references(() => articleCategories.id),
   tags: text("tags").array(),

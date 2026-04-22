@@ -193,11 +193,18 @@ export default function BlogArticlePage({ params }: { params: { slug: string } }
   const article = data?.article;
   const related = data?.related ?? [];
 
-  const processedBody = article?.body ? injectHeadingIds(article.body) : "";
-  const toc = article?.body ? extractToc(article.body) : [];
+  const activeBody = article
+    ? (language === "ar"
+        ? (article.bodyAr ?? article.bodyEn ?? article.body ?? "")
+        : (article.bodyEn ?? article.bodyAr ?? article.body ?? ""))
+    : "";
+  const processedBody = activeBody ? injectHeadingIds(activeBody) : "";
+  const toc = activeBody ? extractToc(activeBody) : [];
   const currentUrl = typeof window !== "undefined" ? window.location.href : "";
   const authorInitials = article?.authorName ? getInitials(article.authorName) : "S";
-  const contentLang = article?.title && /[\u0600-\u06FF]/.test(article.title) ? "ar" : "en";
+  const hasArContent = !!(article?.bodyAr || (!article?.bodyEn && article?.body));
+  const hasEnContent = !!(article?.bodyEn || (!article?.bodyAr && article?.body));
+  const contentLangMatch = language === "ar" ? hasArContent : hasEnContent;
 
   useEffect(() => {
     if (article) {
@@ -307,10 +314,8 @@ export default function BlogArticlePage({ params }: { params: { slug: string } }
               </Badge>
             )}
             {article && (
-              <Badge className={`text-xs px-2.5 py-0.5 ${contentLang === language ? "bg-white/10 text-indigo-300 border-white/10" : "bg-amber-400/20 text-amber-300 border-amber-400/20"}`} data-testid="badge-article-lang">
-                {contentLang === "ar"
-                  ? (language === "en" ? "Arabic content" : "AR")
-                  : (language === "ar" ? "محتوى إنجليزي" : "EN")}
+              <Badge className={`text-xs px-2.5 py-0.5 ${contentLangMatch ? "bg-white/10 text-indigo-300 border-white/10" : "bg-amber-400/20 text-amber-300 border-amber-400/20"}`} data-testid="badge-article-lang">
+                {language === "ar" ? "AR" : "EN"}
               </Badge>
             )}
             {article.tags?.map((tag) => (

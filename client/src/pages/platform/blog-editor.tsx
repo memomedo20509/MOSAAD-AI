@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/lib/i18n";
@@ -35,6 +36,11 @@ function slugify(text: string) {
 function countWords(html: string) {
   const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   return text ? text.split(" ").length : 0;
+}
+
+function isArabicContent(html: string): boolean {
+  const text = html.replace(/<[^>]+>/g, " ");
+  return /[\u0600-\u06FF]/.test(text);
 }
 
 function hasInternalLinks(html: string) {
@@ -205,20 +211,38 @@ export default function BlogEditorPage({ params }: { params?: { id?: string } })
     enabled: !!articleId,
   });
 
-  const editor = useEditor({
+  const editorAr = useEditor({
     extensions: [
       StarterKit,
       Underline,
       Image,
       TipTapLink.configure({ openOnClick: false }),
-      Placeholder.configure({ placeholder: t.blogEditorContentPlaceholder }),
+      Placeholder.configure({ placeholder: t.blogEditorContentArPlaceholder }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
     ],
     content: "",
     editorProps: {
       attributes: {
         class: "prose prose-sm sm:prose dark:prose-invert max-w-none min-h-[400px] p-4 focus:outline-none",
-        dir: isRTL ? "rtl" : "ltr",
+        dir: "rtl",
+      },
+    },
+  });
+
+  const editorEn = useEditor({
+    extensions: [
+      StarterKit,
+      Underline,
+      Image,
+      TipTapLink.configure({ openOnClick: false }),
+      Placeholder.configure({ placeholder: t.blogEditorContentEnPlaceholder }),
+      TextAlign.configure({ types: ["heading", "paragraph"] }),
+    ],
+    content: "",
+    editorProps: {
+      attributes: {
+        class: "prose prose-sm sm:prose dark:prose-invert max-w-none min-h-[400px] p-4 focus:outline-none",
+        dir: "ltr",
       },
     },
   });
@@ -242,13 +266,29 @@ export default function BlogEditorPage({ params }: { params?: { id?: string } })
   }, [existingArticle]);
 
   useEffect(() => {
-    if (existingArticle?.body && editor && !editor.isDestroyed) {
-      editor.commands.setContent(existingArticle.body);
+    if (existingArticle && editorAr && !editorAr.isDestroyed) {
+      let arContent = existingArticle.bodyAr ?? "";
+      if (!arContent && !existingArticle.bodyEn && existingArticle.body) {
+        arContent = isArabicContent(existingArticle.body) ? existingArticle.body : "";
+      }
+      editorAr.commands.setContent(arContent);
     }
-  }, [existingArticle?.body, editor]);
+  }, [existingArticle?.bodyAr, existingArticle?.bodyEn, existingArticle?.body, editorAr]);
 
-  const body = editor?.getHTML() ?? "";
-  const wordCount = countWords(body);
+  useEffect(() => {
+    if (existingArticle && editorEn && !editorEn.isDestroyed) {
+      let enContent = existingArticle.bodyEn ?? "";
+      if (!enContent && !existingArticle.bodyAr && existingArticle.body) {
+        enContent = !isArabicContent(existingArticle.body) ? existingArticle.body : "";
+      }
+      editorEn.commands.setContent(enContent);
+    }
+  }, [existingArticle?.bodyEn, existingArticle?.bodyAr, existingArticle?.body, editorEn]);
+
+  const bodyAr = editorAr?.getHTML() ?? "";
+  const bodyEn = editorEn?.getHTML() ?? "";
+  const primaryBody = bodyAr || bodyEn;
+  const wordCount = countWords(primaryBody);
   const readingTime = Math.max(1, Math.round(wordCount / 200));
 
   const handleTitleChange = (title: string) => {
@@ -279,7 +319,8 @@ export default function BlogEditorPage({ params }: { params?: { id?: string } })
       title: form.title,
       slug: form.slug,
       excerpt: form.excerpt || undefined,
-      body,
+      bodyAr: bodyAr || undefined,
+      bodyEn: bodyEn || undefined,
       featuredImage: form.featuredImage || undefined,
       categoryId: form.categoryId || undefined,
       tags,
@@ -368,11 +409,29 @@ export default function BlogEditorPage({ params }: { params?: { id?: string } })
                 <span className="text-xs font-normal text-muted-foreground">{wordCount} {t.blogEditorWordCount} | {readingTime} {t.blogEditorReadTime}</span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-2">
-              <div className="border rounded-md overflow-hidden">
-                <EditorToolbar editor={editor} />
-                <EditorContent editor={editor} data-testid="editor-content" />
-              </div>
+            <CardContent className="pt-3">
+              <Tabs defaultValue="ar">
+                <TabsList className="mb-3">
+                  <TabsTrigger value="ar" data-testid="tab-content-ar">
+                    {t.blogEditorContentAr}
+                  </TabsTrigger>
+                  <TabsTrigger value="en" data-testid="tab-content-en">
+                    {t.blogEditorContentEn}
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="ar">
+                  <div className="border rounded-md overflow-hidden" dir="rtl">
+                    <EditorToolbar editor={editorAr} />
+                    <EditorContent editor={editorAr} data-testid="editor-content-ar" />
+                  </div>
+                </TabsContent>
+                <TabsContent value="en">
+                  <div className="border rounded-md overflow-hidden" dir="ltr">
+                    <EditorToolbar editor={editorEn} />
+                    <EditorContent editor={editorEn} data-testid="editor-content-en" />
+                  </div>
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
 
@@ -422,7 +481,7 @@ export default function BlogEditorPage({ params }: { params?: { id?: string } })
         </div>
 
         <div className="space-y-4">
-          <SeoScorePanel title={form.title} metaDesc={form.metaDescription} body={body} />
+          <SeoScorePanel title={form.title} metaDesc={form.metaDescription} body={primaryBody} />
 
           <Card>
             <CardHeader className="pb-3">
