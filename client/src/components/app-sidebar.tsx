@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/collapsible";
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/i18n";
+import { LanguageToggle } from "@/components/language-toggle";
 import { type UserRole, normalizeRole, isPlatformAdmin } from "@shared/models/auth";
 import { useQuery } from "@tanstack/react-query";
 
@@ -469,7 +470,10 @@ export function AppSidebar() {
             <span>{t.navTour}</span>
           </button>
         </div>
-        <div className="text-xs text-muted-foreground">SalesBot AI v1.0</div>
+        <div className="flex items-center justify-between">
+          <div className="text-xs text-muted-foreground">SalesBot AI v1.0</div>
+          <LanguageToggle />
+        </div>
       </SidebarFooter>
     </Sidebar>
   );
