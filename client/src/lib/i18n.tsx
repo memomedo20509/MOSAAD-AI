@@ -2572,6 +2572,28 @@ export const translations = {
     // CSV import row-level error reasons
     importErrNameRequired: "الاسم مطلوب",
     importErrUnknown: "خطأ غير معروف",
+
+    // Profile page
+    myProfile: "ملفي الشخصي",
+    profileUpdated: "تم تحديث الملف الشخصي بنجاح",
+    profileUpdateError: "فشل في تحديث الملف الشخصي",
+    currentPassword: "كلمة المرور الحالية",
+    newPassword: "كلمة المرور الجديدة",
+    confirmNewPassword: "تأكيد كلمة المرور الجديدة",
+    passwordChangedSuccess: "تم تغيير كلمة المرور بنجاح",
+    passwordChangeError: "فشل في تغيير كلمة المرور",
+    wrongCurrentPassword: "كلمة المرور الحالية غير صحيحة",
+    profilePictureUrl: "رابط صورة الملف الشخصي",
+    lastLogin: "آخر تسجيل دخول",
+    accountInfo: "معلومات الحساب",
+    personalInfo: "المعلومات الشخصية",
+    changePassword: "تغيير كلمة المرور",
+    passwordMinLength6: "كلمة المرور يجب أن تكون 6 أحرف على الأقل",
+    passwordsDoNotMatch: "كلمات المرور غير متطابقة",
+    noLastLogin: "لم يتم تسجيل الدخول بعد",
+    profileEmailPlaceholder: "example@company.com",
+    profilePhonePlaceholder: "+966 5XX XXX XXXX",
+    profileImageUrlPlaceholder: "https://example.com/avatar.jpg",
   },
   en: {
     // App
@@ -5143,6 +5165,28 @@ export const translations = {
     // CSV import row-level error reasons
     importErrNameRequired: "Name is required",
     importErrUnknown: "Unknown error",
+
+    // Profile page
+    myProfile: "My Profile",
+    profileUpdated: "Profile updated successfully",
+    profileUpdateError: "Failed to update profile",
+    currentPassword: "Current Password",
+    newPassword: "New Password",
+    confirmNewPassword: "Confirm New Password",
+    passwordChangedSuccess: "Password changed successfully",
+    passwordChangeError: "Failed to change password",
+    wrongCurrentPassword: "Current password is incorrect",
+    profilePictureUrl: "Profile Picture URL",
+    lastLogin: "Last Login",
+    accountInfo: "Account Information",
+    personalInfo: "Personal Information",
+    changePassword: "Change Password",
+    passwordMinLength6: "Password must be at least 6 characters",
+    passwordsDoNotMatch: "Passwords do not match",
+    noLastLogin: "Never logged in",
+    profileEmailPlaceholder: "example@company.com",
+    profilePhonePlaceholder: "+966 5XX XXX XXXX",
+    profileImageUrlPlaceholder: "https://example.com/avatar.jpg",
   },
 };
 

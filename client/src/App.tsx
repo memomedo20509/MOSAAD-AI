@@ -70,6 +70,7 @@ import SupportTicketsPage from "@/pages/support/tickets";
 import SupportTicketDetailPage from "@/pages/support/ticket-detail";
 import ProductsPage from "@/pages/products";
 import OrdersPage from "@/pages/orders";
+import ProfilePage from "@/pages/profile";
 
 // Public-only paths — always shown with PublicLayout, no auth required
 const ALWAYS_PUBLIC_PATHS = ["/pricing", "/about", "/contact", "/privacy-policy", "/terms-of-service"];
@@ -124,6 +125,7 @@ function AppRouter() {
       <Route path="/orders">{() => <EcommerceRoute><OrdersPage /></EcommerceRoute>}</Route>
       <Route path="/support/tickets" component={SupportTicketsPage} />
       <Route path="/support/tickets/:id" component={SupportTicketDetailPage} />
+      <Route path="/profile" component={ProfilePage} />
       <Route component={NotFound} />
     </Switch>
   );

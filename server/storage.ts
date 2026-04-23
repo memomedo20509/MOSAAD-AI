@@ -177,6 +177,8 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   getAllUsers(companyId?: string | null): Promise<User[]>;
   updateUser(id: string, data: UpdateUser): Promise<User | undefined>;
+  updateUserProfile(id: string, data: { firstName?: string | null; lastName?: string | null; email?: string | null; phone?: string | null; profileImageUrl?: string | null }): Promise<User | undefined>;
+  updateUserPassword(id: string, hashedPassword: string): Promise<User | undefined>;
   
   // Teams
   getAllTeams(companyId?: string | null): Promise<Team[]>;
@@ -784,6 +786,16 @@ export class DatabaseStorage implements IStorage {
 
   async updateUser(id: string, data: UpdateUser): Promise<User | undefined> {
     const [updated] = await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id)).returning();
+    return updated;
+  }
+
+  async updateUserProfile(id: string, data: { firstName?: string | null; lastName?: string | null; email?: string | null; phone?: string | null; profileImageUrl?: string | null }): Promise<User | undefined> {
+    const [updated] = await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id)).returning();
+    return updated;
+  }
+
+  async updateUserPassword(id: string, hashedPassword: string): Promise<User | undefined> {
+    const [updated] = await db.update(users).set({ password: hashedPassword, updatedAt: new Date() }).where(eq(users.id, id)).returning();
     return updated;
   }
 

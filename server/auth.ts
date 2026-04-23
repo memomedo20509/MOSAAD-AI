@@ -198,7 +198,68 @@ export function registerAuthRoutes(app: Express) {
     } catch (err) {
       console.warn("[api/user] Failed to fetch companyBusinessType:", (err as Error)?.message ?? err);
     }
-    res.json({ ...userWithoutPassword, permissions: effectivePermissions, companyBusinessType });
+    res.json({ ...userWithoutPassword, permissions: effectivePermissions, companyBusinessType, lastLogin: userWithoutPassword.lastLogin });
+  });
+
+  app.patch("/api/user/profile", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as SelectUser;
+      const { z } = await import("zod");
+      const schema = z.object({
+        firstName: z.string().optional().nullable(),
+        lastName: z.string().optional().nullable(),
+        email: z.string().email().optional().nullable(),
+        phone: z.string().optional().nullable(),
+        profileImageUrl: z.string().url().optional().nullable().or(z.literal("")),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid data", details: parsed.error.issues });
+      }
+      const data = parsed.data;
+      // Check email uniqueness if changed
+      if (data.email && data.email !== user.email) {
+        const existing = await storage.getUserByEmail(data.email);
+        if (existing && existing.id !== user.id) {
+          return res.status(400).json({ error: "Email already in use" });
+        }
+      }
+      const updated = await storage.updateUserProfile(user.id, data);
+      if (!updated) return res.status(404).json({ error: "User not found" });
+      const { password: _, ...userWithoutPassword } = updated;
+      res.json(userWithoutPassword);
+    } catch (err) {
+      console.error("[PATCH /api/user/profile]", err);
+      res.status(500).json({ error: "Failed to update profile" });
+    }
+  });
+
+  app.post("/api/user/change-password", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as SelectUser;
+      const { z } = await import("zod");
+      const schema = z.object({
+        currentPassword: z.string().min(1),
+        newPassword: z.string().min(6),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid data", details: parsed.error.issues });
+      }
+      const { currentPassword, newPassword } = parsed.data;
+      const fullUser = await storage.getUser(user.id);
+      if (!fullUser) return res.status(404).json({ error: "User not found" });
+      const isValid = await comparePasswords(currentPassword, fullUser.password);
+      if (!isValid) {
+        return res.status(400).json({ error: "Wrong current password" });
+      }
+      const hashed = await hashPassword(newPassword);
+      await storage.updateUserPassword(user.id, hashed);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("[POST /api/user/change-password]", err);
+      res.status(500).json({ error: "Failed to change password" });
+    }
   });
 }
 

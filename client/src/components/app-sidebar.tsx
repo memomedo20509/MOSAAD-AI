@@ -26,6 +26,7 @@ import {
   LifeBuoy,
   Package,
   ShoppingBag,
+  CircleUser,
 } from "lucide-react";
 import { useTour } from "@/hooks/use-tour";
 import { Badge } from "@/components/ui/badge";
@@ -443,9 +444,9 @@ export function AppSidebar() {
         {user && (
           <div className="mb-2 flex items-start justify-between gap-2" data-testid="sidebar-user-profile">
             <div className="flex flex-col gap-0.5 min-w-0">
-              <span className="text-sm font-medium truncate" data-testid="text-sidebar-username">
+              <Link href="/profile" className="text-sm font-medium truncate hover:text-primary transition-colors" data-testid="link-my-profile">
                 {user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.username}
-              </span>
+              </Link>
               <span className="text-xs text-muted-foreground" data-testid="text-sidebar-role">
                 {userRole ? (roleDisplayNames[userRole] ?? user.role) : user.role}
               </span>
@@ -460,6 +461,14 @@ export function AppSidebar() {
             )}
           </div>
         )}
+        <div className="mb-1">
+          <Link href="/profile" data-testid="link-nav-profile">
+            <button className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+              <CircleUser className="h-3.5 w-3.5" />
+              <span>{t.myProfile}</span>
+            </button>
+          </Link>
+        </div>
         <div className="border-t pt-2 mb-1">
           <button
             onClick={openTour}
