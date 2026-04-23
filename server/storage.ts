@@ -183,6 +183,8 @@ export interface IStorage {
   updateUserPasswordReset(id: string, data: { resetPasswordToken?: string | null; resetPasswordExpiry?: Date | null }): Promise<User | undefined>;
   getUserByResetToken(token: string): Promise<User | undefined>;
   getUserByVerificationToken(token: string): Promise<User | undefined>;
+  getUserByGoogleId(googleId: string): Promise<User | undefined>;
+  updateUserGoogleId(id: string, data: { googleId: string; emailVerifiedAt?: Date | null; profileImageUrl?: string | null }): Promise<User | undefined>;
   
   // Teams
   getAllTeams(companyId?: string | null): Promise<Team[]>;
@@ -810,6 +812,19 @@ export class DatabaseStorage implements IStorage {
 
   async updateUserPasswordReset(id: string, data: { resetPasswordToken?: string | null; resetPasswordExpiry?: Date | null }): Promise<User | undefined> {
     const [updated] = await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id)).returning();
+    return updated;
+  }
+
+  async getUserByGoogleId(googleId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.googleId, googleId));
+    return user;
+  }
+
+  async updateUserGoogleId(id: string, data: { googleId: string; emailVerifiedAt?: Date | null; profileImageUrl?: string | null }): Promise<User | undefined> {
+    const updateData: Record<string, unknown> = { googleId: data.googleId, updatedAt: new Date() };
+    if (data.emailVerifiedAt !== undefined) updateData.emailVerifiedAt = data.emailVerifiedAt;
+    if (data.profileImageUrl !== undefined) updateData.profileImageUrl = data.profileImageUrl;
+    const [updated] = await db.update(users).set(updateData).where(eq(users.id, id)).returning();
     return updated;
   }
 

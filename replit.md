@@ -41,7 +41,7 @@ Preferred communication style: Simple, everyday language.
 - **Runtime**: Node.js with Express
 - **Language**: TypeScript (tsx for development)
 - **Database ORM**: Drizzle ORM with PostgreSQL
-- **Authentication**: Passport.js with local strategy and session-based auth
+- **Authentication**: Passport.js with local strategy + Google OAuth 2.0 (passport-google-oauth20); Google sign-in is feature-flagged behind `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` env vars
 - **Session Storage**: PostgreSQL-backed sessions via connect-pg-simple
 - **WhatsApp**: Baileys library (QR-based connection, not Cloud API)
 - **AI Engine**: OpenRouter (default, Gemini models) or OpenAI — configurable via Integrations page with DB-persisted settings (integration_settings table: ai_provider, openrouter_api_key, openrouter_model)
@@ -68,7 +68,7 @@ Preferred communication style: Simple, everyday language.
 - **articles** — Blog articles with rich HTML body, SEO fields (meta_title, meta_description, og_image), status (draft/published/archived), category, tags, reading_time_minutes
 
 ### Auth Data Model (shared/models/auth.ts)
-- **users** – Platform users with roles: super_admin, admin, sales_admin, team_leader, sales_agent, platform_admin
+- **users** – Platform users with roles: super_admin, admin, sales_admin, team_leader, sales_agent, platform_admin; includes `googleId` for OAuth account linking
 - **teams** – User team groupings
 - **sessions** – Express session storage
 - **plans** – Subscription plans (name, priceMonthly, maxUsers, features)

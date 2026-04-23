@@ -9,8 +9,10 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 import { Building2, User, CheckCircle2, Loader2, ChevronRight, ChevronLeft, Zap, Shield, Clock, Smartphone, SlidersHorizontal, Rocket } from "lucide-react";
+import { SiGoogle } from "react-icons/si";
 import { WAChatMockup } from "@/components/public-mockups";
 import { useLanguage } from "@/lib/i18n";
+import { useQuery } from "@tanstack/react-query";
 
 const INDUSTRIES_AR = [
   "عقارات", "تجزئة وتجارة إلكترونية", "تعليم", "صحة وطب",
@@ -55,6 +57,10 @@ export default function RegisterPage() {
   const { toast } = useToast();
   const { t, language, isRTL } = useLanguage();
   const [step, setStep] = useState(1);
+
+  const { data: authConfig } = useQuery<{ googleEnabled: boolean }>({
+    queryKey: ["/api/auth/config"],
+  });
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<FormData>({
     companyName: "",
@@ -264,6 +270,30 @@ export default function RegisterPage() {
               </h1>
               <p className="text-gray-500 mt-1 text-sm">{t.pub_regSubtitle}</p>
             </div>
+
+            {authConfig?.googleEnabled && (
+              <div className="mb-6">
+                <a href="/api/auth/google" data-testid="button-google-signin-register">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full gap-2 border-gray-300 hover:bg-gray-50"
+                    asChild={false}
+                  >
+                    <SiGoogle className="h-4 w-4 text-[#4285F4]" />
+                    {t.continueWithGoogle}
+                  </Button>
+                </a>
+                <div className="relative my-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-gray-200" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-gray-50 dark:bg-gray-950 px-2 text-gray-400">{t.orDivider}</span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Step indicator */}
             <div className="flex items-center justify-center gap-2 mb-8">

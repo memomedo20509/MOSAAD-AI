@@ -2615,6 +2615,11 @@ export const translations = {
     resendVerificationEmailRateLimit: "يرجى الانتظار 5 دقائق قبل طلب بريد آخر.",
     resendVerificationEmailError: "فشل إرسال رسالة التحقق.",
     emailVerifiedSuccess: "تم التحقق من البريد الإلكتروني بنجاح!",
+
+    // Google OAuth
+    continueWithGoogle: "المتابعة بحساب Google",
+    orDivider: "أو",
+    googleSignInFailed: "فشل تسجيل الدخول بـ Google. يرجى المحاولة مجدداً.",
   },
   en: {
     // App
@@ -5229,6 +5234,11 @@ export const translations = {
     resendVerificationEmailRateLimit: "Please wait 5 minutes before requesting another email.",
     resendVerificationEmailError: "Failed to send verification email.",
     emailVerifiedSuccess: "Email verified successfully!",
+
+    // Google OAuth
+    continueWithGoogle: "Continue with Google",
+    orDivider: "or",
+    googleSignInFailed: "Google sign-in failed. Please try again.",
   },
 };
 

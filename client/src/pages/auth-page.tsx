@@ -8,8 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Zap, Shield, Clock, Languages } from "lucide-react";
+import { SiGoogle } from "react-icons/si";
 import { WAChatMockup } from "@/components/public-mockups";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
 
 export default function AuthPage() {
   const [, navigate] = useLocation();
@@ -17,6 +19,10 @@ export default function AuthPage() {
   const { t, language, setLanguage } = useLanguage();
   const { toast } = useToast();
   const toastShown = useRef(false);
+
+  const { data: authConfig } = useQuery<{ googleEnabled: boolean }>({
+    queryKey: ["/api/auth/config"],
+  });
 
   useEffect(() => {
     if (toastShown.current) return;
@@ -26,6 +32,13 @@ export default function AuthPage() {
       toast({ title: t.resetPasswordSuccess });
       const url = new URL(window.location.href);
       url.searchParams.delete("resetSuccess");
+      window.history.replaceState({}, "", url.toString());
+    }
+    if (params.get("error") === "google_failed") {
+      toastShown.current = true;
+      toast({ title: t.googleSignInFailed, variant: "destructive" });
+      const url = new URL(window.location.href);
+      url.searchParams.delete("error");
       window.history.replaceState({}, "", url.toString());
     }
   }, []);
@@ -166,6 +179,30 @@ export default function AuthPage() {
                 {t.switchLanguage}
               </Button>
             </div>
+
+            {authConfig?.googleEnabled && (
+              <div className="mb-4">
+                <a href="/api/auth/google" data-testid="button-google-signin">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full gap-2 border-gray-300 hover:bg-gray-50"
+                    asChild={false}
+                  >
+                    <SiGoogle className="h-4 w-4 text-[#4285F4]" />
+                    {t.continueWithGoogle}
+                  </Button>
+                </a>
+                <div className="relative my-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-gray-200" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-gray-50 dark:bg-gray-950 px-2 text-gray-400">{t.orDivider}</span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <Card className="shadow-xl border border-gray-100">
               <CardContent className="p-6">

@@ -50,6 +50,7 @@ export const users = pgTable("users", {
   emailVerificationExpiry: timestamp("email_verification_expiry"),
   resetPasswordToken: varchar("reset_password_token"),
   resetPasswordExpiry: timestamp("reset_password_expiry"),
+  googleId: varchar("google_id").unique(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

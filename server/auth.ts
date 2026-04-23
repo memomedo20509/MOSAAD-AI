@@ -1,5 +1,6 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
+import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import type { Express, Request, Response, NextFunction } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -68,6 +69,90 @@ export function setupAuth(app: Express) {
       }
     }),
   );
+
+  // Google OAuth strategy (only register if credentials are configured)
+  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+    passport.use(
+      new GoogleStrategy(
+        {
+          clientID: process.env.GOOGLE_CLIENT_ID,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+          callbackURL: "/api/auth/google/callback",
+          state: true,
+        },
+        async (_accessToken, _refreshToken, profile, done) => {
+          try {
+            const googleId = profile.id;
+            const email = profile.emails?.[0]?.value ?? null;
+            const firstName = profile.name?.givenName ?? null;
+            const lastName = profile.name?.familyName ?? null;
+            const profileImageUrl = profile.photos?.[0]?.value ?? null;
+
+            // 1. Look up by googleId first
+            let user = await storage.getUserByGoogleId(googleId);
+            if (user) {
+              if (!user.isActive || isPlatformAdmin(user.role)) {
+                return done(null, false);
+              }
+              return done(null, user);
+            }
+
+            // 2. Look up by email to link existing account
+            if (email) {
+              const existingByEmail = await storage.getUserByEmail(email);
+              if (existingByEmail) {
+                if (!existingByEmail.isActive || isPlatformAdmin(existingByEmail.role)) {
+                  return done(null, false);
+                }
+                const linked = await storage.updateUserGoogleId(existingByEmail.id, {
+                  googleId,
+                  emailVerifiedAt: existingByEmail.emailVerifiedAt ?? new Date(),
+                  profileImageUrl: existingByEmail.profileImageUrl ?? profileImageUrl,
+                });
+                return done(null, linked ?? existingByEmail);
+              }
+            }
+
+            // 3. Create a new user
+            let defaultCompanyId: string | null = null;
+            try {
+              const { rows } = await pool.query(`SELECT id FROM companies WHERE slug = 'demo-company' LIMIT 1`);
+              if (rows.length > 0) defaultCompanyId = rows[0].id;
+            } catch { /* ignore */ }
+
+            // Generate a username from email or googleId
+            let baseUsername = email
+              ? email.split("@")[0].replace(/[^a-z0-9._-]/gi, "").toLowerCase()
+              : `user_${googleId.slice(0, 8)}`;
+            // Ensure uniqueness
+            let username = baseUsername;
+            let suffix = 1;
+            while (await storage.getUserByUsername(username)) {
+              username = `${baseUsername}${suffix++}`;
+            }
+
+            const newUser = await storage.createUser({
+              username,
+              password: await hashPassword(randomBytes(32).toString("hex")),
+              email,
+              firstName,
+              lastName,
+              profileImageUrl,
+              role: "sales_agent",
+              isActive: true,
+              companyId: defaultCompanyId,
+              googleId,
+              emailVerifiedAt: new Date(),
+            });
+
+            return done(null, newUser);
+          } catch (err) {
+            return done(err as Error);
+          }
+        }
+      )
+    );
+  }
 
   passport.serializeUser((user, done) => done(null, user.id));
   passport.deserializeUser(async (id: string, done) => {
@@ -363,6 +448,36 @@ export function registerAuthRoutes(app: Express) {
       console.error("[POST /api/auth/forgot-password]", err);
       res.json({ success: true });
     }
+  });
+
+  // Google OAuth config endpoint - tells frontend if Google OAuth is available
+  app.get("/api/auth/config", (_req, res) => {
+    res.json({ googleEnabled: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) });
+  });
+
+  // Google OAuth routes (only active when credentials are configured)
+  app.get("/api/auth/google", (req, res, next) => {
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+      return res.status(404).json({ error: "Google OAuth is not configured" });
+    }
+    passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
+  });
+
+  app.get("/api/auth/google/callback", (req, res, next) => {
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+      return res.redirect("/auth?error=google_failed");
+    }
+    passport.authenticate("google", { failureRedirect: "/auth?error=google_failed" }, (err: Error | null, user: SelectUser | false) => {
+      if (err || !user) {
+        return res.redirect("/auth?error=google_failed");
+      }
+      req.login(user, (loginErr) => {
+        if (loginErr) {
+          return res.redirect("/auth?error=google_failed");
+        }
+        res.redirect("/");
+      });
+    })(req, res, next);
   });
 
   app.post("/api/auth/reset-password", async (req, res) => {
