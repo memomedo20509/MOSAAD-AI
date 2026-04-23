@@ -21,7 +21,8 @@ import { PublicLayout } from "@/components/public-layout";
 import { TourProvider, useTour } from "@/hooks/use-tour";
 import { GuidedTour } from "@/components/guided-tour";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { useToast } from "@/hooks/use-toast";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import LeadsPage from "@/pages/leads";
@@ -71,6 +72,8 @@ import SupportTicketDetailPage from "@/pages/support/ticket-detail";
 import ProductsPage from "@/pages/products";
 import OrdersPage from "@/pages/orders";
 import ProfilePage from "@/pages/profile";
+import ForgotPasswordPage from "@/pages/forgot-password";
+import ResetPasswordPage from "@/pages/reset-password";
 
 // Public-only paths — always shown with PublicLayout, no auth required
 const ALWAYS_PUBLIC_PATHS = ["/pricing", "/about", "/contact", "/privacy-policy", "/terms-of-service"];
@@ -199,7 +202,23 @@ function OnboardingGuard({ children }: { children: React.ReactNode }) {
 
 function AuthenticatedApp() {
   const { user } = useAuth();
+  const { t } = useLanguage();
+  const { toast } = useToast();
+  const toastShown = useRef(false);
   useRealtime();
+
+  useEffect(() => {
+    if (toastShown.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const emailVerified = params.get("emailVerified");
+    if (emailVerified === "1") {
+      toastShown.current = true;
+      toast({ title: t.emailVerifiedSuccess, variant: "default" });
+      const url = new URL(window.location.href);
+      url.searchParams.delete("emailVerified");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
 
   if (user?.role === "platform_admin") {
     return <PlatformRouter />;
@@ -313,6 +332,14 @@ function AppContent() {
   if (location === "/auth") {
     if (user) return <Redirect to="/" />;
     return <PublicLayout><AuthPage /></PublicLayout>;
+  }
+
+  // Forgot password & reset password — public pages, no auth required
+  if (location === "/forgot-password") {
+    return <ForgotPasswordPage />;
+  }
+  if (location.startsWith("/reset-password")) {
+    return <ResetPasswordPage />;
   }
 
   // Register page: only for non-authenticated users

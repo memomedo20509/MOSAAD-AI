@@ -45,6 +45,7 @@ Preferred communication style: Simple, everyday language.
 - **Session Storage**: PostgreSQL-backed sessions via connect-pg-simple
 - **WhatsApp**: Baileys library (QR-based connection, not Cloud API)
 - **AI Engine**: OpenRouter (default, Gemini models) or OpenAI — configurable via Integrations page with DB-persisted settings (integration_settings table: ai_provider, openrouter_api_key, openrouter_model)
+- **Email**: Resend SDK (`server/email.ts`) — sends HTML-templated verification and password reset emails; falls back gracefully if `RESEND_API_KEY` is not set
 
 ### Data Model (shared/schema.ts)
 - **leads** — CRM leads with bot tracking fields (botActive, botStage)

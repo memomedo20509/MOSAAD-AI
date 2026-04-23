@@ -179,6 +179,10 @@ export interface IStorage {
   updateUser(id: string, data: UpdateUser): Promise<User | undefined>;
   updateUserProfile(id: string, data: { firstName?: string | null; lastName?: string | null; email?: string | null; phone?: string | null; profileImageUrl?: string | null }): Promise<User | undefined>;
   updateUserPassword(id: string, hashedPassword: string): Promise<User | undefined>;
+  updateUserEmailVerification(id: string, data: { emailVerifiedAt?: Date | null; emailVerificationToken?: string | null; emailVerificationExpiry?: Date | null }): Promise<User | undefined>;
+  updateUserPasswordReset(id: string, data: { resetPasswordToken?: string | null; resetPasswordExpiry?: Date | null }): Promise<User | undefined>;
+  getUserByResetToken(token: string): Promise<User | undefined>;
+  getUserByVerificationToken(token: string): Promise<User | undefined>;
   
   // Teams
   getAllTeams(companyId?: string | null): Promise<Team[]>;
@@ -797,6 +801,26 @@ export class DatabaseStorage implements IStorage {
   async updateUserPassword(id: string, hashedPassword: string): Promise<User | undefined> {
     const [updated] = await db.update(users).set({ password: hashedPassword, updatedAt: new Date() }).where(eq(users.id, id)).returning();
     return updated;
+  }
+
+  async updateUserEmailVerification(id: string, data: { emailVerifiedAt?: Date | null; emailVerificationToken?: string | null; emailVerificationExpiry?: Date | null }): Promise<User | undefined> {
+    const [updated] = await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id)).returning();
+    return updated;
+  }
+
+  async updateUserPasswordReset(id: string, data: { resetPasswordToken?: string | null; resetPasswordExpiry?: Date | null }): Promise<User | undefined> {
+    const [updated] = await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id)).returning();
+    return updated;
+  }
+
+  async getUserByResetToken(token: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.resetPasswordToken, token));
+    return user;
+  }
+
+  async getUserByVerificationToken(token: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.emailVerificationToken, token));
+    return user;
   }
 
   // Teams

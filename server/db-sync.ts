@@ -37,6 +37,11 @@ export async function syncDatabaseSchema(): Promise<void> {
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS company_id VARCHAR REFERENCES companies(id)`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS has_completed_onboarding BOOLEAN DEFAULT false`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS has_seen_tour BOOLEAN DEFAULT false`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_expiry TIMESTAMP`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_token VARCHAR`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_expiry TIMESTAMP`);
 
     await client.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone2 TEXT`);
     await client.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS state_id VARCHAR`);

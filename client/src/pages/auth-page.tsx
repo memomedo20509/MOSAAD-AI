@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/i18n";
@@ -9,11 +9,26 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Zap, Shield, Clock, Languages } from "lucide-react";
 import { WAChatMockup } from "@/components/public-mockups";
+import { useToast } from "@/hooks/use-toast";
 
 export default function AuthPage() {
   const [, navigate] = useLocation();
   const { user, loginMutation, registerMutation } = useAuth();
   const { t, language, setLanguage } = useLanguage();
+  const { toast } = useToast();
+  const toastShown = useRef(false);
+
+  useEffect(() => {
+    if (toastShown.current) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("resetSuccess") === "1") {
+      toastShown.current = true;
+      toast({ title: t.resetPasswordSuccess });
+      const url = new URL(window.location.href);
+      url.searchParams.delete("resetSuccess");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
 
   const BENEFITS = [
     { icon: Zap, title: t.authBenefit1Title, desc: t.authBenefit1Desc },
@@ -192,6 +207,12 @@ export default function AuthPage() {
                         {loginMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                         {t.login}
                       </Button>
+
+                      <div className="text-center">
+                        <Link href="/forgot-password" className="text-sm text-indigo-600 hover:underline" data-testid="link-forgot-password">
+                          {t.forgotPassword}
+                        </Link>
+                      </div>
 
                       {import.meta.env.DEV && (
                         <div className="mt-4 pt-4 border-t">

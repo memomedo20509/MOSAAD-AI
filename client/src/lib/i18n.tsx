@@ -2594,6 +2594,27 @@ export const translations = {
     profileEmailPlaceholder: "example@company.com",
     profilePhonePlaceholder: "+966 5XX XXX XXXX",
     profileImageUrlPlaceholder: "https://example.com/avatar.jpg",
+
+    // Forgot password & reset password
+    forgotPassword: "نسيت كلمة المرور؟",
+    forgotPasswordTitle: "استعادة كلمة المرور",
+    forgotPasswordDesc: "أدخل بريدك الإلكتروني وسنرسل لك رابط إعادة التعيين",
+    forgotPasswordSubmit: "إرسال رابط الاستعادة",
+    forgotPasswordSent: "إذا كان هذا البريد الإلكتروني موجوداً، ستصلك رسالة قريباً.",
+    forgotPasswordError: "فشل إرسال البريد الإلكتروني. يرجى المحاولة مجدداً.",
+    resetPassword: "إعادة تعيين كلمة المرور",
+    resetPasswordTitle: "إعادة تعيين كلمة المرور",
+    resetPasswordExpired: "رابط إعادة التعيين غير صالح أو منتهي الصلاحية.",
+    resetPasswordError: "فشل إعادة تعيين كلمة المرور. يرجى المحاولة مجدداً.",
+    resetPasswordSuccess: "تم إعادة تعيين كلمة المرور بنجاح. يرجى تسجيل الدخول.",
+
+    // Email verification
+    emailVerificationBanner: "يرجى التحقق من بريدك الإلكتروني — تحقق من صندوق الوارد.",
+    resendVerificationEmail: "إعادة إرسال رسالة التحقق",
+    resendVerificationEmailSent: "تم إرسال رسالة التحقق!",
+    resendVerificationEmailRateLimit: "يرجى الانتظار 5 دقائق قبل طلب بريد آخر.",
+    resendVerificationEmailError: "فشل إرسال رسالة التحقق.",
+    emailVerifiedSuccess: "تم التحقق من البريد الإلكتروني بنجاح!",
   },
   en: {
     // App
@@ -5187,6 +5208,27 @@ export const translations = {
     profileEmailPlaceholder: "example@company.com",
     profilePhonePlaceholder: "+966 5XX XXX XXXX",
     profileImageUrlPlaceholder: "https://example.com/avatar.jpg",
+
+    // Forgot password & reset password
+    forgotPassword: "Forgot your password?",
+    forgotPasswordTitle: "Forgot Password",
+    forgotPasswordDesc: "Enter your email and we'll send you a reset link",
+    forgotPasswordSubmit: "Send Reset Link",
+    forgotPasswordSent: "If this email exists, you'll receive a reset link shortly.",
+    forgotPasswordError: "Failed to send reset email. Please try again.",
+    resetPassword: "Reset Password",
+    resetPasswordTitle: "Reset Password",
+    resetPasswordExpired: "This reset link is invalid or has expired.",
+    resetPasswordError: "Failed to reset password. Please try again.",
+    resetPasswordSuccess: "Password reset successfully. Please sign in.",
+
+    // Email verification
+    emailVerificationBanner: "Please verify your email — check your inbox.",
+    resendVerificationEmail: "Resend verification email",
+    resendVerificationEmailSent: "Verification email sent!",
+    resendVerificationEmailRateLimit: "Please wait 5 minutes before requesting another email.",
+    resendVerificationEmailError: "Failed to send verification email.",
+    emailVerifiedSuccess: "Email verified successfully!",
   },
 };
 

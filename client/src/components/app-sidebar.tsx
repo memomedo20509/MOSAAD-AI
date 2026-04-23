@@ -27,6 +27,8 @@ import {
   Package,
   ShoppingBag,
   CircleUser,
+  MailWarning,
+  X,
 } from "lucide-react";
 import { useTour } from "@/hooks/use-tour";
 import { Badge } from "@/components/ui/badge";
@@ -51,7 +53,10 @@ import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/i18n";
 import { LanguageToggle } from "@/components/language-toggle";
 import { type UserRole, normalizeRole, isPlatformAdmin } from "@shared/models/auth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 const isAdmin = (role: string | null | undefined): boolean => {
   return role === "super_admin" || role === "admin" || role === "sales_admin";
@@ -65,6 +70,8 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
   const { t, isRTL } = useLanguage();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const userRole = user?.role ? normalizeRole(user.role) : undefined;
   const roleDisplayNames: Record<UserRole, string> = {
     platform_admin: t.roleLabPlatformAdmin,
@@ -96,6 +103,28 @@ export function AppSidebar() {
   });
   const unreadCount = unreadData?.count ?? 0;
 
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const showVerificationBanner =
+    !bannerDismissed &&
+    !!user?.email &&
+    !user?.emailVerifiedAt &&
+    !isPlatformAdmin(userRole);
+
+  const resendVerificationMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/auth/send-verification"),
+    onSuccess: () => {
+      toast({ title: t.resendVerificationEmailSent });
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("429") || msg.includes("wait")) {
+        toast({ title: t.resendVerificationEmailRateLimit, variant: "destructive" });
+      } else {
+        toast({ title: t.resendVerificationEmailError, variant: "destructive" });
+      }
+    },
+  });
+
   const isActive = (url: string) => location === url || location.startsWith(url + "/");
 
   return (
@@ -108,6 +137,34 @@ export function AppSidebar() {
           <span className="font-semibold text-lg" data-testid="text-app-name">SalesBot AI</span>
         </Link>
       </SidebarHeader>
+
+      {showVerificationBanner && (
+        <div className="mx-3 mb-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-3 py-2.5" data-testid="banner-email-verification">
+          <div className="flex items-start gap-2">
+            <MailWarning className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-amber-800 dark:text-amber-300 leading-snug">
+                {t.emailVerificationBanner}
+              </p>
+              <button
+                onClick={() => resendVerificationMutation.mutate()}
+                disabled={resendVerificationMutation.isPending}
+                className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-400 hover:underline disabled:opacity-50"
+                data-testid="button-resend-verification"
+              >
+                {resendVerificationMutation.isPending ? "..." : t.resendVerificationEmail}
+              </button>
+            </div>
+            <button
+              onClick={() => setBannerDismissed(true)}
+              className="shrink-0 text-amber-500 hover:text-amber-700"
+              data-testid="button-dismiss-verification-banner"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <SidebarContent>
         <SidebarGroup>
